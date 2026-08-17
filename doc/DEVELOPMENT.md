@@ -308,4 +308,7 @@ Rust만 고쳤으면 Rust 셋, 클라이언트만 고쳤으면 클라이언트 �
 [AGENT_CLIENT](AGENT_CLIENT.md) · [AGENT_CLIENT_QUICKSTART](AGENT_CLIENT_QUICKSTART.md) ·
 [AGENT_MANAGER](AGENT_MANAGER.md) · [REMOTE_AGENT_CLIENT](REMOTE_AGENT_CLIENT.md)
 
+**설계 레퍼런스** [Ragnarok Online 시스템 레퍼런스](ragnarok/README.md) —
+RO 시스템 정리 + [갭 분석](ragnarok/09_OPENMMO_GAP_ANALYSIS.md) + [구현 로드맵](ragnarok/10_IMPLEMENTATION_ROADMAP.md)
+
 **작업 목록** [TODO](TODO.md) · [devlog](devlog/README.md)

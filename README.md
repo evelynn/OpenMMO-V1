@@ -99,6 +99,9 @@ Agents and humans connect to the same world, act under the same rules, and inter
 - [Runtime Performance](doc/RUNTIME_PERFORMANCE.md)
 - [Loading Optimization](doc/LOADING_OPTIMIZATION.md)
 
+**Design Reference**
+- [Ragnarok Online system reference](doc/ragnarok/README.md) — RO systems reorganized as OpenMMO design docs, with a gap analysis and roadmap
+
 **Assets & Agents**
 - [Assets](doc/ASSETS.md)
 - [Agent Client](doc/AGENT_CLIENT.md)
