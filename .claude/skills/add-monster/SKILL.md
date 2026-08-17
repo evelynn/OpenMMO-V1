@@ -50,10 +50,13 @@ The clip generator measures real GLBs, so assets must be fetched first
 
 ## 3. Give it somewhere to spawn
 
-- **Surface**: draw a monster spawn rectangle in the in-game map editor. It
-  persists to `data/terrain/zones/<rx>/<rz>.json` with `monsterType`,
-  `maxTotal`, `maxPerPlayer`, `spawnIntervalSecs`. Those files are tracked in
-  git — commit the change. Keep towns covered by `noSpawnZones`.
+- **Surface**: add the id to `ambientSpawns` in `data-src/world.json`. Ground
+  monsters spawn **around each player**, capped by `maxMonstersPerPlayer`, and the
+  monster's own level gates which players it spawns near
+  (`min_ambient_player_level`, `server/src/game_state/monster.rs:843`).
+  **The map editor's spawn rectangles are inert** — the server reads only
+  `noSpawnZones` from `data/terrain/zones/` (`server/src/world_config.rs:93`),
+  so drawing a rectangle spawns nothing. Keep towns covered by `noSpawnZones`.
 - **Dungeon**: the `dungeon*` columns are enough; depth range and weight decide
   which floors roll it. `data-src/dungeons.csv` places bosses per dungeon.
 

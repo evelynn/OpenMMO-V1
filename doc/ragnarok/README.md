@@ -27,7 +27,7 @@ Ragnarok Online의 시스템을 주제별로 재구성하고, 각 문서 끝에 
   그 페이지를 옮기는 대신, 위키의 실제 분류 체계(Category:General Information 127개
   문서, Mechanics, Cash Shop, Instances, Guild 등)를 기준으로 시스템 전면을 나열하고
   문서별 커버리지와 미수집 항목을 표시했다 — [11_SYSTEMS_INDEX](11_SYSTEMS_INDEX.md).
-- **시스템 구조·공식·규칙 = 커버됨.** 아래 12개 문서가 다루는 범위.
+- **시스템 구조·공식·규칙 = 커버됨.** 아래 13개 문서가 다루는 범위.
 - **대량 데이터베이스 = 미커버.** 개별 아이템/몬스터/스킬/맵 수천 건의 수치는
   `db.irowiki.org`(iW Database)에 있고, 이 환경에서는 받아올 수 없다. 실제로 필요할
   때는 egress 허용 목록에 `irowiki.org`, `db.irowiki.org`를 추가한 환경에서

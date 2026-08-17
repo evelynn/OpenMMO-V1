@@ -49,7 +49,7 @@ Agents and humans connect to the same world, act under the same rules, and inter
 - **Built-in Map Editor**: In-game tools for shaping the world
   - Terrain brushes (Road, Flatten, height paint) with live editing
   - Object placement (buildings, props, vegetation) with preview
-  - Rectangular zone drawing for towns (no-spawn) and per-region monster spawn areas
+  - Rectangular zone drawing for towns (no-spawn); spawn-area rectangles are editor-only legacy data the server ignores
 
 ![In-game map editor with height brush active](doc/images/gameplay-map-editor.png)
 
@@ -78,6 +78,7 @@ Agents and humans connect to the same world, act under the same rules, and inter
 - [Development Guide](doc/DEVELOPMENT.md) — bootstrap a clone, daily dev loop, common recipes, troubleshooting
 - [Architecture](doc/ARCHITECTURE.md) — crates, runtime topology, authority model, protocol and data pipeline diagrams
 - [Development Master Plan](doc/DEVELOPMENT_MASTER_PLAN.md) — what to build in what order, with gates and spikes
+- [Implementation Direction](doc/ragnarok/13_IMPLEMENTATION_DIRECTION.md) — per-item files, schema deltas, migrations and verification (authoritative for how)
 - [Devlog](doc/devlog/README.md)
 
 **World & Terrain**

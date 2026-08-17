@@ -472,7 +472,7 @@ GLB 측정기는 mtime으로 자기 스킵하므로(`tools/lib/stale.mjs`) 평�
 
 | | 저장 위치 | 특징 |
 |---|-----------|------|
-| **존** | `data/terrain/zones/r±NN_±NN.json` | 서버는 `noSpawnZones`만 부팅 시 읽는다 (`server/src/world_config.rs:93`). 실패하면 부팅 중단(fail-closed). **핫 리로드 없음** — 재시작 필요. 같은 파일의 `monsterSpawns`는 레거시로, 서버가 읽지 않는다 ([ZONE_SYSTEM.md](ZONE_SYSTEM.md)의 해당 서술은 낡았다) |
+| **존** | `data/terrain/zones/r±NN_±NN.json` | 서버는 `noSpawnZones`만 부팅 시 읽는다 (`server/src/world_config.rs:93`). 실패하면 부팅 중단(fail-closed). **핫 리로드 없음** — 재시작 필요. 같은 파일의 `monsterSpawns`는 레거시로, 서버가 읽지 않는다 ([ZONE_SYSTEM.md](ZONE_SYSTEM.md)) |
 | **하우징** | `{--state-dir}/housing/r{cx}_{cz}/{house_id}.json` | 하우징 청크는 **64 m, `floor(x/64)`** — 지형 타일(`floor((x+32)/64)`)도 1024 m 리전도 아니다. 디렉터리 이름만 같은 꼴. 통행 격자는 **클라이언트가 계산**해 보내고(`client/src/lib/managers/housing-passability.ts:38`) 서버는 그대로 들어올린다 |
 | **던전** | 저장하지도 전송하지도 않는다 | `data-src/dungeons.csv` 한 줄 → id를 FNV-1a로 해싱 → ChaCha8 시드 → 서버와 WASM 클라가 각자 동일 레이아웃 생성. 와이어에는 엔티티/문/소품 델타만 흐른다 |
 

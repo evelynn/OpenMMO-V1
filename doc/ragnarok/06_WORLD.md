@@ -30,7 +30,8 @@ OpenMMO는 정반대로 **32km × 32km 이음매 없는 단일 월드**다
 ([doc/MAP_DESIGN.md](../MAP_DESIGN.md), [TERRAIN_GENERATION.md](../TERRAIN_GENERATION.md)).
 따라서 RO의 맵 단위 규칙은 그대로 옮길 수 없고, **구역(zone) 단위**로 번역해야 한다.
 OpenMMO에는 이미 그 그릇이 있다 — `data/terrain/zones/`의 사각형
-([doc/ZONE_SYSTEM.md](../ZONE_SYSTEM.md)).
+([doc/ZONE_SYSTEM.md](../ZONE_SYSTEM.md)). 다만 **현재 서버가 그 파일에서 읽는 것은
+`noSpawnZones`뿐이고 몬스터 정원은 아직 붙어 있지 않다** (아래 "변형할 것" 참고).
 
 ## 3. 카프라 서비스 (Kafra)
 

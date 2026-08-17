@@ -10,6 +10,11 @@
 
 - 매일 아침 §5 표를 위에서부터 읽고, **선행이 전부 끝난 첫 행**을 집는다. 순번은 권고가
   아니라 의존성 결과다.
+- **단, 처음 네 항목만은 예외다.** 13의 착수 순서 요약대로
+  `IMP-1.1 → IMP-2.1 → IMP-2.5 + IMP-2.6`을 먼저 끝낸다 — 이 넷이 "레벨에 맞는 사냥 →
+  의뢰 → 보상 수령"이라는 최소 루프 하나를 완성하기 때문이다. 나머지 M1 항목
+  (IMP-1.2~1.7)은 전부 서로 독립이라 그 뒤에 병렬로 진행한다. 다섯 번째 행부터는
+  다시 위에서부터 읽는 규칙으로 돌아온다.
 - **한 항목 = 한 PR.** 표의 한 행을 두 PR로 쪼개도 되지만, 두 행을 한 PR에 합치지 않는다.
   CI가 Rust/클라이언트 양쪽을 다 돌리므로 합칠수록 되돌리기가 비싸진다.
 - 끝나면 §5 표의 순번 앞에 `[x]`를 붙이고 PR 번호를 적는다. 진행 중이면 `[~]` + 담당자.
@@ -110,7 +115,7 @@ AI·유료 툴 산출물이면 티어 + 생성 날짜까지. 미사용 전환 �
 ```mermaid
 flowchart TD
   subgraph M0["M0 준비"]
-    R["DoR 게이트<br/>dev-setup --check"]
+    R["DoR 게이트<br/>tools/dev-setup.sh --check"]
     I01["IMP-0.1<br/>되돌릴 수 없는 결정"]
     I02["IMP-0.2<br/>EffectiveStats"]
     S1["SPK-1<br/>밀집 전투 부하"]
@@ -234,7 +239,7 @@ Phase 번호와 1:1이다(M1 = Phase 1 …). **작업 ID는 13의 ID가 정본�
 
 | 순번 | 작업 ID | 작업 | 선행 | 크기 | 영역 | 산출물 |
 |------|---------|------|------|------|------|--------|
-| 0 | — | DoR 게이트 통과 | — | S | — | `dev-setup.sh --check` 초록 (§2) |
+| 0 | — | DoR 게이트 통과 | — | S | — | `bash tools/dev-setup.sh --check` 초록 (§2) |
 | 1 | IMP-0.1 | 되돌릴 수 없는 결정 확정 (§8 #1 · #2 · #4 · #6) | 0 | S | doc | 13 IMP-0.1의 수치 표가 채워짐 |
 | 2 | SPK-1 | 밀집 전투 부하 스파이크 | 0 | M | server(test) | `server/src/game_state/tests/combat_scale_tests.rs` (기존 `spawn_scale_tests.rs` 패턴, `USERS = 5_000`), 판정 기준은 13 IMP-4.3 |
 | 3 | IMP-0.2 | `GuardUpdated` → `EffectiveStats` 일반화 | — | M | shared/server/client | 13 IMP-0.2. `doc/TODO.md:150` 항목 소진. **게이트 아님** — 먼저 하면 뒤 항목의 시트 표시가 공짜가 된다 |
@@ -251,8 +256,8 @@ Phase 번호와 1:1이다(M1 = Phase 1 …). **작업 ID는 13의 ID가 정본�
 | 5 | IMP-1.2 | 보스 프로토콜 (디버프·넉백 면역) | — | S | data/server | `MonsterDefinition`에 `boss` 필드 추가(`server/src/monster_defs.rs`는 현재 이 컬럼을 읽지 않는다), `game_state/debuff.rs`에서 스킵, [DEBUFF.md](DEBUFF.md) 예외 규칙 |
 | 6 | IMP-1.3 | 디버프 저항 스탯 | — | S | data/server | `data-src/debuffs.csv`에 `resistStat` 컬럼, `server/src/debuff_defs.rs` 필드, `debuff.rs`의 확률 보정, [DEBUFF.md](DEBUFF.md) 표 |
 | 7 | IMP-1.4 | 루터 몬스터 | — | M | data/client/server | `monsters.csv`의 `behavior=looter`, `client/src/lib/managers/monsterManager.ts` 브레인, 줍기·드랍은 **서버 검증**(바닥 아이템 경로 재사용), 층 규칙 준수 |
-| 8 | IMP-1.5 | 크기 축 (small/medium/large) | — | M | data/server | `monsters.csv`의 `size`, `items.csv`의 크기 배율, `server/src/game/combat.rs` 데미지 곱. **프로토콜 변경 없음** — 크기는 클라이언트도 CSV에서 직접 읽는다 |
-| 9 | IMP-1.6 | 무기 티어 = 제련 리스크 등급 | — | S | data/server | 기존 인챈트 사다리(`server/src/game_state/inventory.rs`의 `enchant_success_bp`)에 `rarityTier` 오프셋, [ENCHANT.md](ENCHANT.md) 표 갱신 |
+| 8 | IMP-1.5 | 크기 축 (small/medium/large) | — | M | data/server/client | `monsters.csv`의 `size`, `items.csv`의 크기 배율, `server/src/game/combat.rs` 데미지 곱. **프로토콜 변경 없음** — 크기는 클라이언트도 CSV에서 직접 읽는다 |
+| 9 | IMP-1.6 | 무기 티어 = 제련 리스크 등급 | — | S | data/server | `items.csv`에 **`weaponTier` 신규 컬럼**(1~5, 빈 칸 = 3) — `rarityTier`는 낚시 전용이라 재사용하지 않는다(`server/src/item_defs.rs:75`), `enchant_success_bp(enchant + tier − 3)`(`server/src/game_state/inventory.rs:42`), [ENCHANT.md](ENCHANT.md) 표 갱신 |
 | 10 | IMP-1.7 | 채팅 접두사 규약 (`%` 파티) | — | S | shared/server/client | `shared/src/messages.rs:207` `strip_command` 계열에 접두사 파싱, 클라 입력·채널 스토어 반영. `$` 길드는 IMP-4.1에서 |
 
 ### M2 — 월드 인프라 + 보상 경로 (= 13 Phase 2)
@@ -272,7 +277,7 @@ Phase 번호와 1:1이다(M1 = Phase 1 …). **작업 ID는 13의 ID가 정본�
 | 17 | IMP-2.5 | 헌팅 보드 반복 퀘스트 | IMP-2.1, IMP-1.1 | L | data/shared/server/client | `data-src/hunting_quests.csv` (`id,boardId,name,monsterId,count,minLevel,maxLevel,rewardXp,rewardZeny,rewardItem,dailyLimit`), `character_quests` 테이블(`day_key`/`day_count` 포함), 런타임은 quest id를 u16 인턴한 `Vec<(u16,u16)>`(수락 상한 5), 처치 훅은 `combat.rs:499~:511`의 XP 수령자 목록 재사용, **보상은 우편 지급** |
 | 18 | IMP-2.6 | 일일 한도 + 고효율 | IMP-2.5, IMP-0.1 | M | data/server/client | 보드당 일일 한도(캐릭터 단위), 리셋 기준 시각 고정, 한도 소진 UI 표시. **IMP-2.5와 같은 릴리스에 나간다** |
 | 19 | IMP-2.7 | 미니보스 (장주기 + 변량 리스폰) | IMP-1.2 | M | data/server | `data-src/world_bosses.csv`(신규) + `server/src/world_boss_defs.rs`(신규), `tick_world_bosses` 30초 틱(`server/src/main.rs:84` `run_ticks`), 부팅 시 `monsterId`의 `boss=true` assert, `client/src/lib/components/map-editor/MapEditorCursor.svelte`에 좌표 복사 버튼 |
-| 20 | IMP-2.8 | MVP 기여도 보너스 | IMP-1.2, IMP-2.7 | M | server | 보스 한정 누적 피해 기록(**메모리 상한 필수**), 파티 분배와 별개 경로, 보상은 우편. SPK-1이 no-go면 참여자 상한을 둔 축소형으로 |
+| 20 | IMP-2.8 | MVP 기여도 보너스 | IMP-1.2, IMP-2.7 | M | shared/server/client | 보스 한정 누적 피해 기록(**메모리 상한 필수**), 파티 분배와 별개 경로, 보상은 우편. SPK-1이 no-go면 참여자 상한을 둔 축소형으로 |
 
 ### M3 — 성장 · 경제 축 (= 13 Phase 3)
 
@@ -329,13 +334,14 @@ Phase 번호와 1:1이다(M1 = Phase 1 …). **작업 ID는 13의 ID가 정본�
 | IMP-1.1 ↔ IMP-2.8 | 둘 다 `game_state/combat.rs`의 처치 보상 경로 |
 | IMP-1.5 ↔ IMP-3.3 | 둘 다 `server/src/game/combat.rs`의 데미지 계산 순서 |
 | IMP-2.1 ↔ IMP-2.3 | 둘 다 아이템 이전 원자성(첨부 ↔ 입출금) |
-| IMP-2.3 ↔ IMP-4.1 | 길드 창고가 IMP-2.3 컨테이너를 그대로 쓴다 |
-| IMP-2.1 ↔ IMP-2.5 | 퀘스트 보상이 우편 API를 호출한다 |
-| IMP-2.5 ↔ IMP-2.6 | 같은 CSV·같은 테이블. **같은 릴리스로 묶는 편이 낫다** |
-| IMP-3.1 ↔ IMP-3.2 | 스킬 정의가 4분할 타이머 필드를 참조한다 |
 | IMP-3.4 ↔ IMP-3.5 | 둘 다 `trading.rs`·`deals.rs`의 가격 계산. 13은 **같은 PR**을 권장한다 |
 | **프로토콜을 건드리는 모든 쌍** | `shared/src/lib.rs:78`의 `PROTOCOL_VERSION` 한 줄. 병렬 PR 2개면 **뒤에 머지되는 쪽이 반드시 리베이스**해서 번호를 다시 매긴다 |
 | **같은 CSV를 건드리는 모든 쌍** | CSV는 `split(',')` 단순 파서이고 Rust 변환기는 헤더/행 필드 수 불일치를 **빌드 에러로 처리**한다. 컬럼 추가 PR 2개가 병렬이면 머지 순서를 정해 둔다 |
+
+**선행 관계로 이미 순서가 정해진 쌍**은 애초에 병렬 대상이 아니다 — 2.1 → 2.5,
+2.5 → 2.6, 3.1 → 3.2, 2.3 → 4.1. 충돌 표에 넣지 않는 이유는 `선행` 칸이 이미
+답을 주기 때문이다. 다만 **IMP-2.5와 IMP-2.6은 같은 릴리스로 묶는다**(한도 없는
+반복 콘텐츠가 하루라도 라이브에 나가면 이후 한도가 너프로 읽힌다).
 
 ---
 
@@ -350,9 +356,11 @@ no-go면 후행 항목을 착수하지 않는다.
   AOI 팬아웃은 `EVENT_DELIVERY_RADIUS`(43m, `shared/src/world.rs:134`) 안의 인원수에
   선형이고, 전투 이벤트는 이동보다 빈도가 높다.
 - **무엇을 잰다**: `server/src/game_state/tests/spawn_scale_tests.rs`와 같은 형태로
-  `combat_scale_tests.rs`를 만들어, 한 셀에 **100 / 200 / 400명**을 넣고
-  ① 전투 브로드캐스트 1회의 수신자 수와 직렬화 바이트, ② 초당 총 바이트,
-  ③ `players`/`monsters` 쓰기 락 점유 시간을 잰다.
+  `combat_scale_tests.rs`를 만들어, 한 셀에 **100 / 200 / 400명**(게이트 판정 지점은
+  **200명**)을 넣고 ① `tick_player_movement` 1회 소요 시간(예산 200ms),
+  ② 초당 팬아웃 메시지 수와 총 바이트, ③ 브로드캐스트 `Lagged` 발생 여부,
+  ④ 전투 브로드캐스트 1회의 수신자 수·직렬화 바이트, ⑤ `players`/`monsters` 쓰기 락
+  점유 시간을 잰다. ①~③이 13 IMP-4.3의 세 조건에 그대로 대응한다.
 - **go/no-go**: 판정 기준은 [13 IMP-4.3](ragnarok/13_IMPLEMENTATION_DIRECTION.md)의 세 조건을
   그대로 쓴다 — 특히 브로드캐스트 채널 용량(1000, `game_state/mod.rs:583`)을 넘기지 않을 것.
   no-go면 IMP-4.3은 착수하지 않고, IMP-2.8은 보스 1마리 + 참여자 상한 형태로 축소한다.
@@ -403,7 +411,7 @@ no-go면 후행 항목을 착수하지 않는다.
 | 3 | **시간 4분할** (VCT / FCT / after-cast delay / cooldown) | IMP-3.1, 스킬 정의 이전 | 스킬 하나라도 정의된 뒤에 넣으면 모든 스킬과 애니메이션 타이밍을 다시 잡아야 한다 |
 | 4 | **거래 수수료는 소각** — NPC 수입이 아니라 제니 소멸 | IMP-0.1 (IMP-3.5 착수 전) | NPC에게 가면 싱크가 아니라 순환이다. 인플레 대책은 선제적이어야 한다 |
 | 5 | **프로토콜 하위호환 없음** — `PROTOCOL_VERSION` 정확 일치, 서버·클라 동시 배포 | 이미 확정 (`shared/src/lib.rs:78`) | MessagePack이 구조체를 **위치 배열**로 인코딩한다. 중간 필드 추가·재정렬은 이후 모든 필드를 밀어버린다 |
-| 6 | **창고 슬롯 상한** — 무제한 금지 | 이미 확정 (13 IMP-2.3, `STORAGE_SLOTS = 120`). SPK-2는 **검증만** | 상한 없이 출시한 뒤 낮추는 것은 아이템 몰수다 |
+| 6 | **창고 슬롯 상한** — 무제한 금지 | IMP-0.1 (IMP-2.3 착수 전). 값은 13 IMP-2.3의 `STORAGE_SLOTS = 120`이고 SPK-2는 **검증만** | 상한 없이 출시한 뒤 낮추는 것은 아이템 몰수다 |
 | 7 | **세이브 포인트 기본값** — 기존 캐릭터는 현행 리스폰 규칙 유지 | IMP-2.2 | 마이그레이션에서 `NULL`을 잘못 다루면 전 캐릭터가 원점으로 리스폰한다 |
 | 8 | **던전은 유료 이동 목적지가 아니다** | IMP-2.4 | 이걸 열면 32km 월드를 만든 이유가 사라진다. 열었다가 닫는 것은 접근성 회수다 |
 | 9 | **에이전트-인간 동등성** — 에이전트 전용 API 없음 | 이미 확정 ([REMOTE_AGENT_CLIENT.md](REMOTE_AGENT_CLIENT.md)) | 한 번 갈라지면 이후 모든 기능이 두 경로를 유지해야 한다 |

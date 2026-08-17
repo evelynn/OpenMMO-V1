@@ -87,8 +87,8 @@ cargo install wasm-pack cargo-watch
    ```
    `data/terrain/worldgen.json`이 **마지막에** 쓰이므로, 이 파일이 있으면 베이크가
    끝까지 돈 것이다. 베이크하지 않으면 지형 API가 404를 내고 월드가 검게 렌더링된다.
-   `data/terrain/zones/`(마을 no-spawn, 몬스터 스폰 사각형)는 git에 있고 베이크가
-   건드리지 않는다.
+   `data/terrain/zones/`(마을 no-spawn — `monsterSpawns` 사각형은 에디터 전용 레거시)는
+   git에 있고 베이크가 건드리지 않는다.
 
 베이크 범위 밖으로 걸어 나가면 지형이 없다. 개발 중에는 원점(0,0) 주변에서 논다.
 
@@ -204,7 +204,10 @@ Rust만 고쳤으면 Rust 셋, 클라이언트만 고쳤으면 클라이언트 �
 ### 몬스터 추가
 1. `data-src/monsters.csv`에 행 추가. 모델은 `client/public/models/monsters/*.glb`,
    애니 클립 이름은 그 GLB 안의 실제 클립명과 일치해야 한다.
-2. 지상 스폰은 맵 에디터로 스폰 사각형을 그린다(`data/terrain/zones/`).
+2. 지상 스폰은 `data-src/world.json`의 `ambientSpawns`에 `monsterType`을 추가한다 —
+   몬스터는 플레이어를 따라다니며 스폰되고, 인당 상한은 `maxMonstersPerPlayer`,
+   게이트는 몬스터 자신의 레벨이다. **존 파일(`data/terrain/zones/`)의 `monsterSpawns`
+   사각형은 서버가 읽지 않는다**(맵 에디터 전용 레거시, [ZONE_SYSTEM.md](ZONE_SYSTEM.md)).
    던전 스폰은 `dungeonMinDepth`/`dungeonMaxDepth`/`dungeonWeight` 컬럼으로 붙는다.
 3. `npm --prefix client run generate:monster-clips`로 공격 클립 타이밍을 다시 측정.
 4. 새 에셋이면 `doc/assets/`에 출처·라이선스를 기록한다.

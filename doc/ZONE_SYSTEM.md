@@ -1,10 +1,21 @@
-# Per-Region Spawn Zones & Town No-Spawn Zones
+# Per-Region Zones (Town No-Spawn) & Legacy Spawn Rectangles
 
 ## Context
-Monster spawns were previously defined in a monolithic `world.json`. As the world grows with many monster types and regions, this doesn't scale. This system:
-1. Moves spawn rules to per-region zone files (`data/terrain/zones/r{X}_{Z}.json`)
-2. Adds rectangular **no-spawn zones** (towns) to the same zone files
-3. Adds map editor tools to draw town rectangles and spawn areas
+Per-region zone files (`data/terrain/zones/r{X}_{Z}.json`) carry two rectangle
+arrays and a map-editor UI for drawing them.
+
+> **What the server actually reads.** Only `noSpawnZones`.
+> `server/src/world_config.rs:93` `load_no_spawn_zones_from_regions()` parses that key
+> and nothing else. **`monsterSpawns` is editor-only legacy data** — no Rust code reads it.
+>
+> Ground monsters spawn by **following players**: `data-src/world.json`'s `ambientSpawns`
+> list plus the per-player cap `maxMonstersPerPlayer` (30), driven by
+> `tick_monster_spawns()` (`server/src/game_state/monster.rs:854`). The gate is the
+> monster's own level (`min_ambient_player_level`, `monster.rs:843`), so there are no
+> fixed level-banded hunting grounds today. Restoring a zone-driven spawner is an open
+> task — `doc/TODO.md`'s "몬스터 스폰 개선 — 플레이어의 레벨에 맞게", deferred in
+> [ragnarok/13_IMPLEMENTATION_DIRECTION.md](ragnarok/13_IMPLEMENTATION_DIRECTION.md)'s
+> 조건부/보류 table.
 
 Zone data is kept separate from terrain meta (`data/terrain/meta/`) to avoid coupling gameplay logic with rendering config.
 
@@ -22,7 +33,9 @@ Zone data is kept separate from terrain meta (`data/terrain/meta/`) to avoid cou
   ]
 }
 ```
-Both arrays are optional (default empty). Coordinates are world-space. Both zone types use the same rectangular `minX/minZ/maxX/maxZ` format.
+Both arrays are optional (default empty). Coordinates are world-space. Both zone types use
+the same rectangular `minX/minZ/maxX/maxZ` format. The `monsterSpawns` entry above is
+retained by the editor and ignored by the server (see the note at the top).
 
 ## Architecture
 
@@ -37,9 +50,13 @@ Both arrays are optional (default empty). Coordinates are world-space. Both zone
 - `io::TerrainIO` — `list_zone_regions()`, `read_zone()`, `write_zone()`
 
 ### Server
-- `world_config.rs` — `MonsterSpawnRule` with rectangular bounds + `maxTotal`, `load_spawn_config_from_regions()` reads all zone files at startup
-- `game_state/mod.rs` — `no_spawn_zones` field, constructor takes spawn rules + zones as params, `no_spawn_zones()` accessor
-- `game_state/monster.rs` — `validate_spawn_request()` checks rect bounds + no-spawn zones, `tick_monster_spawns()` sends rect coords
+- `world_config.rs:93` — `load_no_spawn_zones_from_regions()` reads every zone file at
+  startup and keeps **only** `noSpawnZones`. Ambient spawn rules come from
+  `data-src/world.json` (`ambient_spawns`, `max_monsters_per_player`), not from zone files.
+- `game_state/mod.rs` — `no_spawn_zones` field + accessor
+- `game_state/monster.rs:854` — `tick_monster_spawns()` asks each player's client to place
+  ambient monsters near that player; no-spawn zones and `NO_SPAWN_MARGIN` (30 m) reject
+  town positions
 - `terrain/routes.rs` — `GET/PUT /api/terrain/zones/{rx}/{rz}`
 - `connection.rs` — sends `NoSpawnZones` on join
 - `main.rs` — loads zones from region files at startup, passes to `GameState::new()`
@@ -64,4 +81,6 @@ Both arrays are optional (default empty). Coordinates are world-space. Both zone
 ## Notes
 - **Cross-region zones**: A zone drawn in region A may cover region B territory. Server aggregates all zones into a flat list so validation works. Editor shows zones stored in the current region only.
 - **Hot-reload**: After editor saves a zone, server won't see it until restart. Acceptable for v1.
+- **Spawn rectangles are inert**: drawing one changes nothing at runtime. Keep the tool for
+  when the zone-driven spawner lands, but do not treat the rectangles as live configuration.
 - **Agent-client zone source**: Currently receives zones via WebSocket `NoSpawnZones` message on join. Could alternatively read zone files directly from disk (agent-client has `TerrainIO` access), but kept as WebSocket for now.

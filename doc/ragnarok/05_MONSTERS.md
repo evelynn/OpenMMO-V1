@@ -51,7 +51,7 @@ iW Database의 몬스터 레코드는 대략 다음을 갖는다: HP/SP, 레벨,
 
 ## OpenMMO 적용
 
-**현재 상태** (`data-src/monsters.csv`, 42개 컬럼)
+**현재 상태** (`data-src/monsters.csv`, 40개 컬럼)
 - 이미 풍부하다: `health`, `level`, `guard`, `attackBonus`, `damageRoll`,
   `walkSpeed`/`runSpeed`, `attackRange`/`chaseRange`, `attackCooldown`,
   `attackImpactDelay`, `behavior`, 애니메이션 클립 8종, `weapon`/`weaponBone`/
@@ -73,10 +73,12 @@ iW Database의 몬스터 레코드는 대략 다음을 갖는다: HP/SP, 레벨,
 1. **루터(Looter) 행동.** `behavior` 컬럼에 값 하나 추가로 구현 가능하고,
    OpenMMO에는 이미 바닥 아이템 시스템(층 인식 포함)이 있다. 재미 대비 비용이
    가장 좋은 항목.
-2. **미니보스 = 시간 기반 리스폰 + 변량.** 현재 스폰은 `spawnIntervalSecs` 하나뿐이라
-   전부 "즉시 채워지는 일반 몹"이다. 변량 있는 장주기 스폰을 넣으면 월드에
-   **찾아다닐 목표**가 생긴다. 스폰 존 JSON에 `respawnVarianceSecs`,
-   `maxTotal: 1` 조합으로 표현 가능.
+2. **미니보스 = 시간 기반 리스폰 + 변량.** 현재 앰비언트 스폰에는 주기도 변량도 없다 —
+   `world.json`의 항목은 `monsterType`과 `maxDistance`뿐이고, 몹은 플레이어 주위에
+   계속 채워진다. 고정 좌표에 장주기 + 변량으로 뜨는 개체를 넣으면 월드에
+   **찾아다닐 목표**가 생긴다. 존 JSON이 아니라 `data-src/world_bosses.csv`
+   (좌표 + `respawnBaseSecs`/`respawnVarianceSecs`) + 30초 틱으로 간다
+   (13 IMP-2.7) — 존 사각형은 서버가 읽지 않기 때문이다.
 3. **MVP 기여도 보너스.** 파티 분배(`party_xp_share`)와 별개로 최대 기여자에게
    추가 보상. 보스전이 "누가 막타 쳤나"가 아니라 "누가 기여했나"가 되게 한다.
 4. **보스 프로토콜 플래그.** `boss` 컬럼에 디버프·넉백 면역을 묶는다 (03 문서와 동일 결론).
