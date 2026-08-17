@@ -80,7 +80,9 @@ pub const NPC_TOKEN_FILENAME: &str = "npc_token";
 ///      IMP-1.1.
 /// v31: mailbox (OpenMailbox/ClaimMail/DeleteMail →
 ///      MailList/MailUpdated/MailUnread) — IMP-2.1.
-pub const PROTOCOL_VERSION: u32 = 31;
+/// v32: hunting board (OpenQuestBoard/AcceptQuest/AbandonQuest/TurnInQuest →
+///      QuestBoard/QuestAccepted/QuestProgress/QuestCompleted) — IMP-2.5.
+pub const PROTOCOL_VERSION: u32 = 32;
 
 /// WebSocket close code sent when the handshake is refused (wrong protocol
 /// version, or traffic before `ClientInfo`). Lives outside the serialized

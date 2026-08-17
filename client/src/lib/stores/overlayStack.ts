@@ -2,6 +2,7 @@ import { get, writable, type Readable } from 'svelte/store'
 import { characterPanelVisible, inventoryVisible } from './debugStore'
 import { friendPanelVisible } from './friendStore'
 import { mailPanelVisible } from './mailStore'
+import { questBoardVisible } from './questStore'
 import { shopSession } from './tradeStore'
 
 /** HUD overlays Escape interacts with. */
@@ -10,6 +11,7 @@ export type OverlayId =
   | 'character'
   | 'friends'
   | 'mail'
+  | 'questBoard'
   | 'inventory'
   | 'trade'
   | 'settings'
@@ -28,6 +30,7 @@ const OVERLAYS: Record<OverlayId, { layer: number; close?: () => void }> = {
   inventory: { layer: 0, close: () => inventoryVisible.set(false) },
   friends: { layer: 0, close: () => friendPanelVisible.set(false) },
   mail: { layer: 0, close: () => mailPanelVisible.set(false) },
+  questBoard: { layer: 0, close: () => questBoardVisible.set(false) },
   trade: { layer: 1, close: () => shopSession.set(null) },
   loading: { layer: 2 },
   respawn: { layer: 3 },

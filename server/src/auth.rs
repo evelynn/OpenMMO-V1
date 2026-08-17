@@ -14,6 +14,15 @@ pub const MAX_MAILBOX: u16 = 30;
 /// Letters expire after 30 real days, swept on the hourly buyback tick.
 pub const MAIL_TTL_SECS: i64 = 30 * 24 * 60 * 60;
 
+/// One `character_quests` row.
+#[derive(Debug, Clone)]
+pub struct QuestRow {
+    pub quest_id: String,
+    pub progress: u16,
+    pub day_key: i64,
+    pub day_count: u16,
+}
+
 /// One letter to deliver. Grouped so the delivery call reads as data rather
 /// than seven positional arguments.
 pub struct NewMail<'a> {
@@ -420,6 +429,7 @@ impl AuthService {
         Self::ensure_dungeon_chest_schema(&conn)?;
         Self::ensure_dungeon_discovery_schema(&conn)?;
         Self::ensure_mail_schema(&conn)?;
+        Self::ensure_quest_schema(&conn)?;
 
         Ok(Self { pool })
     }
@@ -669,6 +679,24 @@ impl AuthService {
         )?;
         conn.execute(
             "CREATE INDEX IF NOT EXISTS idx_mail_items_mail ON mail_items(mail_id)",
+            [],
+        )?;
+        Ok(())
+    }
+
+    /// Hunting-board progress. `day_key`/`day_count` carry the daily limit
+    /// (IMP-2.6): the key is the UTC day the count belongs to, so the reset is
+    /// a comparison at turn-in rather than a midnight sweep.
+    fn ensure_quest_schema(conn: &Connection) -> Result<(), rusqlite::Error> {
+        conn.execute(
+            "CREATE TABLE IF NOT EXISTS character_quests (
+                character_id INTEGER NOT NULL REFERENCES characters(id) ON DELETE CASCADE,
+                quest_id TEXT NOT NULL,
+                progress INTEGER NOT NULL DEFAULT 0,
+                day_key INTEGER NOT NULL DEFAULT 0,
+                day_count INTEGER NOT NULL DEFAULT 0,
+                PRIMARY KEY (character_id, quest_id)
+            )",
             [],
         )?;
         Ok(())
@@ -1068,6 +1096,86 @@ impl AuthService {
     pub fn delete_expired_mail(&self, now: i64) -> Result<usize, AuthError> {
         let conn = self.open_connection()?;
         Ok(conn.execute("DELETE FROM mail WHERE expires_at < ?1", params![now])?)
+    }
+
+    /// Every contract row for one character: accepted progress and the daily
+    /// tally, including rows kept only for their tally.
+    pub fn load_quests(&self, character_id: i64) -> Result<Vec<QuestRow>, AuthError> {
+        let conn = self.open_connection()?;
+        let mut stmt = conn.prepare(
+            "SELECT quest_id, progress, day_key, day_count FROM character_quests \
+             WHERE character_id = ?1",
+        )?;
+        let rows = stmt
+            .query_map(params![character_id], |row| {
+                Ok(QuestRow {
+                    quest_id: row.get(0)?,
+                    progress: row.get::<_, i64>(1)? as u16,
+                    day_key: row.get(2)?,
+                    day_count: row.get::<_, i64>(3)? as u16,
+                })
+            })?
+            .collect::<Result<Vec<_>, _>>()?;
+        Ok(rows)
+    }
+
+    /// Upsert progress without touching the daily tally — the batch save path.
+    pub fn save_quest_progress(
+        &self,
+        character_id: i64,
+        rows: &[(String, u16)],
+    ) -> Result<(), AuthError> {
+        let mut conn = self.open_connection()?;
+        let tx = conn.transaction()?;
+        for (quest_id, progress) in rows {
+            tx.execute(
+                "INSERT INTO character_quests (character_id, quest_id, progress) \
+                 VALUES (?1, ?2, ?3) \
+                 ON CONFLICT(character_id, quest_id) DO UPDATE SET progress = excluded.progress",
+                params![character_id, quest_id, i64::from(*progress)],
+            )?;
+        }
+        tx.commit()?;
+        Ok(())
+    }
+
+    /// Record one completion: clears progress and advances the daily tally,
+    /// rolling it over when `day_key` moved. One statement, so a concurrent
+    /// turn-in cannot double-count.
+    pub fn complete_quest(
+        &self,
+        character_id: i64,
+        quest_id: &str,
+        day_key: i64,
+    ) -> Result<u16, AuthError> {
+        let conn = self.open_connection()?;
+        conn.execute(
+            "INSERT INTO character_quests (character_id, quest_id, progress, day_key, day_count) \
+             VALUES (?1, ?2, 0, ?3, 1) \
+             ON CONFLICT(character_id, quest_id) DO UPDATE SET \
+               progress = 0, \
+               day_count = CASE WHEN day_key = excluded.day_key THEN day_count + 1 ELSE 1 END, \
+               day_key = excluded.day_key",
+            params![character_id, quest_id, day_key],
+        )?;
+        let count: i64 = conn.query_row(
+            "SELECT day_count FROM character_quests WHERE character_id = ?1 AND quest_id = ?2",
+            params![character_id, quest_id],
+            |row| row.get(0),
+        )?;
+        Ok(count.clamp(0, i64::from(u16::MAX)) as u16)
+    }
+
+    /// Forget one contract's progress. The daily tally row survives — dropping
+    /// a contract must not hand back a spent daily completion.
+    pub fn abandon_quest(&self, character_id: i64, quest_id: &str) -> Result<(), AuthError> {
+        let conn = self.open_connection()?;
+        conn.execute(
+            "UPDATE character_quests SET progress = 0 \
+             WHERE character_id = ?1 AND quest_id = ?2",
+            params![character_id, quest_id],
+        )?;
+        Ok(())
     }
 
     pub fn load_blocked_names(&self, character_id: i64) -> Result<Vec<String>, AuthError> {

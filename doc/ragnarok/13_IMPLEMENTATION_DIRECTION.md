@@ -825,7 +825,7 @@ crypt_town,Crypt Town,-1402.0,1.1,4680.0,600,3
 | 결정 | 채택 (09 #2) |
 | 난이도 | 대 |
 | 선행 조건 | IMP-2.1(보상 지급 경로), IMP-1.1(레벨 구간 설계의 전제) |
-| 프로토콜 변경 | 있음 — `OpenQuestBoard` / `AcceptQuest` / `AbandonQuest` / `TurnInQuest`, `QuestBoard` / `QuestAccepted` / `QuestProgress` / `QuestCompleted` |
+| 프로토콜 변경 | 있음 — `OpenQuestBoard` / `AcceptQuest` / `AbandonQuest` / `TurnInQuest`, `QuestBoard` / `QuestAccepted` / `QuestProgress` / `QuestCompleted` + `QuestOffer` 페이로드 (v31 → **v32**) |
 | 저장 스키마 변경 | 있음 — `character_quests` 테이블 |
 
 **손댈 파일**
@@ -840,8 +840,16 @@ crypt_town,Crypt Town,-1402.0,1.1,4680.0,600,3
 - `server/src/game_state/player.rs:644` `flush_dirty_saves` 합류, `:302` 정리.
 - `client/src/lib/stores/questStore.ts`, `QuestBoardPanel.svelte`, `QuestTracker.svelte`,
   `overlayStack.ts`.
-- `agent-client/` — `AgentAction::AcceptQuest`/`TurnInQuest`, `format_world_state`에
-  진행 중 퀘스트 표시.
+- `agent-client/` — `AgentAction::QuestBoard`/`AcceptQuest`/`TurnInQuest`.
+  **`quest_board`가 추가된 이유**: 봇은 읽을 수 없는 계약을 수락할 수 없다. 진행 상황은
+  `format_event`가 `[Quest] id 3/10` 형태로 흘려주므로 별도 월드 상태 필드는 두지 않았다.
+- `server/src/game_state/combat.rs` — 처치 훅 외에 `bank_xp`를 추출했다.
+  계약 보상 XP는 레벨 차 감쇠(IMP-1.1)를 **받지 않는 고정액**이라, 감쇠를 품고 있던
+  `grant_monster_kill_xp`의 본체를 공용 함수로 빼고 두 호출자가 각자의 금액 규칙을
+  넘긴다.
+- `client/src/lib/components/GameHud.svelte` — 보드를 여는 버튼. 도시 서비스 NPC가
+  아직 없으므로(IMP-2.2) **HUD 버튼이 임시 진입점**이고, 열리는 보드는 `capital`
+  하나로 고정한다. NPC가 생기면 이 버튼은 상호작용으로 대체된다.
 
 **구현 방향**
 카운터 훅은 이미 정확히 한 곳에 있다: `combat.rs`가 `party_members_sharing_kill`로
@@ -890,10 +898,16 @@ CREATE TABLE IF NOT EXISTS character_quests (
 
 **마이그레이션** — 신규 테이블. 기존 캐릭터는 수락한 퀘스트 없음.
 
-**검증**
-- `quest_defs.rs` 부팅 테스트: 없는 몬스터/아이템을 참조하면 기동 실패.
-- `game_state` 테스트: 파티 처치 시 전원 카운트, 레벨 구간 밖 수락 거부,
-  수락 상한 5 초과 거부, 완료 후 보상이 우편으로 생성되는지.
+**포기(abandon)의 규칙** — 진척은 0으로 돌아가지만 **그날 쓴 일일 횟수는 돌려주지
+않는다.** `character_quests` 행을 지우지 않고 `progress`만 0으로 만드는 이유가 이것이다.
+지웠다면 "일일 계약 완료 → 재수락 → 포기"로 한도를 세탁할 수 있다.
+
+**검증** (구현 완료 — 12개 테스트)
+- `server/src/quest_defs.rs`: 정의 교차검증 2개(부팅 assert, 인턴 왕복).
+- `server/src/game_state/tests/quest_tests.rs`: 파티 전원 카운트, 대상 외 몬스터는
+  무반응, 레벨 구간 밖 수락 거부, 수락 상한, 반납 시 **우편으로** 보상 + 일일 소진,
+  미완료 반납 거부, 포기 시 진척만 초기화, 저장·재로드 왕복,
+  `utc_day_key` 경계(자정 전후·음수 시각), 날짜가 바뀌면 일일 카운트 리셋.
 - 인게임: 보드에서 수락 → 대상 사냥 → 트래커 증가 → 반납 → 우편 도착 → 수령.
 
 **성능** — 처치당 최대 5회 비교, 할당 0. 저장은 배치 합류.

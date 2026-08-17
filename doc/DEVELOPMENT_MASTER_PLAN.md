@@ -274,8 +274,8 @@ Phase 번호와 1:1이다(M1 = Phase 1 …). **작업 ID는 13의 ID가 정본�
 | 14 | IMP-2.3 | 창고 (Storage) | IMP-2.2, SPK-2, IMP-0.1 | L | shared/server/client | `STORAGE_SLOTS = 120`, 열기/입금/출금/닫기 프로토콜(**델타**), 거리(NPC 근처)·슬롯 상한·원자성 검증 — **창고 자체에는 무게 제한이 없다**(출금 시 인벤토리 `max_carry_weight`만 검사), 기존 배치 세이브 합류, UI + `overlayStack.ts` 등록 |
 | 15 | SPK-3 | 유료 이동 로딩 폭풍 스파이크 | — | S | server/client(test) | 도착 순간의 타일·하우징·오브젝트 요청 폭 측정 + §7 판정 ([LOADING_OPTIMIZATION.md](LOADING_OPTIMIZATION.md)) |
 | 16 | IMP-2.4 | 유료 이동 + "던전 워프 불가" | IMP-2.2, SPK-3 | L | shared/server/client | **도시 소수 고정 지점만**(임의 좌표 금지), 요금 제니 싱크, 던전 입구·내부 목적지 제외, 타일 캐시 예열(`terrain/src/tile_cache.rs`) |
-| 17 | IMP-2.5 | 헌팅 보드 반복 퀘스트 | IMP-2.1, IMP-1.1 | L | data/shared/server/client | `data-src/hunting_quests.csv` (`id,boardId,name,monsterId,count,minLevel,maxLevel,rewardXp,rewardZeny,rewardItem,dailyLimit`), `character_quests` 테이블(`day_key`/`day_count` 포함), 런타임은 quest id를 u16 인턴한 `Vec<(u16,u16)>`(수락 상한 5), 처치 훅은 `combat.rs:499~:511`의 XP 수령자 목록 재사용, **보상은 우편 지급** |
-| 18 | IMP-2.6 | 일일 한도 + 고효율 | IMP-2.5, IMP-0.1 | M | data/server/client | 보드당 일일 한도(캐릭터 단위), 리셋 기준 시각 고정, 한도 소진 UI 표시. **IMP-2.5와 같은 릴리스에 나간다** |
+| [x] 17 | IMP-2.5 | 헌팅 보드 반복 퀘스트 | IMP-2.1, IMP-1.1 | L | data/shared/server/client | `data-src/hunting_quests.csv` (`id,boardId,name,monsterId,count,minLevel,maxLevel,rewardXp,rewardZeny,rewardItem,dailyLimit`), `character_quests` 테이블(`day_key`/`day_count` 포함), 런타임은 quest id를 u16 인턴한 `Vec<(u16,u16)>`(수락 상한 5), 처치 훅은 `combat.rs:499~:511`의 XP 수령자 목록 재사용, **보상은 우편 지급** |
+| [x] 18 | IMP-2.6 | 일일 한도 + 고효율 | IMP-2.5, IMP-0.1 | M | data/server/client | 보드당 일일 한도(캐릭터 단위), 리셋 기준 시각 고정, 한도 소진 UI 표시. **IMP-2.5와 같은 릴리스에 나간다** |
 | 19 | IMP-2.7 | 미니보스 (장주기 + 변량 리스폰) | IMP-1.2 | M | data/server | `data-src/world_bosses.csv`(신규) + `server/src/world_boss_defs.rs`(신규), `tick_world_bosses` 30초 틱(`server/src/main.rs:84` `run_ticks`), 부팅 시 `monsterId`의 `boss=true` assert, `client/src/lib/components/map-editor/MapEditorCursor.svelte`에 좌표 복사 버튼 |
 | 20 | IMP-2.8 | MVP 기여도 보너스 | IMP-1.2, IMP-2.7 | M | shared/server/client | 보스 한정 누적 피해 기록(**메모리 상한 필수**), 파티 분배와 별개 경로, 보상은 우편. SPK-1이 no-go면 참여자 상한을 둔 축소형으로 |
 

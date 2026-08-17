@@ -716,6 +716,22 @@ class NetworkManager {
     this.sendMessage({ DeleteMail: { mail_id: mailId } })
   }
 
+  sendOpenQuestBoard(boardId: string) {
+    this.sendMessage({ OpenQuestBoard: { board_id: boardId } })
+  }
+
+  sendAcceptQuest(questId: string) {
+    this.sendMessage({ AcceptQuest: { quest_id: questId } })
+  }
+
+  sendAbandonQuest(questId: string) {
+    this.sendMessage({ AbandonQuest: { quest_id: questId } })
+  }
+
+  sendTurnInQuest(questId: string) {
+    this.sendMessage({ TurnInQuest: { quest_id: questId } })
+  }
+
   sendBuyItem(merchantPlayerId: number, itemDefId: string) {
     this.sendMessage({
       BuyItem: { merchant_player_id: merchantPlayerId, item_def_id: itemDefId },

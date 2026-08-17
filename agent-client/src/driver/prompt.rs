@@ -431,6 +431,64 @@ pub(crate) fn format_event(state: &SharedState, msg: &ServerMessage) -> Option<S
                 player.name, player.health, player.max_health
             ))
         }
+        ServerMessage::QuestBoard { board_id, quests } => {
+            if quests.is_empty() {
+                return Some(format!("[Board:{board_id}] no contracts"));
+            }
+            let lines: Vec<String> = quests
+                .iter()
+                .map(|q| {
+                    let held = match q.progress {
+                        Some(banked) => format!(" [held {banked}/{}]", q.count),
+                        None => String::new(),
+                    };
+                    let daily = if q.daily_limit > 0 {
+                        format!(" daily {}/{}", q.daily_remaining, q.daily_limit)
+                    } else {
+                        String::new()
+                    };
+                    format!(
+                        "  {} \"{}\" {} x{} lv{}-{} → {} xp, {}c{daily}{held}",
+                        q.id,
+                        q.name,
+                        q.monster_id,
+                        q.count,
+                        q.min_level,
+                        q.max_level,
+                        q.reward_xp,
+                        q.reward_zeny
+                    )
+                })
+                .collect();
+            Some(format!(
+                "[Board:{board_id}] {} contract(s):\n{}",
+                quests.len(),
+                lines.join("\n")
+            ))
+        }
+        ServerMessage::QuestAccepted { quest_id, count } => {
+            Some(format!("[Quest] accepted {quest_id} (need {count})"))
+        }
+        ServerMessage::QuestProgress {
+            quest_id,
+            progress,
+            count,
+        } => Some(if progress >= count {
+            format!("[Quest] {quest_id} {progress}/{count} — ready to turn in")
+        } else {
+            format!("[Quest] {quest_id} {progress}/{count}")
+        }),
+        ServerMessage::QuestCompleted {
+            quest_id,
+            rewarded,
+            daily_remaining,
+        } => Some(if *rewarded {
+            format!(
+                "[Quest] {quest_id} complete — reward is in your mailbox (daily left: {daily_remaining})"
+            )
+        } else {
+            format!("[Quest] {quest_id} abandoned")
+        }),
         ServerMessage::MailUnread { count } => {
             Some(format!("[Mail] {count} unread — use check_mail to read them"))
         }

@@ -27,6 +27,7 @@ mod party_tests;
 mod persistence_tests;
 mod pickup_tests;
 mod player_tests;
+mod quest_tests;
 mod skills_tests;
 mod spawn_scale_tests;
 mod spawn_soak_tests;
@@ -278,6 +279,7 @@ fn make_game_state_with_zones(
     let world_drop_defs = crate::world_drop_defs::WorldDropDefs::load(&item_defs);
     let monster_defs = MonsterDefs::load();
     let dungeon_defs = crate::dungeon_defs::DungeonDefs::load(&item_defs, &monster_defs);
+    let quest_defs = crate::quest_defs::QuestDefs::load(&monster_defs, &item_defs);
     GameState::new(
         monster_defs,
         item_defs,
@@ -286,6 +288,7 @@ fn make_game_state_with_zones(
         housing_io,
         no_spawn_zones,
         dungeon_defs,
+        quest_defs,
         Arc::new(onlinerpg_terrain::height::HeightSampler::new(height)),
         Arc::new(onlinerpg_terrain::water::WaterSampler::new(water)),
     )

@@ -1,0 +1,76 @@
+{
+  "hb_kobold_10": {
+    "id": "hb_kobold_10",
+    "boardId": "capital",
+    "name": "Kobold Cull",
+    "monsterId": "kobold",
+    "count": 10,
+    "minLevel": 1,
+    "maxLevel": 4,
+    "rewardXp": 120,
+    "rewardZeny": 300,
+    "dailyLimit": 0
+  },
+  "hb_goblin_10": {
+    "id": "hb_goblin_10",
+    "boardId": "capital",
+    "name": "Goblin Cull",
+    "monsterId": "goblin",
+    "count": 10,
+    "minLevel": 2,
+    "maxLevel": 6,
+    "rewardXp": 260,
+    "rewardZeny": 450,
+    "dailyLimit": 0
+  },
+  "hb_orc_8": {
+    "id": "hb_orc_8",
+    "boardId": "capital",
+    "name": "Orc Patrol",
+    "monsterId": "orc",
+    "count": 8,
+    "minLevel": 4,
+    "maxLevel": 9,
+    "rewardXp": 900,
+    "rewardZeny": 900,
+    "dailyLimit": 0
+  },
+  "hb_gnoll_8": {
+    "id": "hb_gnoll_8",
+    "boardId": "capital",
+    "name": "Gnoll Watch",
+    "monsterId": "gnoll",
+    "count": 8,
+    "minLevel": 5,
+    "maxLevel": 10,
+    "rewardXp": 1400,
+    "rewardZeny": 1200,
+    "dailyLimit": 0
+  },
+  "hb_ogre_5": {
+    "id": "hb_ogre_5",
+    "boardId": "capital",
+    "name": "Ogre Contract",
+    "monsterId": "ogre",
+    "count": 5,
+    "minLevel": 8,
+    "maxLevel": 99,
+    "rewardXp": 9000,
+    "rewardZeny": 5000,
+    "rewardItem": "healing_potion",
+    "dailyLimit": 1
+  },
+  "hb_troll_5": {
+    "id": "hb_troll_5",
+    "boardId": "capital",
+    "name": "Troll Contract",
+    "monsterId": "troll",
+    "count": 5,
+    "minLevel": 8,
+    "maxLevel": 99,
+    "rewardXp": 9000,
+    "rewardZeny": 6000,
+    "rewardItem": "healing_potion",
+    "dailyLimit": 1
+  }
+}

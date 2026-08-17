@@ -85,6 +85,16 @@ import {
   resetMailStores,
   type MailEntry,
 } from '../stores/mailStore'
+import {
+  questBoard,
+  questBoardLoading,
+  acceptedQuests,
+  applyQuestProgress,
+  trackQuest,
+  untrackQuest,
+  resetQuestStores,
+  type QuestOffer,
+} from '../stores/questStore'
 import { enqueueConsent } from '../stores/consentQueue'
 import { editorTreeDataManager } from '../stores/editorStore'
 import { discoveredDungeonIds } from '../stores/dungeonStore'
@@ -650,6 +660,7 @@ export function handleServerMessage(
       // Mail is per character; a fresh session refetches the badge from the
       // join snapshot and the list only when the panel is opened.
       resetMailStores()
+      resetQuestStores()
       gameStore.update((state) => {
         state.otherPlayers.clear()
         remotePlayerManager.reset()
@@ -1279,6 +1290,63 @@ export function handleServerMessage(
           : session
       )
       break
+
+    case 'QuestBoard': {
+      questBoard.set({
+        boardId: data.board_id,
+        quests: data.quests as QuestOffer[],
+      })
+      questBoardLoading.set(false)
+      // The board is the only message carrying names for accepted contracts,
+      // so the tracker learns them here.
+      acceptedQuests.update((map) => {
+        for (const quest of data.quests as QuestOffer[]) {
+          if (quest.progress === null) continue
+          map.set(quest.id, {
+            name: quest.name,
+            progress: quest.progress,
+            count: quest.count,
+          })
+        }
+        return new Map(map)
+      })
+      break
+    }
+
+    case 'QuestAccepted': {
+      const offer = get(questBoard).quests.find((q) => q.id === data.quest_id)
+      trackQuest(data.quest_id, offer?.name ?? data.quest_id, data.count)
+      addCombatMessage({
+        text: `Contract accepted: ${offer?.name ?? data.quest_id}.`,
+        sender: 'local',
+      })
+      break
+    }
+
+    case 'QuestProgress': {
+      applyQuestProgress(data.quest_id, data.progress, data.count)
+      if (data.progress >= data.count) {
+        const name =
+          get(acceptedQuests).get(data.quest_id)?.name ?? data.quest_id
+        addCombatMessage({
+          text: `${name} is ready to turn in.`,
+          sender: 'local',
+        })
+      }
+      break
+    }
+
+    case 'QuestCompleted': {
+      const name = get(acceptedQuests).get(data.quest_id)?.name ?? data.quest_id
+      untrackQuest(data.quest_id)
+      if (data.rewarded) {
+        addCombatMessage({
+          text: `${name} complete — the reward is in your mailbox.`,
+          sender: 'local',
+        })
+      }
+      break
+    }
 
     case 'MailUnread': {
       unreadMail.set(data.count)

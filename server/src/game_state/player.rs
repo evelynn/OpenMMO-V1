@@ -310,6 +310,7 @@ impl super::GameState {
         }
         self.remove_player_blocks(player_id).await;
         self.remove_player_friends(player_id).await;
+        self.drop_quest_progress(player_id).await;
         self.forget_whisper_partner(player_id).await;
         self.forget_player_skills(player_id).await;
         self.remove_dungeon_discoveries(player_id).await;
@@ -647,10 +648,12 @@ impl super::GameState {
         let (dirty_player_ids, dirty_states) = self.collect_dirty_character_states().await;
         let (dirty_inventory_ids, dirty_inventories) = self.collect_dirty_inventory_states().await;
         let (dirty_skill_ids, dirty_skills) = self.collect_dirty_skill_states().await;
+        let (dirty_quest_ids, dirty_quests) = self.collect_dirty_quest_states().await;
         let dirty_discoveries = self.take_pending_discovery_saves().await;
         if dirty_states.is_empty()
             && dirty_inventories.is_empty()
             && dirty_skills.is_empty()
+            && dirty_quests.is_empty()
             && dirty_discoveries.is_empty()
         {
             return;
@@ -669,6 +672,9 @@ impl super::GameState {
                     &discoveries,
                     None,
                 )?;
+                for (character_id, rows) in &dirty_quests {
+                    auth.save_quest_progress(*character_id, rows)?;
+                }
                 info!(
                     "Batch-saved {} character state(s), {} inventory/inventories",
                     character_count, inventory_count
@@ -682,6 +688,7 @@ impl super::GameState {
             self.restore_dirty_players(dirty_player_ids).await;
             self.restore_dirty_inventories(dirty_inventory_ids).await;
             self.restore_dirty_skills(dirty_skill_ids).await;
+            self.restore_dirty_quests(dirty_quest_ids).await;
             self.restore_pending_discovery_saves(dirty_discoveries)
                 .await;
         }

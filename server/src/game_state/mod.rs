@@ -246,6 +246,7 @@ mod monster;
 mod party;
 mod passability;
 mod player;
+mod quest;
 pub(crate) use player::{restored_floor_level, MoveCommand};
 mod salary;
 mod skills;
@@ -376,6 +377,12 @@ pub struct GameState {
     dirty_players: Arc<RwLock<HashSet<PlayerId>>>,
     /// Players whose inventory has changed since the last periodic save.
     dirty_inventories: Arc<RwLock<HashSet<PlayerId>>>,
+    /// Accepted hunting contracts: interned quest key → kills banked. A `Vec`
+    /// capped at `MAX_ACCEPTED_QUESTS` rather than a map — 5,000 players makes
+    /// the per-entry overhead of a string-keyed map the dominant cost, and the
+    /// per-kill scan is at most five comparisons.
+    quest_progress: Arc<RwLock<AcceptedQuests>>,
+    dirty_quests: Arc<RwLock<HashSet<PlayerId>>>,
     /// Players who relocated (or whose party reshaped) since the last
     /// party-position push; the tick maps them to parties, so entries from
     /// partyless players just drop out there.
@@ -414,6 +421,7 @@ pub struct GameState {
     npc_salary_last_day: Arc<RwLock<Option<i64>>>,
     /// Dungeon entrance registry (data/dungeons.json).
     dungeon_defs: crate::dungeon_defs::DungeonDefs,
+    quest_defs: crate::quest_defs::QuestDefs,
     /// Live dungeon runtimes, keyed by entrance id. Created lazily.
     dungeons: Arc<RwLock<HashMap<String, dungeon::DungeonRuntime>>>,
     /// monster_id → dungeon spawn slot, for respawn bookkeeping on death.
@@ -578,6 +586,7 @@ impl GameState {
         housing_io: Arc<HousingIO>,
         no_spawn_zones: Vec<NoSpawnZone>,
         dungeon_defs: crate::dungeon_defs::DungeonDefs,
+        quest_defs: crate::quest_defs::QuestDefs,
         height_sampler: Arc<onlinerpg_terrain::height::HeightSampler>,
         water_sampler: Arc<onlinerpg_terrain::water::WaterSampler>,
     ) -> Self {
@@ -619,6 +628,8 @@ impl GameState {
             housing_io,
             dirty_players: Arc::new(RwLock::new(HashSet::new())),
             dirty_inventories: Arc::new(RwLock::new(HashSet::new())),
+            quest_progress: Arc::new(RwLock::new(HashMap::new())),
+            dirty_quests: Arc::new(RwLock::new(HashSet::new())),
             party_position_dirty: Arc::new(RwLock::new(HashSet::new())),
             party_vitals_dirty: Arc::new(RwLock::new(HashSet::new())),
             persistence_lock: Arc::new(Mutex::new(())),
@@ -636,6 +647,7 @@ impl GameState {
             deal_ledgers: Arc::new(RwLock::new(deals::DealLedgers::default())),
             npc_salary_last_day: Arc::new(RwLock::new(None)),
             dungeon_defs,
+            quest_defs,
             dungeons: Arc::new(RwLock::new(HashMap::new())),
             dungeon_monsters: Arc::new(RwLock::new(HashMap::new())),
             open_shops: Arc::new(RwLock::new(HashMap::new())),
@@ -820,6 +832,9 @@ where
         .await
         .map_err(|e| crate::auth::AuthError::Database(e.to_string()))?
 }
+
+/// Accepted hunting contracts per player: interned quest key → kills banked.
+type AcceptedQuests = HashMap<PlayerId, Vec<(crate::quest_defs::QuestKey, u16)>>;
 
 const MAX_DOOR_DISTANCE: f32 = 2.0;
 

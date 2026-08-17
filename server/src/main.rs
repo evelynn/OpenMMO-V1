@@ -16,6 +16,7 @@ mod merchant_defs;
 mod monster_defs;
 mod npc_defs;
 mod npc_schedule;
+mod quest_defs;
 mod semicolon_list;
 mod terrain;
 #[cfg(test)]
@@ -294,6 +295,7 @@ async fn main() -> ExitCode {
     let monster_defs = monster_defs::MonsterDefs::load();
     let item_defs = item_defs::item_defs().clone();
     let dungeon_defs = dungeon_defs::DungeonDefs::load(&item_defs, &monster_defs);
+    let quest_defs = quest_defs::QuestDefs::load(&monster_defs, &item_defs);
     let world_drop_defs = world_drop_defs::WorldDropDefs::load(&item_defs);
     let paths = state_paths(&args.state_dir);
     let auth_service = match AuthService::new(paths.db.clone()) {
@@ -396,6 +398,7 @@ async fn main() -> ExitCode {
         Arc::clone(&housing_io),
         no_spawn_zones,
         dungeon_defs,
+        quest_defs,
         height_sampler,
         water_sampler,
     ));

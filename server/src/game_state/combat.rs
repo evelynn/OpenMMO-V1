@@ -524,6 +524,10 @@ impl super::GameState {
                     recipients.extend(sharers);
                     self.grant_monster_kill_xp(&recipients, share, effective_level)
                         .await;
+                    // Same recipient list as the XP: a party member who shares
+                    // the kill must share the contract progress, or partying
+                    // becomes a penalty for hunters (IMP-2.5).
+                    self.credit_quest_kill(&recipients, &monster_type).await;
                 }
 
                 // Schedule removal after 30 seconds. Through despawn_monsters
@@ -562,21 +566,41 @@ impl super::GameState {
         if xp_amount == 0 {
             return;
         }
+        let monster_level = u32::from(monster_level);
+        self.bank_xp(recipients, |level| {
+            (
+                xp::apply_level_diff(xp_amount, level, monster_level),
+                xp::level_diff_mult_pct(level, monster_level),
+            )
+        })
+        .await;
+    }
+
+    /// A fixed award outside combat — a contract payout, which is not scaled
+    /// by any level gap (IMP-2.5).
+    pub(super) async fn grant_quest_xp(&self, player_id: &PlayerId, xp_amount: u32) {
+        if xp_amount == 0 {
+            return;
+        }
+        self.bank_xp(&[*player_id], |_| (xp_amount, 100)).await;
+    }
+
+    /// Bank XP for a set of recipients, level-ups and notices included.
+    /// `amount_for` receives each recipient's current level and returns the
+    /// award plus the multiplier to report.
+    async fn bank_xp(&self, recipients: &[PlayerId], amount_for: impl Fn(u32) -> (u32, u8)) {
         // Read-modify-write under one lock: a member can receive two kills'
         // shares concurrently, and a split read/write would lose one. The
-        // level-gap multiplier rides along here because each recipient's level
-        // is already in hand as `old_xp` — reading `players` for it instead
-        // would take the two locks in the order the regen tick forbids.
-        let monster_level = u32::from(monster_level);
+        // recipient's level is already in hand as `old_xp`, so reading
+        // `players` for it would take the two locks in the order the regen
+        // tick forbids.
         let mut grants = Vec::with_capacity(recipients.len());
         {
             let mut map = self.player_characters.write().await;
             for player_id in recipients {
                 if let Some(entry) = map.get_mut(player_id) {
                     let old_xp = entry.1;
-                    let level = xp::level_from_xp(old_xp);
-                    let granted = xp::apply_level_diff(xp_amount, level, monster_level);
-                    let mult_pct = xp::level_diff_mult_pct(level, monster_level);
+                    let (granted, mult_pct) = amount_for(xp::level_from_xp(old_xp));
                     entry.1 += u64::from(granted);
                     grants.push((
                         *player_id,

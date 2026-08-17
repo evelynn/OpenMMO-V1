@@ -20,6 +20,8 @@
   import FriendRequestToast from './FriendRequestToast.svelte'
   import FriendPanel from './FriendPanel.svelte'
   import MailPanel from './MailPanel.svelte'
+  import QuestBoardPanel from './QuestBoardPanel.svelte'
+  import QuestTracker from './QuestTracker.svelte'
   import NpcContextMenu from './NpcContextMenu.svelte'
   import DragGhost from './DragGhost.svelte'
   import LoadingDialog from './LoadingDialog.svelte'
@@ -38,6 +40,7 @@
   import { minimapEnabled } from '../stores/minimapStore'
   import { friendPanelVisible } from '../stores/friendStore'
   import { mailPanelVisible, unreadMail } from '../stores/mailStore'
+  import { questBoardVisible } from '../stores/questStore'
   import { networkManager, type AccountCharacter } from '../network/socket'
   import { tipHatDialog } from '../stores/tipHatStore'
 
@@ -125,6 +128,8 @@
          online notice whether or not the list is on screen. -->
     <FriendPanel />
     <MailPanel />
+    <QuestBoardPanel />
+    <QuestTracker />
     <NpcContextMenu />
     <FishingPrompt />
   {/if}
@@ -211,6 +216,22 @@
             ><path
               fill="currentColor"
               d="M384 476.1L192 421.2V35.9L384 90.8zM416 88.4V456l138.5-69.3c11.9-5.9 21.5-17.4 21.5-30.7V32c0-22-21.5-37.5-42.7-30.7L416 88.4zM160 421.2l-25.5-8.5C94 400.3 64 363.6 64 321.4V280h32c17.7 0 32-14.3 32-32s-14.3-32-32-32H64V192c0-17.7-14.3-32-32-32S0 174.3 0 192v129.4C0 383.5 38.3 439 91.3 457.2l68.7 22.9V88.4L21.2 33.7C9.3 39.6 0 51.1 0 64.4v1.6h32c17.7 0 32 14.3 32 32s-14.3 32-32 32H0v24h64c17.7 0 32 14.3 32 32s-14.3 32-32 32H0v105.4c0 62.1 38.3 117.6 91.3 135.8l68.7 22.9z"
+            /></svg
+          >
+        </button>
+        <button
+          class="corner-btn"
+          onclick={() => questBoardVisible.update((v) => !v)}
+          title="Hunting board"
+        >
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            width="384"
+            height="512"
+            viewBox="0 0 384 512"
+            ><path
+              fill="currentColor"
+              d="M0 64C0 28.7 28.7 0 64 0H224V128c0 17.7 14.3 32 32 32H384V448c0 35.3-28.7 64-64 64H64c-35.3 0-64-28.7-64-64V64zm384 64H256V0L384 128zM128 240c-8.8 0-16 7.2-16 16s7.2 16 16 16H272c8.8 0 16-7.2 16-16s-7.2-16-16-16H128zm0 96c-8.8 0-16 7.2-16 16s7.2 16 16 16H272c8.8 0 16-7.2 16-16s-7.2-16-16-16H128z"
             /></svg
           >
         </button>

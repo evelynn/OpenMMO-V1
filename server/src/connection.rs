@@ -991,17 +991,18 @@ async fn handle_client_message(
             // Skills and dungeon history load before any registration: a failed
             // read must refuse the session, or an empty fallback would overwrite
             // trained skills on save and re-grant already-opened chest rewards.
-            let (skill_rows, chest_opens, discovered_dungeons) = {
+            let (skill_rows, chest_opens, discovered_dungeons, quest_rows) = {
                 let auth = Arc::clone(auth_service);
                 let loaded = crate::game_state::auth_db(move || {
                     Ok((
                         auth.load_skills(character_id)?,
                         auth.load_dungeon_history(character_id)?,
+                        auth.load_quests(character_id)?,
                     ))
                 })
                 .await;
                 match loaded {
-                    Ok((rows, (opens, ids))) => (rows, opens, ids),
+                    Ok((rows, (opens, ids), quests)) => (rows, opens, ids, quests),
                     Err(err) => {
                         warn!(
                             "Failed to load required state for character {}: {} — refusing session",
@@ -1121,6 +1122,7 @@ async fn handle_client_message(
             // Missing rows = never trained.
             let skills = crate::game_state::skills_from_rows(&skill_rows);
             game_state.register_player_skills(&id, skills.clone()).await;
+            game_state.load_quest_progress(&id, &quest_rows).await;
 
             // The equipped off-hand is the authoritative carried-torch state.
             // Resolve it before add_player builds the late-join GameState snapshot.
@@ -1711,6 +1713,28 @@ async fn handle_client_message(
             }
         }
 
+        ClientMessage::OpenQuestBoard { board_id } => {
+            if let Some(id) = &state.player_id {
+                game_state
+                    .open_quest_board(auth_service, id, &board_id)
+                    .await;
+            }
+        }
+        ClientMessage::AcceptQuest { quest_id } => {
+            if let Some(id) = &state.player_id {
+                game_state.accept_quest(auth_service, id, &quest_id).await;
+            }
+        }
+        ClientMessage::AbandonQuest { quest_id } => {
+            if let Some(id) = &state.player_id {
+                game_state.abandon_quest(auth_service, id, &quest_id).await;
+            }
+        }
+        ClientMessage::TurnInQuest { quest_id } => {
+            if let Some(id) = &state.player_id {
+                game_state.turn_in_quest(auth_service, id, &quest_id).await;
+            }
+        }
         ClientMessage::OpenMailbox => {
             if let Some(id) = &state.player_id {
                 game_state.open_mailbox(auth_service, id).await;

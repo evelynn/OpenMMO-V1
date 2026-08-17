@@ -63,6 +63,23 @@ pub(super) enum AgentAction {
         #[serde(alias = "id", alias = "mailId")]
         mail_id: i64,
     },
+    /// Read a hunting board's contracts.
+    #[serde(rename = "quest_board", alias = "hunting_board", alias = "board")]
+    QuestBoard {
+        #[serde(default = "default_board", alias = "board")]
+        board_id: String,
+    },
+    #[serde(rename = "accept_quest")]
+    AcceptQuest {
+        #[serde(alias = "id", alias = "quest")]
+        quest_id: String,
+    },
+    /// Hand in a finished contract; the payout arrives as mail.
+    #[serde(rename = "turn_in_quest", alias = "complete_quest")]
+    TurnInQuest {
+        #[serde(alias = "id", alias = "quest")]
+        quest_id: String,
+    },
     /// Cast the rod at (x, z), or 4 m south when omitted; server validates.
     /// Reflexes (the state module) fight the fish — this is only the decision to fish.
     #[serde(rename = "fish")]
@@ -330,6 +347,10 @@ pub(super) struct ActionSpec {
     pub(super) doc: &'static str,
 }
 
+fn default_board() -> String {
+    "capital".to_string()
+}
+
 pub(super) const ACTION_SPECS: &[ActionSpec] = &[
     ActionSpec {
         names: &["say"],
@@ -399,6 +420,28 @@ pub(super) const ACTION_SPECS: &[ActionSpec] = &[
         aliases: &[],
         doc: r#"- Respawn when dead:
   {"type": "respawn"}"#,
+    },
+    ActionSpec {
+        names: &["quest_board"],
+        aliases: &["hunting_board", "board"],
+        doc: r#"- Read the hunting board's contracts (kill N of a monster for XP, zeny and
+  sometimes an item). Shows which you already hold and how many daily runs
+  are left:
+  {"type": "quest_board"}"#,
+    },
+    ActionSpec {
+        names: &["accept_quest"],
+        aliases: &[],
+        doc: r#"- Take a contract you saw on the board. Only within its level band, and at
+  most five at a time:
+  {"type": "accept_quest", "quest_id": "hb_kobold_10"}"#,
+    },
+    ActionSpec {
+        names: &["turn_in_quest"],
+        aliases: &["complete_quest"],
+        doc: r#"- Hand in a finished contract. The reward arrives as mail, so read it with
+  check_mail afterwards:
+  {"type": "turn_in_quest", "quest_id": "hb_kobold_10"}"#,
     },
     ActionSpec {
         names: &["check_mail"],
@@ -664,7 +707,11 @@ impl AgentAction {
             | Self::Buyback { .. }
             | Self::Fish { .. }
             | Self::Respawn => true,
-            Self::CheckMail | Self::ClaimMail { .. } => false,
+            Self::CheckMail
+            | Self::ClaimMail { .. }
+            | Self::QuestBoard { .. }
+            | Self::AcceptQuest { .. }
+            | Self::TurnInQuest { .. } => false,
             Self::Say { .. }
             | Self::StopFishing
             | Self::OfferDeal { .. }
@@ -722,7 +769,10 @@ impl AgentAction {
             | Self::PartySay { .. }
             | Self::Wait
             | Self::CheckMail
-            | Self::ClaimMail { .. } => true,
+            | Self::ClaimMail { .. }
+            | Self::QuestBoard { .. }
+            | Self::AcceptQuest { .. }
+            | Self::TurnInQuest { .. } => true,
             Self::Move { .. }
             | Self::Attack { .. }
             | Self::Follow { .. }
@@ -767,6 +817,9 @@ impl AgentAction {
             Self::Respawn => "respawn",
             Self::CheckMail => "check_mail",
             Self::ClaimMail { .. } => "claim_mail",
+            Self::QuestBoard { .. } => "quest_board",
+            Self::AcceptQuest { .. } => "accept_quest",
+            Self::TurnInQuest { .. } => "turn_in_quest",
             Self::Fish { .. } => "fish",
             Self::StopFishing => "stop_fishing",
             Self::OfferDeal { .. } => "offer_deal",
@@ -1212,6 +1265,15 @@ pub(super) fn action_to_command(
         }
         AgentAction::Respawn => Some(ClientMessage::RequestRespawn),
         AgentAction::CheckMail => Some(ClientMessage::OpenMailbox),
+        AgentAction::QuestBoard { board_id } => Some(ClientMessage::OpenQuestBoard {
+            board_id: board_id.clone(),
+        }),
+        AgentAction::AcceptQuest { quest_id } => Some(ClientMessage::AcceptQuest {
+            quest_id: quest_id.clone(),
+        }),
+        AgentAction::TurnInQuest { quest_id } => Some(ClientMessage::TurnInQuest {
+            quest_id: quest_id.clone(),
+        }),
         AgentAction::ClaimMail { mail_id } => Some(ClientMessage::ClaimMail { mail_id: *mail_id }),
         AgentAction::Fish { x, z } => {
             // Explicit coordinates, or a fixed short cast south of the agent.

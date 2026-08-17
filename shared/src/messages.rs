@@ -228,6 +228,27 @@ pub fn resolve_title<'a>(
         .or_else(|| titles.find(|t| t.to_lowercase().contains(&wanted)))
 }
 
+/// One contract as the board shows it, with this character's state folded in.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct QuestOffer {
+    pub id: String,
+    pub name: String,
+    pub monster_id: String,
+    pub count: u16,
+    pub min_level: u32,
+    pub max_level: u32,
+    pub reward_xp: u32,
+    pub reward_zeny: i64,
+    pub reward_item: Option<String>,
+    /// 0 = unlimited. Otherwise how many completions the day allows.
+    pub daily_limit: u16,
+    /// Completions left today; equals `daily_limit` when unlimited is false
+    /// and none have been turned in. Always 0 when the contract is exhausted.
+    pub daily_remaining: u16,
+    /// Kills banked so far, `None` when the contract is not accepted.
+    pub progress: Option<u16>,
+}
+
 /// One attachment row on a piece of mail. Mirrors `mail_items`.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct MailAttachment {
@@ -572,6 +593,23 @@ pub enum ClientMessage {
     /// friend may be offline, so no player id exists to name them by.
     FriendRemove {
         name: String,
+    },
+    /// Ask for one hunting board's contracts, with this character's progress
+    /// and remaining daily completions folded in.
+    OpenQuestBoard {
+        board_id: String,
+    },
+    AcceptQuest {
+        quest_id: String,
+    },
+    /// Drop a contract; banked progress is discarded with it.
+    AbandonQuest {
+        quest_id: String,
+    },
+    /// Claim a finished contract. Rewards arrive by mail, so a full bag never
+    /// costs the player the payout.
+    TurnInQuest {
+        quest_id: String,
     },
     /// Ask for the full mailbox. The list is pulled, never pushed: the
     /// steady-state signal is `MailUnread`'s count.
@@ -922,6 +960,28 @@ pub enum ServerMessage {
         /// percentage (100 = no adjustment). Display only — the server has
         /// banked the adjusted amount. 100 on the death-penalty notice.
         xp_mult_pct: u8,
+    },
+    /// Direct message: one board's contracts, in reply to `OpenQuestBoard`.
+    QuestBoard {
+        board_id: String,
+        quests: Vec<QuestOffer>,
+    },
+    QuestAccepted {
+        quest_id: String,
+        count: u16,
+    },
+    /// Direct message: a kill advanced one contract. Sent only on change and
+    /// only to the hunter — never broadcast.
+    QuestProgress {
+        quest_id: String,
+        progress: u16,
+        count: u16,
+    },
+    /// Direct message: turned in (`rewarded`) or dropped (`rewarded: false`).
+    QuestCompleted {
+        quest_id: String,
+        rewarded: bool,
+        daily_remaining: u16,
     },
     /// Direct message: the mailbox contents, in reply to `OpenMailbox`.
     MailList {

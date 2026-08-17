@@ -1,0 +1,7 @@
+id,boardId,name,monsterId,count,minLevel,maxLevel,rewardXp,rewardZeny,rewardItem,dailyLimit
+hb_kobold_10,capital,Kobold Cull,kobold,10,1,4,120,300,,0
+hb_goblin_10,capital,Goblin Cull,goblin,10,2,6,260,450,,0
+hb_orc_8,capital,Orc Patrol,orc,8,4,9,900,900,,0
+hb_gnoll_8,capital,Gnoll Watch,gnoll,8,5,10,1400,1200,,0
+hb_ogre_5,capital,Ogre Contract,ogre,5,8,99,9000,5000,healing_potion,1
+hb_troll_5,capital,Troll Contract,troll,5,8,99,9000,6000,healing_potion,1

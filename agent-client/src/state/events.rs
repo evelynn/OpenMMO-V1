@@ -140,6 +140,10 @@ impl SharedState {
             // New mail can wait for the next batched prompt: it keeps for 30
             // days and waking the LLM for it is pure cost.
             | ServerMessage::MailUnread { .. }
+            | ServerMessage::QuestBoard { .. }
+            | ServerMessage::QuestAccepted { .. }
+            | ServerMessage::QuestProgress { .. }
+            | ServerMessage::QuestCompleted { .. }
             | ServerMessage::MailList { .. }
             | ServerMessage::MailUpdated { .. }
             | ServerMessage::PlayerHealthUpdate { .. }

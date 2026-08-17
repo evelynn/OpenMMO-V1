@@ -165,6 +165,10 @@ export type ClientMessage =
   | 'OpenMailbox'
   | { ClaimMail: { mail_id: number } }
   | { DeleteMail: { mail_id: number } }
+  | { OpenQuestBoard: { board_id: string } }
+  | { AcceptQuest: { quest_id: string } }
+  | { AbandonQuest: { quest_id: string } }
+  | { TurnInQuest: { quest_id: string } }
   | { OpenDungeonChest: { entrance_id: string } }
   | {
       BreakDungeonProp: { entrance_id: string; depth: number; prop_id: number }
