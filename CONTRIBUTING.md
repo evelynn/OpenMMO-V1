@@ -10,6 +10,8 @@ Contributions are welcome — this guide collects the practical details that are
 
 ## Development setup
 
+`bash tools/dev-setup.sh` bootstraps a fresh clone (toolchain check, assets, generated data, WASM, a ~1 GB dev terrain bake); `--check` diagnoses an existing one without changing anything. [doc/DEVELOPMENT.md](doc/DEVELOPMENT.md) covers the manual steps, the daily dev loop, and troubleshooting.
+
 Follow the [Development Setup](README.md#development-setup) section of the README. Two steps live outside git and are required for a working world: fetching binary assets (`bash tools/fetch-assets.sh`, re-run whenever `assets.lock` changes) and baking terrain (`cargo run -p terrain-gen --release -- bake --seed 42`, ~73 GB).
 
 ## Checks CI runs

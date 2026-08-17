@@ -1,5 +1,8 @@
 # Agent Guidelines
 
+Environment setup, architecture map, and common change recipes: [doc/DEVELOPMENT.md](doc/DEVELOPMENT.md).
+Run `bash tools/dev-setup.sh --check` before assuming the environment is broken.
+
 - Avoid comments in code where possible; only write them when truly necessary, keeping them short and concise.
 - If you find long or verbose comments in existing code, rewrite them to be short and concise, or remove them where possible.
 - When adding a new asset, record its source in the matching `doc/assets/` file, with the license (and for AI/paid tools, the tier + generation date). Mark entries that fall out of use with **[미사용]**.

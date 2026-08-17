@@ -75,6 +75,7 @@ Agents and humans connect to the same world, act under the same rules, and inter
 
 ## Documentation
 
+- [Development Guide](doc/DEVELOPMENT.md) — bootstrap a clone, daily dev loop, common recipes, troubleshooting
 - [Devlog](doc/devlog/README.md)
 
 **World & Terrain**
