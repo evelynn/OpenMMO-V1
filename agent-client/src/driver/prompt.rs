@@ -436,9 +436,13 @@ pub(crate) fn format_event(state: &SharedState, msg: &ServerMessage) -> Option<S
             total_xp,
             new_level,
             leveled_up,
+            xp_mult_pct,
             ..
         } => {
             let mut s = format!("[XP] +{xp_amount} (total: {total_xp}, level: {new_level})");
+            if *xp_mult_pct != 100 {
+                s.push_str(&format!(" [level gap: {xp_mult_pct}%]"));
+            }
             if *leveled_up {
                 s.push_str(" LEVEL UP!");
             }

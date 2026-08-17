@@ -7,6 +7,55 @@ pub fn monster_xp(level: u8, guard: u8) -> u32 {
     base + guard_bonus
 }
 
+/// 100% as basis points, the scale `level_diff_mult_bp` returns on.
+pub const LEVEL_DIFF_BASE_BP: u32 = 10_000;
+/// Level gap, either direction, that costs nothing.
+pub const LEVEL_DIFF_FREE_BAND: u32 = 2;
+/// Decay per level the player is above the monster, past the free band.
+pub const LEVEL_DIFF_DECAY_BP_PER_LEVEL: u32 = 1_000;
+/// Decay stops here: grinding far-below monsters stays worth a trickle.
+pub const LEVEL_DIFF_FLOOR_BP: u32 = 1_000;
+/// Bonus per level the player is below the monster, past the free band.
+pub const LEVEL_DIFF_BONUS_BP_PER_LEVEL: u32 = 500;
+/// Bonus ceiling, so a level-1 character killing a boss cannot skip tiers.
+pub const LEVEL_DIFF_CEIL_BP: u32 = 12_000;
+
+/// XP multiplier in basis points for a level gap. Flat inside the free band,
+/// then decaying toward `LEVEL_DIFF_FLOOR_BP` when the player out-levels the
+/// monster and rising toward `LEVEL_DIFF_CEIL_BP` when it out-levels them.
+/// Asymmetric on purpose: punching down should stop paying long before
+/// punching up starts paying double.
+pub fn level_diff_mult_bp(player_level: u32, monster_level: u32) -> u32 {
+    if player_level >= monster_level {
+        let over = (player_level - monster_level).saturating_sub(LEVEL_DIFF_FREE_BAND);
+        LEVEL_DIFF_BASE_BP
+            .saturating_sub(over.saturating_mul(LEVEL_DIFF_DECAY_BP_PER_LEVEL))
+            .max(LEVEL_DIFF_FLOOR_BP)
+    } else {
+        let under = (monster_level - player_level).saturating_sub(LEVEL_DIFF_FREE_BAND);
+        LEVEL_DIFF_BASE_BP
+            .saturating_add(under.saturating_mul(LEVEL_DIFF_BONUS_BP_PER_LEVEL))
+            .min(LEVEL_DIFF_CEIL_BP)
+    }
+}
+
+/// Apply the level-gap multiplier to one recipient's share. A share that was
+/// worth something never decays to nothing — same 1 XP floor `party_xp_share`
+/// guarantees, so a decayed kill still reads as a kill.
+pub fn apply_level_diff(share: u32, player_level: u32, monster_level: u32) -> u32 {
+    if share == 0 {
+        return 0;
+    }
+    let scaled = u64::from(share) * u64::from(level_diff_mult_bp(player_level, monster_level))
+        / u64::from(LEVEL_DIFF_BASE_BP);
+    (scaled as u32).max(1)
+}
+
+/// The multiplier as a percentage, for display and the wire.
+pub fn level_diff_mult_pct(player_level: u32, monster_level: u32) -> u8 {
+    (level_diff_mult_bp(player_level, monster_level) / 100).min(u32::from(u8::MAX)) as u8
+}
+
 /// Party XP bonus per eligible member beyond the first. A full 5-member
 /// party pools exactly double the solo award.
 pub const PARTY_XP_BONUS_PER_EXTRA_PERCENT: u64 = 25;
@@ -171,6 +220,66 @@ mod tests {
         // Should terminate without panic at extreme values
         let _ = level_from_xp(u64::MAX);
         let _ = level_from_xp(u64::MAX - 1);
+    }
+
+    #[test]
+    fn level_diff_free_band_costs_nothing() {
+        for (player, monster) in [(5, 5), (7, 5), (3, 5), (5, 3), (5, 7)] {
+            assert_eq!(
+                level_diff_mult_bp(player, monster),
+                LEVEL_DIFF_BASE_BP,
+                "player {player} vs monster {monster} should be unpenalised"
+            );
+        }
+    }
+
+    #[test]
+    fn level_diff_decays_above_the_band_and_stops_at_the_floor() {
+        assert_eq!(level_diff_mult_bp(8, 5), 9_000);
+        assert_eq!(level_diff_mult_bp(12, 5), 5_000);
+        assert_eq!(level_diff_mult_bp(20, 5), LEVEL_DIFF_FLOOR_BP);
+        assert_eq!(level_diff_mult_bp(u32::MAX, 1), LEVEL_DIFF_FLOOR_BP);
+    }
+
+    #[test]
+    fn level_diff_rewards_punching_up_up_to_the_ceiling() {
+        assert_eq!(level_diff_mult_bp(5, 8), 10_500);
+        assert_eq!(level_diff_mult_bp(5, 12), 12_000);
+        assert_eq!(level_diff_mult_bp(1, u32::MAX), LEVEL_DIFF_CEIL_BP);
+    }
+
+    #[test]
+    fn level_diff_never_zeroes_a_real_share() {
+        assert_eq!(apply_level_diff(0, 20, 1), 0);
+        assert_eq!(apply_level_diff(1, 20, 1), 1);
+        assert_eq!(apply_level_diff(100, 20, 1), 10);
+        assert_eq!(apply_level_diff(100, 5, 5), 100);
+        assert_eq!(apply_level_diff(100, 1, 12), 120);
+    }
+
+    #[test]
+    fn level_diff_pct_matches_bp() {
+        assert_eq!(level_diff_mult_pct(5, 5), 100);
+        assert_eq!(level_diff_mult_pct(20, 1), 10);
+        assert_eq!(level_diff_mult_pct(1, 12), 120);
+    }
+
+    #[test]
+    fn level_diff_share_never_beats_soloing() {
+        // The decay rides on top of the party split, so the party invariant
+        // has to survive it at every gap.
+        for base in [1u32, 2, 5, 17, 107, 401] {
+            for n in 2u32..=5 {
+                for (player, monster) in [(1u32, 12u32), (5, 5), (20, 1)] {
+                    let solo = apply_level_diff(base, player, monster);
+                    let share = apply_level_diff(party_xp_share(base, n), player, monster);
+                    assert!(
+                        share <= solo,
+                        "base {base} n {n} gap {player}/{monster}: {share} > {solo}"
+                    );
+                }
+            }
+        }
     }
 
     #[test]

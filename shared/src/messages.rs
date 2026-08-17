@@ -868,6 +868,10 @@ pub enum ServerMessage {
         leveled_up: bool,
         max_hp: u32,
         current_hp: u32,
+        /// Level-gap multiplier already applied to `xp_amount`, as a
+        /// percentage (100 = no adjustment). Display only — the server has
+        /// banked the adjusted amount. 100 on the death-penalty notice.
+        xp_mult_pct: u8,
     },
     /// Direct message: the receiving player's full trained-skill map, sent
     /// once on EnterGame. Skills stay out of the broadcast `Player` struct —

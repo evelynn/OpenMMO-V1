@@ -8,6 +8,20 @@ use std::sync::LazyLock;
 use std::time::Duration;
 use tracing::{debug, info, warn};
 
+/// One recipient's share of a kill, carried from under the `players` guard to
+/// the send loop outside it.
+struct XpNotice {
+    player_id: PlayerId,
+    name: String,
+    xp_amount: u32,
+    total_xp: u64,
+    new_level: u32,
+    leveled_up: bool,
+    max_hp: u32,
+    current_hp: u32,
+    xp_mult_pct: u8,
+}
+
 const WEAPON_DROP_OFFSET_METERS: f32 = 2.0;
 // Mirrors the web and agent clients' 2m melee reach. This server-side check is
 // authoritative: clients may request an attack directly without chasing.
@@ -508,7 +522,8 @@ impl super::GameState {
                     let mut recipients = Vec::with_capacity(sharers.len() + 1);
                     recipients.push(*player_id);
                     recipients.extend(sharers);
-                    self.grant_monster_kill_xp(&recipients, share).await;
+                    self.grant_monster_kill_xp(&recipients, share, effective_level)
+                        .await;
                 }
 
                 // Schedule removal after 30 seconds. Through despawn_monsters
@@ -538,20 +553,39 @@ impl super::GameState {
     /// (HP rolls plus the full heal), dirty marks, and the direct XpGained
     /// notice. A zero share (tiny monster split) sends nothing. Batched over
     /// the whole party so one kill takes each lock once.
-    async fn grant_monster_kill_xp(&self, recipients: &[PlayerId], xp_amount: u32) {
+    async fn grant_monster_kill_xp(
+        &self,
+        recipients: &[PlayerId],
+        xp_amount: u32,
+        monster_level: u8,
+    ) {
         if xp_amount == 0 {
             return;
         }
         // Read-modify-write under one lock: a member can receive two kills'
-        // shares concurrently, and a split read/write would lose one.
+        // shares concurrently, and a split read/write would lose one. The
+        // level-gap multiplier rides along here because each recipient's level
+        // is already in hand as `old_xp` — reading `players` for it instead
+        // would take the two locks in the order the regen tick forbids.
+        let monster_level = u32::from(monster_level);
         let mut grants = Vec::with_capacity(recipients.len());
         {
             let mut map = self.player_characters.write().await;
             for player_id in recipients {
                 if let Some(entry) = map.get_mut(player_id) {
                     let old_xp = entry.1;
-                    entry.1 += u64::from(xp_amount);
-                    grants.push((*player_id, old_xp, entry.1, entry.2.clone()));
+                    let level = xp::level_from_xp(old_xp);
+                    let granted = xp::apply_level_diff(xp_amount, level, monster_level);
+                    let mult_pct = xp::level_diff_mult_pct(level, monster_level);
+                    entry.1 += u64::from(granted);
+                    grants.push((
+                        *player_id,
+                        old_xp,
+                        entry.1,
+                        entry.2.clone(),
+                        granted,
+                        mult_pct,
+                    ));
                 }
             }
         }
@@ -566,7 +600,7 @@ impl super::GameState {
         let mut leveled = Vec::new();
         {
             let mut players = self.players.write().await;
-            for (player_id, old_xp, new_xp, attributes) in &grants {
+            for (player_id, old_xp, new_xp, attributes, granted, mult_pct) in &grants {
                 let old_level = xp::level_from_xp(*old_xp);
                 let new_level = xp::level_from_xp(*new_xp);
                 let leveled_up = new_level > old_level;
@@ -601,15 +635,17 @@ impl super::GameState {
                     p.health = p.max_health;
                     leveled.push(*player_id);
                 }
-                notices.push((
-                    *player_id,
-                    p.name.clone(),
-                    *new_xp,
+                notices.push(XpNotice {
+                    player_id: *player_id,
+                    name: p.name.clone(),
+                    xp_amount: *granted,
+                    total_xp: *new_xp,
                     new_level,
                     leveled_up,
-                    p.max_health,
-                    p.health,
-                ));
+                    max_hp: p.max_health,
+                    current_hp: p.health,
+                    xp_mult_pct: *mult_pct,
+                });
             }
         }
 
@@ -621,27 +657,40 @@ impl super::GameState {
             self.party_vitals_dirty.write().await.extend(leveled);
         }
 
-        for (player_id, name, new_xp, new_level, leveled_up, max_hp, current_hp) in notices {
+        for notice in notices {
+            let XpNotice {
+                player_id,
+                name,
+                xp_amount,
+                total_xp,
+                new_level,
+                leveled_up,
+                max_hp,
+                current_hp,
+                xp_mult_pct,
+            } = notice;
             self.send_direct_message(
                 &player_id,
                 ServerMessage::XpGained {
                     player_id,
                     xp_amount,
                     xp_lost: 0,
-                    total_xp: new_xp,
+                    total_xp,
                     new_level,
                     leveled_up,
                     max_hp,
                     current_hp,
+                    xp_mult_pct,
                 },
             )
             .await;
 
             debug!(
-                "Player {} gained {} XP (total: {}, level: {}{})",
+                "Player {} gained {} XP at {}% (total: {}, level: {}{})",
                 name,
                 xp_amount,
-                new_xp,
+                xp_mult_pct,
+                total_xp,
                 new_level,
                 if leveled_up { " LEVEL UP!" } else { "" }
             );
@@ -1064,6 +1113,7 @@ impl super::GameState {
                 leveled_up: false,
                 max_hp: max_hp_for_msg,
                 current_hp: current_hp_for_msg,
+                xp_mult_pct: 100,
             },
         )
         .await;

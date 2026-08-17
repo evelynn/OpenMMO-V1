@@ -45,12 +45,15 @@
 **손댈 파일** — 이 문서뿐이다. 아래 네 결정의 **수치**를 해당 항목 절에 박아 넣고,
 [DEVELOPMENT_MASTER_PLAN](../DEVELOPMENT_MASTER_PLAN.md) §8 표의 "확정 시점" 칸을 갱신한다.
 
-| 결정 | 어디에 박히나 | 기본값 제안 |
-|------|---------------|-------------|
-| 일일 한도 | IMP-2.6 | 보드당 일일 3회, 계정이 아니라 **캐릭터** 단위 |
-| 인스턴스 개인 쿨다운 | IMP-4.2 | 입장 시점에 **입장자 개인**에게 부여 |
-| 거래 수수료는 소각 | IMP-3.5 | 임계 초과분 5%, NPC 수입 아님 |
-| 창고 슬롯 상한 | IMP-2.3 | `STORAGE_SLOTS = 120` (SPK-2가 검증) |
+| 결정 | 어디에 박히나 | **확정값** |
+|------|---------------|------------|
+| 일일 한도 | IMP-2.6 | 보드당 **일일 3회**, 계정이 아니라 **캐릭터** 단위. 리셋은 서버 시각 기준 매일 00:00 UTC (`DAILY_RESET_HOUR_UTC = 0`, `QUEST_DAILY_LIMIT = 3`) |
+| 인스턴스 개인 쿨다운 | IMP-4.2 | **입장 시점**에 입장자 개인에게 부여. 파티 단위 아님 (`INSTANCE_COOLDOWN_SECS`, 첫 던전은 `21_600` = 6시간) |
+| 거래 수수료는 소각 | IMP-3.5 | 임계 **10,000c 초과분의 5%**, 전액 소각 — NPC 수입으로 돌리지 않는다 (`TRADE_FEE_THRESHOLD = 10_000`, `TRADE_FEE_PCT = 5`) |
+| 창고 슬롯 상한 | IMP-2.3 | `STORAGE_SLOTS = 120` — SPK-2는 이 값을 **검증만** 한다 |
+
+> **확정 상태**: 네 값 모두 IMP-0.1에서 확정됐다. 구현 PR은 이 숫자를 상수로 옮겨
+> 적기만 하고, 바꾸려면 이 표를 먼저 고친 뒤 그 PR에서 근거를 남긴다.
 
 **구현 방향**
 코드가 없는 항목을 별도 ID로 세운 이유는 하나다 — 이 넷은 **출시 후에 바꾸면 플레이어가
@@ -122,13 +125,13 @@
 | 결정 | 채택 (09 #1) |
 | 난이도 | 소 |
 | 선행 조건 | 없음 |
-| 프로토콜 변경 | 있음 — `ServerMessage::XpGained`에 `penalty_pct: u8` 추가, `PROTOCOL_VERSION` 29 → 30 |
+| 프로토콜 변경 | 있음 — `ServerMessage::XpGained`에 `xp_mult_pct: u8` 추가, `PROTOCOL_VERSION` 29 → 30 |
 | 저장 스키마 변경 | 없음 |
 
 **손댈 파일**
 - `shared/src/xp.rs` — `monster_xp`(:4) 옆에 `level_diff_mult_bp(player_level, monster_level) -> u32`(basis point) 추가. 기존 `monster_xp` 시그니처는 **그대로 둔다**(:117~:138의 4개 테스트가 그대로 살아남는다).
 - `server/src/game_state/combat.rs` — :499의 `base_xp` 계산은 유지, :507 `party_xp_share` 뒤 `grant_monster_kill_xp`(:541)에 `monster_level: u8`을 넘긴다.
-- `shared/src/messages.rs` — `ServerMessage::XpGained`에 필드 추가(끝에 append).
+- `shared/src/messages.rs` — `ServerMessage::XpGained`에 `xp_mult_pct: u8` 추가(끝에 append). 감쇠(<100)와 보너스(>100)를 한 필드로 표현하므로 `penalty_pct`가 아니라 배율 이름을 쓴다.
 - `shared/src/lib.rs:78` — `PROTOCOL_VERSION` 증가 + 상단 체인지로그에 `/// v30:` 한 줄.
 - `client/src/lib/network/messageHandlers.ts` — `XpGained` case에서 감쇠율 표시.
 - `agent-client/src/driver/prompt.rs:164` `format_event` — `[Xp] ... (감쇠 40%)`.
@@ -146,9 +149,12 @@
 1레벨당 +5%p(천장 120%). 감쇠는 `party_xp_share` **밖**에 있으므로 파티 불변식
 (`party_share_never_beats_soloing`, `shared/src/xp.rs:204`)은 손대지 않는다.
 
-**데이터 스키마** — 없음. 곡선 상수는 `shared/src/xp.rs`에 `pub const` 3개
-(`LEVEL_DIFF_FREE_BAND: u32 = 2`, `LEVEL_DIFF_DECAY_BP_PER_LEVEL: u32 = 1000`,
-`LEVEL_DIFF_FLOOR_BP: u32 = 1000`).
+**데이터 스키마** — 없음. 곡선 상수는 `shared/src/xp.rs`에 `pub const` 6개
+(`LEVEL_DIFF_BASE_BP = 10_000`, `LEVEL_DIFF_FREE_BAND = 2`,
+`LEVEL_DIFF_DECAY_BP_PER_LEVEL = 1_000`, `LEVEL_DIFF_FLOOR_BP = 1_000`,
+`LEVEL_DIFF_BONUS_BP_PER_LEVEL = 500`, `LEVEL_DIFF_CEIL_BP = 12_000`).
+공개 함수는 `level_diff_mult_bp` · `apply_level_diff`(1 XP 바닥 포함) ·
+`level_diff_mult_pct`(와이어·표시용).
 
 **마이그레이션** — 없음. 누적 XP는 그대로이고 획득 속도만 바뀐다.
 단, 저레벨 몹 파밍 중이던 캐릭터는 체감 수급이 급락하므로 배포 공지 대상이다.

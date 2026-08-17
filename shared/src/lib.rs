@@ -75,7 +75,10 @@ pub const NPC_TOKEN_FILENAME: &str = "npc_token";
 ///      TipHatRemoved, ClientMessage::TipHat); GameState carries `tip_hats`.
 /// v29: debuffs (DebuffUpdate) replace HungerUpdate's `poisoned_ms` —
 ///      doc/DEBUFF.md.
-pub const PROTOCOL_VERSION: u32 = 29;
+/// v30: XpGained carries `xp_mult_pct`, the level-gap multiplier already
+///      applied to the award — doc/ragnarok/13_IMPLEMENTATION_DIRECTION.md
+///      IMP-1.1.
+pub const PROTOCOL_VERSION: u32 = 30;
 
 /// WebSocket close code sent when the handshake is refused (wrong protocol
 /// version, or traffic before `ClientInfo`). Lives outside the serialized

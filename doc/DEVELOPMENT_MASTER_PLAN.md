@@ -240,7 +240,7 @@ Phase 번호와 1:1이다(M1 = Phase 1 …). **작업 ID는 13의 ID가 정본�
 | 순번 | 작업 ID | 작업 | 선행 | 크기 | 영역 | 산출물 |
 |------|---------|------|------|------|------|--------|
 | 0 | — | DoR 게이트 통과 | — | S | — | `bash tools/dev-setup.sh --check` 초록 (§2) |
-| 1 | IMP-0.1 | 되돌릴 수 없는 결정 확정 (§8 #1 · #2 · #4 · #6) | 0 | S | doc | 13 IMP-0.1의 수치 표가 채워짐 |
+| [x] 1 | IMP-0.1 | 되돌릴 수 없는 결정 확정 (§8 #1 · #2 · #4 · #6) | 0 | S | doc | 13 IMP-0.1의 수치 표가 채워짐 |
 | 2 | SPK-1 | 밀집 전투 부하 스파이크 | 0 | M | server(test) | `server/src/game_state/tests/combat_scale_tests.rs` (기존 `spawn_scale_tests.rs` 패턴, `USERS = 5_000`), 판정 기준은 13 IMP-4.3 |
 | 3 | IMP-0.2 | `GuardUpdated` → `EffectiveStats` 일반화 | — | M | shared/server/client | 13 IMP-0.2. `doc/TODO.md:150` 항목 소진. **게이트 아님** — 먼저 하면 뒤 항목의 시트 표시가 공짜가 된다 |
 
@@ -252,7 +252,7 @@ Phase 번호와 1:1이다(M1 = Phase 1 …). **작업 ID는 13의 ID가 정본�
 
 | 순번 | 작업 ID | 작업 | 선행 | 크기 | 영역 | 산출물 |
 |------|---------|------|------|------|------|--------|
-| 4 | IMP-1.1 | 레벨 차 EXP 페널티 | — | S | shared/server/client | `shared/src/xp.rs`에 `level_diff_mult_bp` 신규 + 상수 3개, **`monster_xp` 시그니처 불변**, `grant_monster_kill_xp`(`server/src/game_state/combat.rs:541`)에 `monster_level` 전달, `XpGained`에 `penalty_pct` append + `PROTOCOL_VERSION` +1 |
+| [x] 4 | IMP-1.1 | 레벨 차 EXP 페널티 | — | S | shared/server/client | `shared/src/xp.rs`에 `level_diff_mult_bp` 신규 + 상수 3개, **`monster_xp` 시그니처 불변**, `grant_monster_kill_xp`(`server/src/game_state/combat.rs:541`)에 `monster_level` 전달, `XpGained`에 `penalty_pct` append + `PROTOCOL_VERSION` +1 |
 | 5 | IMP-1.2 | 보스 프로토콜 (디버프·넉백 면역) | — | S | data/server | `MonsterDefinition`에 `boss` 필드 추가(`server/src/monster_defs.rs`는 현재 이 컬럼을 읽지 않는다), `game_state/debuff.rs`에서 스킵, [DEBUFF.md](DEBUFF.md) 예외 규칙 |
 | 6 | IMP-1.3 | 디버프 저항 스탯 | — | S | data/server | `data-src/debuffs.csv`에 `resistStat` 컬럼, `server/src/debuff_defs.rs` 필드, `debuff.rs`의 확률 보정, [DEBUFF.md](DEBUFF.md) 표 |
 | 7 | IMP-1.4 | 루터 몬스터 | — | M | data/client/server | `monsters.csv`의 `behavior=looter`, `client/src/lib/managers/monsterManager.ts` 브레인, 줍기·드랍은 **서버 검증**(바닥 아이템 경로 재사용), 층 규칙 준수 |

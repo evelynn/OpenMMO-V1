@@ -1308,8 +1308,15 @@ export function handleServerMessage(
         ...(isCurrentPlayer ? { lastRegenInfo: regenInfo } : {}),
       })
       if (data.xp_amount > 0) {
+        const multPct = data.xp_mult_pct ?? 100
+        const gap =
+          multPct === 100
+            ? ''
+            : multPct < 100
+              ? ` (level gap: ${multPct}% of full)`
+              : ` (level gap bonus: ${multPct}%)`
         addCombatMessage({
-          text: `You gained ${data.xp_amount} XP.`,
+          text: `You gained ${data.xp_amount} XP.${gap}`,
           sender: 'local',
         })
       } else if (previousLevel !== null) {
