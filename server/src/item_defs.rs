@@ -110,6 +110,11 @@ pub struct ItemDefinition {
     /// Debuff id rolled when eaten (raw fish → food poisoning, doc/DEBUFF.md).
     #[serde(rename = "useDebuff", default)]
     pub use_debuff: Option<String>,
+    /// Weapons only — enchant risk grade 1..=5 (doc/ENCHANT.md). Blank is 3,
+    /// the current curve. Deliberately not `rarityTier`, which is the fishing
+    /// catch table and would be polluted by sharing the column.
+    #[serde(rename = "weaponTier", default)]
+    pub weapon_tier: Option<u8>,
     /// Weapons only — damage multipliers against small|medium|large targets,
     /// pipe-separated (doc/COMBAT.md). One column rather than three keeps a
     /// csv that is already wide from getting wider.
@@ -233,6 +238,13 @@ impl ItemDefinition {
     }
 
     /// Damage dice if this item is a weapon, else `None`.
+    /// How far this item's enchant ladder is shifted: negative is safer,
+    /// positive riskier, 0 for anything without a tier (all armor, and a
+    /// weapon that left the column blank).
+    pub fn enchant_tier_offset(&self) -> i32 {
+        self.weapon_tier.map_or(0, |tier| i32::from(tier) - 3)
+    }
+
     /// This weapon's multiplier against `size`. Neutral for anything that
     /// left the column blank, so an unfilled table changes no damage.
     pub fn size_mult(&self, size: crate::monster_defs::MonsterSize) -> f32 {
@@ -318,6 +330,23 @@ impl ItemDefs {
         for def in defs.values() {
             if let Some(id) = &def.use_debuff {
                 crate::debuff_defs::assert_debuff_exists(id, &format!("item '{}'", def.id));
+            }
+        }
+
+        // A tier outside 1..=5 would shift the ladder off the end of the
+        // table, and one on armor would silently do nothing.
+        for def in defs.values() {
+            if let Some(tier) = def.weapon_tier {
+                assert!(
+                    (1..=5).contains(&tier),
+                    "item '{}': weaponTier {tier} is outside 1..=5",
+                    def.id
+                );
+                assert!(
+                    def.damage_dice().is_some(),
+                    "item '{}' has a weaponTier but is not a weapon",
+                    def.id
+                );
             }
         }
 

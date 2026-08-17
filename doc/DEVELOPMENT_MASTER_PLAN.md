@@ -9,7 +9,7 @@
 ## 0. 현재 진행 상황 (이어서 작업할 때 먼저 읽는다)
 
 **브랜치**: `claude/project-analysis-dev-setup-9amcvt`
-**진행**: 30개 항목 중 **9개 완료**, 1개 미착수로 남김.
+**진행**: 30개 항목 중 **10개 완료**, 1개 미착수로 남김.
 
 | 항목 | 상태 | 커밋 |
 |------|------|------|
@@ -21,11 +21,13 @@
 | IMP-1.2 보스 프로토콜 | ✅ 완료 (`MonsterDefs::boss_immune` + 부팅 검증, 13 개정 2건) | `af02309` |
 | IMP-1.3 디버프 저항 스탯 | ✅ 완료 (CON 저항, 개정 없음) | `2be665d` |
 | IMP-1.4 루터 몬스터 | ✅ 완료 (놀이 루터, 프로토콜 v33, 개정 없음) | `c4241e7` |
-| IMP-1.5 크기 축 | ✅ 완료 (13 개정 1건 — 이름표는 보스만) | 아래 참조 |
+| IMP-1.5 크기 축 | ✅ 완료 (13 개정 1건 — 이름표는 보스만) | `23b8e9b` |
+| IMP-1.6 무기 티어 | ✅ 완료 (13 개정 1건 — 티어 5 기대값 정정) | 아래 참조 |
 | IMP-0.2 EffectiveStats | ⏸ 미착수 — **게이트가 아니다.** 먼저 하면 뒤 항목의 시트 표시가 공짜가 된다 | — |
 
-**다음에 집을 것**: §5 표에서 체크되지 않은 첫 행은 **IMP-1.6 무기 티어**이고,
-M1의 마지막 항목은 IMP-1.7 채팅 접두사다. 둘은 서로 독립이다 (§6 묶음 G). §6의 **IMP-1.2 ↔ IMP-1.3 충돌 행은 소진됐다** — 둘 다
+**다음에 집을 것**: M1의 마지막 남은 항목은 **IMP-1.7 채팅 접두사**다. 그 뒤로는
+§5 표를 위에서부터 읽는 평상 규칙대로 M0의 SPK-1(밀집 전투 부하 스파이크) ·
+IMP-0.2, 그리고 M2의 IMP-2.2(세이브 포인트)로 넘어간다. §6의 **IMP-1.2 ↔ IMP-1.3 충돌 행은 소진됐다** — 둘 다
 끝났고, 1.2는 결국 `debuff.rs`를 건드리지 않았다(13 IMP-1.2 개정 참조).
 
 **이어받을 때의 준비**
@@ -299,7 +301,7 @@ Phase 번호와 1:1이다(M1 = Phase 1 …). **작업 ID는 13의 ID가 정본�
 | [x] 6 | IMP-1.3 | 디버프 저항 스탯 | — | S | data/server | `data-src/debuffs.csv`에 `resistStat`/`resistK` 컬럼, `server/src/debuff_defs.rs` 필드, `debuff.rs`의 `resisted_chance`, [DEBUFF.md](DEBUFF.md) 표 |
 | [x] 7 | IMP-1.4 | 루터 몬스터 | — | M | data/client/server | `monsters.csv`의 `behavior=looter`(놀), `behavior_trees.json`의 `looter` 트리, 줍기·드랍은 **서버 검증**(바닥 아이템 경로 재사용), 층 규칙 준수, 프로토콜 v33 |
 | [x] 8 | IMP-1.5 | 크기 축 (small/medium/large) | — | M | data/server/client | `monsters.csv`의 `size`, `items.csv`의 크기 배율, `server/src/game/combat.rs` 데미지 곱. **프로토콜 변경 없음** — 크기는 클라이언트도 CSV에서 직접 읽는다 |
-| 9 | IMP-1.6 | 무기 티어 = 제련 리스크 등급 | — | S | data/server | `items.csv`에 **`weaponTier` 신규 컬럼**(1~5, 빈 칸 = 3) — `rarityTier`는 낚시 전용이라 재사용하지 않는다(`server/src/item_defs.rs:75`), `enchant_success_bp(enchant + tier − 3)`(`server/src/game_state/inventory.rs:42`), [ENCHANT.md](ENCHANT.md) 표 갱신 |
+| [x] 9 | IMP-1.6 | 무기 티어 = 제련 리스크 등급 | — | S | data/server | `items.csv`에 **`weaponTier` 신규 컬럼**(1~5, 빈 칸 = 3) — `rarityTier`는 낚시 전용이라 재사용하지 않는다(`server/src/item_defs.rs:75`), `enchant_success_bp(enchant + tier − 3)`(`server/src/game_state/inventory.rs:42`), [ENCHANT.md](ENCHANT.md) 표 갱신 |
 | 10 | IMP-1.7 | 채팅 접두사 규약 (`%` 파티) | — | S | shared/server/client | `shared/src/messages.rs:207` `strip_command` 계열에 접두사 파싱, 클라 입력·채널 스토어 반영. `$` 길드는 IMP-4.1에서 |
 
 ### M2 — 월드 인프라 + 보상 경로 (= 13 Phase 2)

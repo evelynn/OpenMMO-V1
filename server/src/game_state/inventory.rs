@@ -1044,7 +1044,14 @@ impl super::GameState {
 
             let item = inv.equipped.get_mut(&slot).expect("the selector found it");
             let name = self.item_name(&item.item_def_id);
-            let (message, enchant_log) = if roll_bp >= (scroll.ladder)(item.enchant) {
+            // A weapon's tier shifts the ladder rather than replacing it, so
+            // ENCHANT_BP_SCALE and the 1% floor hold for every tier
+            // (doc/ENCHANT.md).
+            let tier_offset = self
+                .item_defs
+                .get(&item.item_def_id)
+                .map_or(0, |def| def.enchant_tier_offset());
+            let (message, enchant_log) = if roll_bp >= (scroll.ladder)(item.enchant + tier_offset) {
                 let log = format!(
                     "destroyed {} enchanting at +{}",
                     item.item_def_id, item.enchant
@@ -1857,6 +1864,28 @@ mod tests {
         assert_eq!(enchant_success_bp(12), 100);
         assert_eq!(enchant_success_bp(50), 100);
         assert_eq!(enchant_success_bp(i32::MAX), 100);
+    }
+
+    /// A tier shifts the same ladder rather than introducing a second one,
+    /// so the scale and the 1% floor come along for free.
+    #[test]
+    fn a_weapon_tier_shifts_the_ladder_instead_of_replacing_it() {
+        let defs = crate::item_defs::ItemDefs::load();
+        let offset = |id: &str| defs.get(id).expect(id).enchant_tier_offset();
+        assert_eq!(offset("small_sword"), -2, "tier 1 is two rungs safer");
+        assert_eq!(offset("spear"), 0, "tier 3 is the current curve");
+        assert_eq!(offset("iron_sword"), 2, "tier 5 is two rungs riskier");
+        assert_eq!(offset("leather_armor"), 0, "armor has no weapon tier");
+
+        // The +5 -> +6 attempt every tier is judged on.
+        assert_eq!(enchant_success_bp(5 + offset("small_sword")), 10_000);
+        assert_eq!(enchant_success_bp(5 + offset("spear")), 7_500);
+        assert_eq!(enchant_success_bp(5 + offset("iron_sword")), 2_500);
+
+        // The floor holds on every tier, including the safest.
+        for id in ["small_sword", "spear", "iron_sword"] {
+            assert_eq!(enchant_success_bp(50 + offset(id)), 100, "{id}");
+        }
     }
 
     #[test]
