@@ -1,0 +1,462 @@
+# 개발 마스터 플랜 (Development Master Plan)
+
+[09_OPENMMO_GAP_ANALYSIS](ragnarok/09_OPENMMO_GAP_ANALYSIS.md)가 **무엇을**,
+[10_IMPLEMENTATION_ROADMAP](ragnarok/10_IMPLEMENTATION_ROADMAP.md)가 **어떤 파일을**
+정했다면, 이 문서는 **어떤 순서로**를 정한다.
+
+---
+
+## 1. 이 문서의 사용법
+
+- 매일 아침 §5 표를 위에서부터 읽고, **선행이 전부 끝난 첫 행**을 집는다. 순번은 권고가
+  아니라 의존성 결과다.
+- **한 항목 = 한 PR.** 표의 한 행을 두 PR로 쪼개도 되지만, 두 행을 한 PR에 합치지 않는다.
+  CI가 Rust/클라이언트 양쪽을 다 돌리므로 합칠수록 되돌리기가 비싸진다.
+- 끝나면 §5 표의 순번 앞에 `[x]`를 붙이고 PR 번호를 적는다. 진행 중이면 `[~]` + 담당자.
+- 각 항목의 **스키마·공식·파일 단위 상세**는
+  [ragnarok/13_IMPLEMENTATION_DIRECTION.md](ragnarok/13_IMPLEMENTATION_DIRECTION.md)에 있다
+  (없으면 IMP-0.1이 아직 안 끝난 것이다). 이 문서는 순서와 게이트만 다룬다.
+
+---
+
+## 2. 개발 준비 완료 조건 (Definition of Ready)
+
+아래가 전부 초록이 아니면 §5의 어떤 행도 시작하지 않는다. 절차와 문제 해결은
+[doc/DEVELOPMENT.md](DEVELOPMENT.md) §2~§3, §10.
+
+| # | 조건 | 확인 방법 |
+|---|------|-----------|
+| R1 | 툴체인 (Rust stable, `wasm32-unknown-unknown`, `wasm-pack`, Node 22+) | `bash tools/dev-setup.sh --check` |
+| R2 | 바이너리 에셋 내려받음 (`assets.lock` 기준 sha256 일치) | `bash tools/fetch-assets.sh` |
+| R3 | 생성 데이터 + WASM 존재 (`data/*.json`, `client/src/lib/wasm/`) | `npm --prefix client run build:wasm` |
+| R4 | 지형 베이크 완료 — `data/terrain/worldgen.json`이 있어야 끝까지 돈 것 | `cargo run -p terrain-gen --release -- bake --seed 42 --region-x-min -2 --region-x-max 1 --region-z-min -2 --region-z-max 1` |
+| R5 | 환경 파일 — `client/.env.local`의 `VITE_GOOGLE_CLIENT_ID`와 서버 `GOOGLE_CLIENT_ID`가 같은 Web ID | 로그인 버튼이 에러를 안 냄 |
+| R6 | CI 동등 검증을 로컬에서 완주 (§3 명령이 전부 통과) | 아래 §3 |
+| R7 | 인게임 진입 가능 — 서버·WASM watch·Vite 3터미널 ([DEVELOPMENT.md](DEVELOPMENT.md) §1) | `http://localhost:10004/`에서 캐릭터 진입 |
+
+베이크 범위 밖으로 걸어 나가면 지형이 없다. 개발 중에는 원점 근처에서 확인한다.
+
+---
+
+## 3. 작업 완료 조건 (Definition of Done)
+
+모든 항목에 동일하게 적용한다. 명령은
+[CONTRIBUTING.md](../CONTRIBUTING.md#checks-ci-runs)와
+[.github/workflows/ci.yml](../.github/workflows/ci.yml)에 있는 것 그대로다.
+
+**D1. CI 동등 검증** — 건드린 쪽만. `shared/`를 건드렸으면 **양쪽 다**.
+
+```bash
+# Rust — 저장소 루트
+cargo fmt --all --check
+cargo clippy --workspace --all-targets --locked -- -D warnings
+cargo test --workspace --locked
+
+# 클라이언트 — client/
+npm run build:wasm
+npm test
+npm run check
+npm run lint
+npm run format:check      # 깨지면 npm run format
+```
+
+`/preflight` 스킬이 변경 파일을 보고 필요한 것만 골라 돌려준다.
+
+**D2. 테스트 추가** — 새 공식·불변식은 테스트로 고정한다. 기존 불변식을 깨지 않았는지
+확인한다 (예: `party_share_never_beats_soloing` in `shared/src/xp.rs`,
+`owner_index_matches_map` / `cell_index_matches_map` in `server/src/game_state/monster.rs`).
+
+**D3. 문서** — 해당 시스템 문서를 같은 PR에서 갱신한다
+([doc/COMBAT.md](COMBAT.md) · [DEBUFF.md](DEBUFF.md) · [ECONOMY.md](ECONOMY.md) ·
+[ZONE_SYSTEM.md](ZONE_SYSTEM.md) · [ITEM_TIERS.md](ITEM_TIERS.md) 등).
+`doc/TODO.md`에 대응 항목이 있으면 체크한다. 프로토콜을 바꿨으면
+`shared/src/lib.rs`의 `PROTOCOL_VERSION` 변경 로그 주석에 `/// vNN:` 한 줄.
+
+**D4. 에셋** — 새 GLB/아이콘/사운드를 넣었으면 `doc/assets/`의 해당 파일
+(`items.md` / `monsters.md` / `props.md` / `ui.md` …)에 출처·라이선스를 기록한다.
+AI·유료 툴 산출물이면 티어 + 생성 날짜까지. 미사용 전환 시 **[미사용]** 표기
+(CLAUDE.md 규칙).
+
+**D5. 인게임 확인** — 실제로 접속해서 눈으로 본다. `game-login` 스킬이 Chrome으로
+로그인까지 해 준다. 확인 절차와 결과를 PR 본문에 적는다.
+
+**D6. 5,000 동접 가드레일** — [10_IMPLEMENTATION_ROADMAP](ragnarok/10_IMPLEMENTATION_ROADMAP.md) §5의
+다섯 항목을 PR 본문에 한 줄씩 답한다 (배경은 [DEVELOPMENT.md](DEVELOPMENT.md) §8).
+
+1. 서버 틱에 플레이어 전체 순회가 새로 생기지 않았는가.
+2. 브로드캐스트가 AOI(`EVENT_DELIVERY_RADIUS`, `shared/src/world.rs:134`)로 잘려 있는가.
+   전체 스냅샷이 아니라 델타인가.
+3. 락을 쥔 채 직렬화·IO·할당을 하지 않는가.
+4. 새 디스크 쓰기 경로 대신 기존 배치 세이브
+   (`server/src/game_state/player.rs:644` `flush_dirty_saves`)에 합류했는가.
+5. 클라이언트에 매 프레임 새 오브젝트/머티리얼이 생기지 않는가.
+
+**D7. 에이전트-인간 동등성** — 새 기능은 `ClientMessage`/`ServerMessage`로만 노출한다.
+에이전트 전용 엔드포인트·필드·우회로는 만들지 않는다
+([doc/REMOTE_AGENT_CLIENT.md](REMOTE_AGENT_CLIENT.md)). 에이전트가 써야 할 기능이면
+`agent-client/src/driver/action.rs`의 `ACTION_SPECS`에도 항목을 추가한다 — 빼먹으면
+`action_docs_cover_exactly_the_parser_actions` 테스트가 잡아 준다.
+
+---
+
+## 4. 의존성 그래프
+
+선행 관계의 **진실은 §5 표의 `선행` 칸**이다. 아래 두 그래프는 그 칸을 그림으로 옮긴
+것이고, 표를 고치면 그래프도 같이 고친다. 항목 ID는
+[13_IMPLEMENTATION_DIRECTION](ragnarok/13_IMPLEMENTATION_DIRECTION.md)의 고정 ID를 그대로 쓴다.
+
+### 4.1 M0 ~ M2
+
+```mermaid
+flowchart TD
+  subgraph M0["M0 준비"]
+    R["DoR 게이트<br/>dev-setup --check"]
+    I01["IMP-0.1<br/>되돌릴 수 없는 결정"]
+    I02["IMP-0.2<br/>EffectiveStats"]
+    S1["SPK-1<br/>밀집 전투 부하"]
+  end
+
+  subgraph M1["M1 밸런스 축"]
+    I11["IMP-1.1<br/>레벨 차 EXP 페널티"]
+    I12["IMP-1.2<br/>보스 프로토콜"]
+    I13["IMP-1.3<br/>디버프 저항"]
+    I14["IMP-1.4<br/>루터 몬스터"]
+    I15["IMP-1.5<br/>크기 축"]
+    I16["IMP-1.6<br/>무기 티어"]
+    I17["IMP-1.7<br/>채팅 접두사"]
+  end
+
+  subgraph M2["M2 월드 인프라 + 보상 경로"]
+    I21["IMP-2.1<br/>우편함"]
+    I22["IMP-2.2<br/>세이브 포인트"]
+    S2["SPK-2<br/>창고 델타"]
+    I23["IMP-2.3<br/>창고"]
+    S3["SPK-3<br/>이동 로딩 폭풍"]
+    I24["IMP-2.4<br/>유료 이동"]
+    I25["IMP-2.5<br/>헌팅 보드"]
+    I26["IMP-2.6<br/>일일 한도"]
+    I27["IMP-2.7<br/>미니보스"]
+    I28["IMP-2.8<br/>MVP 기여도"]
+  end
+
+  R --> I01
+  R --> S1
+  I01 --> I23
+  I01 --> I26
+  I11 --> I25
+  I12 --> I27
+  I12 --> I28
+  I27 --> I28
+  I21 --> I25
+  I25 --> I26
+  I22 --> I23
+  I22 --> I24
+  S2 --> I23
+  S3 --> I24
+```
+
+### 4.2 M3 ~ M4
+
+```mermaid
+flowchart TD
+  subgraph carry["M0~M2에서 넘어오는 선행"]
+    C01["IMP-0.1<br/>결정 확정"]
+    C17["IMP-1.7<br/>채팅 접두사"]
+    C21["IMP-2.1<br/>우편함"]
+    C23["IMP-2.3<br/>창고"]
+    CS1["SPK-1<br/>밀집 전투 go"]
+  end
+
+  subgraph M3["M3 성장 · 경제 축"]
+    I31["IMP-3.1<br/>시간 4분할"]
+    I32["IMP-3.2<br/>전투 스킬"]
+    I33["IMP-3.3<br/>방어 2단"]
+    I34["IMP-3.4<br/>경제 스킬 Trading"]
+    I35["IMP-3.5<br/>거래 수수료"]
+    I36["IMP-3.6<br/>코스튬"]
+    I37["IMP-3.7<br/>업적 · 칭호"]
+  end
+
+  subgraph M4["M4 사회 · 확장"]
+    I41["IMP-4.1<br/>길드"]
+    I42["IMP-4.2<br/>인스턴스 던전"]
+    I45["IMP-4.5<br/>에이전트 동반자"]
+    I46["IMP-4.6<br/>제한형 매크로"]
+    I43["IMP-4.3<br/>거점 점유 · 보류"]
+    I44["IMP-4.4<br/>제작 · 조건부"]
+  end
+
+  I31 --> I32 --> I33
+  C21 --> I37
+  C23 --> I41
+  C17 --> I41
+  C01 --> I35
+  C01 --> I42
+  CS1 --> I43
+  I41 --> I43
+```
+
+**구조적 선행 3건** — 이 순서를 뒤집으면 되돌리는 비용이 구현 비용보다 크다.
+
+| 선행 | 후행 | 왜 |
+|------|------|-----|
+| IMP-3.1 시간 4분할 | IMP-3.2 전투 스킬 | 스킬이 하나라도 정의된 뒤에 넣으면 모든 스킬 정의와 애니메이션 타이밍을 다시 잡아야 한다 ([02_STATS_COMBAT](ragnarok/02_STATS_COMBAT.md) §7) |
+| IMP-2.1 우편함 | IMP-2.5 퀘스트 보상 · IMP-3.7 업적 | 우편이 없으면 "인벤 가득 참 / 오프라인" 두 예외를 보상 코드가 직접 떠안는다 ([12_UX_SERVICES](ragnarok/12_UX_SERVICES.md) §4) |
+| IMP-0.1 결정 확정 | IMP-2.3 창고 · IMP-2.6 일일 한도 · IMP-3.5 수수료 · IMP-4.2 쿨다운 | 상한·한도·수수료·쿨다운은 출시 후 바꾸면 전부 플레이어가 손해 보는 방향으로만 바뀐다 (§8) |
+
+> **스폰 모델 주의** — 현재 지상 몬스터는 **플레이어를 따라다니며** 스폰된다.
+> `data-src/world.json`의 `ambientSpawns` + 인당 캡(`maxMonstersPerPlayer = 30`)이
+> `tick_monster_spawns`(`server/src/game_state/monster.rs:854`)를 돌리고, 몬스터 레벨이
+> 플레이어 레벨 게이트를 만든다(`min_ambient_player_level`). 존 파일
+> (`data/terrain/zones/*.json`)의 `monsterSpawns` 배열은 **서버가 읽지 않는다** —
+> `server/src/world_config.rs:93`은 `noSpawnZones`만 읽고, 나머지는 맵 에디터·클라이언트
+> 오버레이 전용이다. 따라서 "레벨대별 고정 사냥터"는 아직 존재하지 않으며,
+> IMP-1.1의 EXP 페널티는 **이동을 강제하는 장치가 아니라 주변에 스폰된 몹 중 무엇을 잡을
+> 가치가 있는지를 가르는 장치**로 먼저 작동한다. 존 기반 서버 스포너는
+> [13 조건부/보류](ragnarok/13_IMPLEMENTATION_DIRECTION.md) 항목이며
+> `doc/TODO.md`의 "몬스터 스폰 개선 — 플레이어의 레벨에 맞게"와 같은 과제다.
+> 착수하려면 먼저 13에 정식 항목으로 올린다.
+
+---
+
+## 5. 개발 순서
+
+크기: **S** = 하루 이내 / **M** = 2~4일 / **L** = 1주+ 또는 프로토콜·DB 스키마 동반.
+마일스톤 번호는 [13_IMPLEMENTATION_DIRECTION](ragnarok/13_IMPLEMENTATION_DIRECTION.md)의
+Phase 번호와 1:1이다(M1 = Phase 1 …). **작업 ID는 13의 ID가 정본이다.**
+
+### M0 — 준비
+
+> **목표**: 되돌릴 수 없는 결정을 수치로 못 박고, 뒤 마일스톤의 go/no-go 근거를 만든다.
+> **관측 가능한 결과**: 13 IMP-0.1에 §8의 IMP-0.1 결정 네 건(#1 일일 한도 · #2 인스턴스
+> 개인 쿨다운 · #4 수수료 소각 · #6 창고 슬롯 상한)이 상수 이름과 함께 적혀 있고,
+> `cargo test --workspace` 안에 밀집 전투 측정치가 남는다.
+
+| 순번 | 작업 ID | 작업 | 선행 | 크기 | 영역 | 산출물 |
+|------|---------|------|------|------|------|--------|
+| 0 | — | DoR 게이트 통과 | — | S | — | `dev-setup.sh --check` 초록 (§2) |
+| 1 | IMP-0.1 | 되돌릴 수 없는 결정 확정 (§8 #1 · #2 · #4 · #6) | 0 | S | doc | 13 IMP-0.1의 수치 표가 채워짐 |
+| 2 | SPK-1 | 밀집 전투 부하 스파이크 | 0 | M | server(test) | `server/src/game_state/tests/combat_scale_tests.rs` (기존 `spawn_scale_tests.rs` 패턴, `USERS = 5_000`), 판정 기준은 13 IMP-4.3 |
+| 3 | IMP-0.2 | `GuardUpdated` → `EffectiveStats` 일반화 | — | M | shared/server/client | 13 IMP-0.2. `doc/TODO.md:150` 항목 소진. **게이트 아님** — 먼저 하면 뒤 항목의 시트 표시가 공짜가 된다 |
+
+### M1 — 밸런스 축 채우기 (= 13 Phase 1)
+
+> **목표**: 새 시스템 없이 기존 CSV의 빈칸을 채워 뒤 마일스톤의 밸런싱 기준선을 만든다.
+> **관측 가능한 결과**: 레벨에 안 맞는 몬스터를 잡으면 손해라는 것이 보이고, 보스에게
+> 디버프가 안 걸리며, 무기 선택에 "어떤 크기 상대냐"라는 이유가 생긴다.
+
+| 순번 | 작업 ID | 작업 | 선행 | 크기 | 영역 | 산출물 |
+|------|---------|------|------|------|------|--------|
+| 4 | IMP-1.1 | 레벨 차 EXP 페널티 | — | S | shared/server/client | `shared/src/xp.rs`에 `level_diff_mult_bp` 신규 + 상수 3개, **`monster_xp` 시그니처 불변**, `grant_monster_kill_xp`(`server/src/game_state/combat.rs:541`)에 `monster_level` 전달, `XpGained`에 `penalty_pct` append + `PROTOCOL_VERSION` +1 |
+| 5 | IMP-1.2 | 보스 프로토콜 (디버프·넉백 면역) | — | S | data/server | `MonsterDefinition`에 `boss` 필드 추가(`server/src/monster_defs.rs`는 현재 이 컬럼을 읽지 않는다), `game_state/debuff.rs`에서 스킵, [DEBUFF.md](DEBUFF.md) 예외 규칙 |
+| 6 | IMP-1.3 | 디버프 저항 스탯 | — | S | data/server | `data-src/debuffs.csv`에 `resistStat` 컬럼, `server/src/debuff_defs.rs` 필드, `debuff.rs`의 확률 보정, [DEBUFF.md](DEBUFF.md) 표 |
+| 7 | IMP-1.4 | 루터 몬스터 | — | M | data/client/server | `monsters.csv`의 `behavior=looter`, `client/src/lib/managers/monsterManager.ts` 브레인, 줍기·드랍은 **서버 검증**(바닥 아이템 경로 재사용), 층 규칙 준수 |
+| 8 | IMP-1.5 | 크기 축 (small/medium/large) | — | M | data/server | `monsters.csv`의 `size`, `items.csv`의 크기 배율, `server/src/game/combat.rs` 데미지 곱. **프로토콜 변경 없음** — 크기는 클라이언트도 CSV에서 직접 읽는다 |
+| 9 | IMP-1.6 | 무기 티어 = 제련 리스크 등급 | — | S | data/server | 기존 인챈트 사다리(`server/src/game_state/inventory.rs`의 `enchant_success_bp`)에 `rarityTier` 오프셋, [ENCHANT.md](ENCHANT.md) 표 갱신 |
+| 10 | IMP-1.7 | 채팅 접두사 규약 (`%` 파티) | — | S | shared/server/client | `shared/src/messages.rs:207` `strip_command` 계열에 접두사 파싱, 클라 입력·채널 스토어 반영. `$` 길드는 IMP-4.1에서 |
+
+### M2 — 월드 인프라 + 보상 경로 (= 13 Phase 2)
+
+> **목표**: 32km 월드를 실제로 쓰게 만드는 골격과, 보상을 안전하게 전달하는 경로.
+> **관측 가능한 결과**: 도시에 짐을 맡기고 세이브한 뒤 사냥 의뢰를 받아 나가고, 보상은
+> 인벤이 가득 차 있어도 우편으로 도착한다. 던전에는 걸어서만 간다.
+
+| 순번 | 작업 ID | 작업 | 선행 | 크기 | 영역 | 산출물 |
+|------|---------|------|------|------|------|--------|
+| 11 | IMP-2.1 | 우편함 (Mailbox) | — | L | shared/server/client | 우편 테이블(`server/src/auth.rs`의 `ensure_*` 마이그레이션), 수령·삭제 프로토콜, 첨부 아이템 원자성, 운영 지급 경로. **콘텐츠가 아니라 운영 안전장치로 먼저 넣는다** |
+| 12 | IMP-2.2 | 세이브 포인트 + 리스폰 | — | M | shared/server/client | `ClientMessage::SetSavePoint`, 캐릭터 레코드에 `save_point`(`auth.rs`의 `CHARACTER_COLUMNS` + `CharacterSaveData` + `write_character_states`), **기본값은 현행 리스폰 유지** |
+| 13 | SPK-2 | 창고 델타 전송 스파이크 | — | S | server(test) | 슬롯 상한 후보(60 / **120** / 240)별 바이트 측정 + §7 판정. 120은 13 IMP-2.3의 확정값이므로 **검증 대상**이다 |
+| 14 | IMP-2.3 | 창고 (Storage) | IMP-2.2, SPK-2, IMP-0.1 | L | shared/server/client | `STORAGE_SLOTS = 120`, 열기/입금/출금/닫기 프로토콜(**델타**), 거리(NPC 근처)·슬롯 상한·원자성 검증 — **창고 자체에는 무게 제한이 없다**(출금 시 인벤토리 `max_carry_weight`만 검사), 기존 배치 세이브 합류, UI + `overlayStack.ts` 등록 |
+| 15 | SPK-3 | 유료 이동 로딩 폭풍 스파이크 | — | S | server/client(test) | 도착 순간의 타일·하우징·오브젝트 요청 폭 측정 + §7 판정 ([LOADING_OPTIMIZATION.md](LOADING_OPTIMIZATION.md)) |
+| 16 | IMP-2.4 | 유료 이동 + "던전 워프 불가" | IMP-2.2, SPK-3 | L | shared/server/client | **도시 소수 고정 지점만**(임의 좌표 금지), 요금 제니 싱크, 던전 입구·내부 목적지 제외, 타일 캐시 예열(`terrain/src/tile_cache.rs`) |
+| 17 | IMP-2.5 | 헌팅 보드 반복 퀘스트 | IMP-2.1, IMP-1.1 | L | data/shared/server/client | `data-src/hunting_quests.csv` (`id,boardId,name,monsterId,count,minLevel,maxLevel,rewardXp,rewardZeny,rewardItem,dailyLimit`), `character_quests` 테이블(`day_key`/`day_count` 포함), 런타임은 quest id를 u16 인턴한 `Vec<(u16,u16)>`(수락 상한 5), 처치 훅은 `combat.rs:499~:511`의 XP 수령자 목록 재사용, **보상은 우편 지급** |
+| 18 | IMP-2.6 | 일일 한도 + 고효율 | IMP-2.5, IMP-0.1 | M | data/server/client | 보드당 일일 한도(캐릭터 단위), 리셋 기준 시각 고정, 한도 소진 UI 표시. **IMP-2.5와 같은 릴리스에 나간다** |
+| 19 | IMP-2.7 | 미니보스 (장주기 + 변량 리스폰) | IMP-1.2 | M | data/server | `data-src/world_bosses.csv`(신규) + `server/src/world_boss_defs.rs`(신규), `tick_world_bosses` 30초 틱(`server/src/main.rs:84` `run_ticks`), 부팅 시 `monsterId`의 `boss=true` assert, `client/src/lib/components/map-editor/MapEditorCursor.svelte`에 좌표 복사 버튼 |
+| 20 | IMP-2.8 | MVP 기여도 보너스 | IMP-1.2, IMP-2.7 | M | server | 보스 한정 누적 피해 기록(**메모리 상한 필수**), 파티 분배와 별개 경로, 보상은 우편. SPK-1이 no-go면 참여자 상한을 둔 축소형으로 |
+
+### M3 — 성장 · 경제 축 (= 13 Phase 3)
+
+> **목표**: 단일 레벨 외의 성장 축을 열되 시간 구조를 먼저 못 박고, 제니 싱크를 선제적으로 심는다.
+> **관측 가능한 결과**: 스킬을 배우고, 시전 중에 맞으면 끊기며, 쿨다운 때문에 난사할 수 없다.
+> 고액 거래에는 수수료가 붙고, 상인형 캐릭터는 흥정으로 먹고산다.
+
+| 순번 | 작업 ID | 작업 | 선행 | 크기 | 영역 | 산출물 |
+|------|---------|------|------|------|------|--------|
+| 21 | IMP-3.1 | 시간 4분할 (VCT / FCT / after-cast delay / cooldown) | — | L | shared/server/client | 4개 타이머의 서버 권위 상태 기계 + 애니메이션 결합 규약. 기존 `data-src/player_anim_timing.csv` / `attackImpactDelay` 접근과 정합. **스킬 정의보다 먼저** |
+| 22 | IMP-3.2 | 전투 스킬 시스템 | IMP-3.1 | L | data/shared/server/client | `shared/src/skills.rs`의 `SkillId` 확장 + 스킬 포인트, `data-src/skills.csv`, `ClientMessage::UseSkill` / `ServerMessage::SkillResult`. **서버가 쿨다운·사거리·자원을 판정한다. 클라이언트 예측 금지** |
+| 23 | IMP-3.3 | 방어 2단 (Hard/Soft) | IMP-3.2 | M | data/server/doc | **`guard`는 명중 판정(AC)으로 유지**하고 축을 하나 더 만든다 — `data-src/items.csv`에 `armorPct`/`armorFlat`, `server/src/game/combat.rs`에 `apply_defense`(비율 → 감산 → 최소 1), 두 축의 역할 분리를 [COMBAT.md](COMBAT.md)에 문서화 |
+| 24 | IMP-3.4 | 경제 스킬 `SkillId::Trading` | — | M | shared/server/client | 기존 haggle(`game_state/deals.rs`의 딜 원장, 와이어 타입은 `shared/src/messages.rs:52` `ActiveDeal`)·상인 `sellRatePercent`에 곱, CHA와의 역할 분리를 [ECONOMY.md](ECONOMY.md)에 **먼저** 문서화 |
+| 25 | IMP-3.5 | 고액 거래 수수료 | IMP-0.1 | M | shared/server | `shared`에 `trade_fee(amount)`, `game_state/trading.rs:1073` `sell_item` / `:1336` `sell_items`에서 **상대가 `merchants.csv` 상인이 아닐 때만** 임계 초과분 차감, **수수료는 소각**, `TRADE_FEE_THRESHOLD`/`TRADE_FEE_PCT` 상수, [ECONOMY.md](ECONOMY.md) 갱신. IMP-3.4와 같은 PR 권장 |
+| 26 | IMP-3.6 | 코스튬 레이어 | — | M | data/shared/server/client | `EquipSlot`에 `CostumeHead`/`CostumeBack`, `shared/src/entity.rs`의 `Player`에 필드 2개 **끝에 append** + `PROTOCOL_VERSION` +1, `equipped_guard`에서 코스튬 슬롯 명시적 제외(테스트로 고정), `items.csv`에 `category=costume` 행(weight 0, guard 없음) |
+| 27 | IMP-3.7 | 업적 · 칭호 | IMP-2.1 | M | data/shared/server/client | 기존 행동 재사용(낚시 `trophyCm`, 던전 심층, 하우징, 공연, 요리), **보상은 우편**, 칭호는 채팅·이름표 표시만 |
+
+### M4 — 사회 · 확장 (= 13 Phase 4)
+
+> **목표**: 조직 단위와 반복 가능한 던전을 열고, 게이트가 걸린 항목은 게이트 뒤에 세운다.
+> **관측 가능한 결과**: 길드에 가입해 길드 창고를 함께 쓰고, 파티마다 다른 던전을 돈다.
+
+| 순번 | 작업 ID | 작업 | 선행 | 크기 | 영역 | 산출물 |
+|------|---------|------|------|------|------|--------|
+| 28 | IMP-4.1 | 길드 (명단 + 길드 창고 + 길드 하우스) | IMP-2.3, IMP-1.7 | L | shared/server/client | 길드 테이블 + **인덱스 필수**(조회가 접속자 전체 순회가 되면 안 됨), 창고는 IMP-2.3 컨테이너 재사용, 하우스는 기존 하우징 재사용, `$` 길드 채팅 접두사 |
+| 29 | IMP-4.2 | 인스턴스 던전 (파티 시드) | IMP-0.1 | M | shared/server | **`dungeon_seed`(`shared/src/dungeon/mod.rs:368`)는 손대지 않고** `dungeon_seed_with(entrance_id, party_seed)`를 추가한다 — `dungeon_seed(id) == dungeon_seed_with(id, 0)` 보장, 골든 해시 테스트는 **갱신 없이 그대로 통과**해야 한다. wasm `DUNGEON_LAYOUTS` 캐시에 LRU 상한. **쿨다운은 처음부터 개인 단위** |
+| 30 | IMP-4.6 | 제한형 매크로 | — | S | client | 이모트·문구·UI 열기까지만. **전투 행동 자동화는 매크로 밖에 둔다** ([12_UX_SERVICES](ragnarok/12_UX_SERVICES.md) §3) |
+| 31 | IMP-4.5 | 에이전트 NPC 동반자 계약 | — | L | server/agent-client | 펫이 아니라 **에이전트 NPC 고용** — 유지비는 기존 급여(`game_state/salary.rs`), 시간 제한은 LLM 비용 상한 |
+| 32 | IMP-4.3 | 거점 점유 (공성전 대체) — **보류** | SPK-1 **go**, IMP-4.1 | L | shared/server/client | 설계 문서 먼저. SPK-1이 no-go면 착수하지 않는다 |
+| 33 | IMP-4.4 | 제작 (단조 · 조제) — **조건부** | 제작 콘텐츠 도입 결정 | L | data/shared/server/client | 성공률 공식은 인챈트와 같은 "투자 − 욕심" 철학 ([ENCHANT.md](ENCHANT.md)) |
+
+---
+
+## 6. 병렬 진행 가능 조합
+
+**동시에 해도 안전한 묶음** (파일·프로토콜 enum·CSV가 겹치지 않음):
+
+| 묶음 | 항목 | 이유 |
+|------|------|------|
+| A | IMP-1.1 + IMP-1.4 | `xp.rs` vs `monsterManager.ts` + 바닥 아이템 경로 |
+| B | IMP-1.2 + IMP-1.5 | `debuff.rs` vs `game/combat.rs`. `monsters.csv`는 **다른 컬럼** |
+| C | IMP-2.1 + IMP-2.2 | 우편 테이블 vs 캐릭터 레코드·리스폰 |
+| D | SPK-1 + SPK-2 + SPK-3 | 전부 측정 전용. 서로 독립 |
+| E | IMP-2.8 + IMP-3.7 | 보스 기여도 집계 vs 업적 집계. 둘 다 우편을 **호출만** 함 |
+| F | IMP-4.2 + IMP-3.6 | 던전 시드 vs 장비 슬롯·렌더 레이어 |
+| G | IMP-1.6 + IMP-1.7 | 인챈트 사다리 vs 채팅 파싱 |
+| H | 아무 항목 + 문서 PR | 항상 안전 |
+
+**동시에 하면 충돌하는 쌍** — 하나가 머지된 뒤 리베이스한다:
+
+| 쌍 | 충돌 지점 |
+|----|-----------|
+| IMP-1.2 ↔ IMP-1.3 | 둘 다 `server/src/game_state/debuff.rs`의 디버프 부여 확률 경로 |
+| IMP-1.1 ↔ IMP-2.8 | 둘 다 `game_state/combat.rs`의 처치 보상 경로 |
+| IMP-1.5 ↔ IMP-3.3 | 둘 다 `server/src/game/combat.rs`의 데미지 계산 순서 |
+| IMP-2.1 ↔ IMP-2.3 | 둘 다 아이템 이전 원자성(첨부 ↔ 입출금) |
+| IMP-2.3 ↔ IMP-4.1 | 길드 창고가 IMP-2.3 컨테이너를 그대로 쓴다 |
+| IMP-2.1 ↔ IMP-2.5 | 퀘스트 보상이 우편 API를 호출한다 |
+| IMP-2.5 ↔ IMP-2.6 | 같은 CSV·같은 테이블. **같은 릴리스로 묶는 편이 낫다** |
+| IMP-3.1 ↔ IMP-3.2 | 스킬 정의가 4분할 타이머 필드를 참조한다 |
+| IMP-3.4 ↔ IMP-3.5 | 둘 다 `trading.rs`·`deals.rs`의 가격 계산. 13은 **같은 PR**을 권장한다 |
+| **프로토콜을 건드리는 모든 쌍** | `shared/src/lib.rs:78`의 `PROTOCOL_VERSION` 한 줄. 병렬 PR 2개면 **뒤에 머지되는 쪽이 반드시 리베이스**해서 번호를 다시 매긴다 |
+| **같은 CSV를 건드리는 모든 쌍** | CSV는 `split(',')` 단순 파서이고 Rust 변환기는 헤더/행 필드 수 불일치를 **빌드 에러로 처리**한다. 컬럼 추가 PR 2개가 병렬이면 머지 순서를 정해 둔다 |
+
+---
+
+## 7. 리스크와 선결 검증
+
+측정 없이 들어가면 안 되는 것 셋. 전부 **§5 표에 SPK 행으로 들어가 있고**, 결과가
+no-go면 후행 항목을 착수하지 않는다.
+
+### SPK-1 — 밀집 전투 부하
+
+- **왜**: 거점 점유(IMP-4.3)와 MVP 기여도(IMP-2.8)는 한 지점에 사람이 몰리는 것이 전제다.
+  AOI 팬아웃은 `EVENT_DELIVERY_RADIUS`(43m, `shared/src/world.rs:134`) 안의 인원수에
+  선형이고, 전투 이벤트는 이동보다 빈도가 높다.
+- **무엇을 잰다**: `server/src/game_state/tests/spawn_scale_tests.rs`와 같은 형태로
+  `combat_scale_tests.rs`를 만들어, 한 셀에 **100 / 200 / 400명**을 넣고
+  ① 전투 브로드캐스트 1회의 수신자 수와 직렬화 바이트, ② 초당 총 바이트,
+  ③ `players`/`monsters` 쓰기 락 점유 시간을 잰다.
+- **go/no-go**: 판정 기준은 [13 IMP-4.3](ragnarok/13_IMPLEMENTATION_DIRECTION.md)의 세 조건을
+  그대로 쓴다 — 특히 브로드캐스트 채널 용량(1000, `game_state/mod.rs:583`)을 넘기지 않을 것.
+  no-go면 IMP-4.3은 착수하지 않고, IMP-2.8은 보스 1마리 + 참여자 상한 형태로 축소한다.
+
+### SPK-2 — 창고 델타 전송
+
+- **왜**: 창고를 전체 스냅샷으로 보내면 5,000명 × 슬롯 수가 그대로 대역폭이 된다.
+  인벤토리는 현재 전체 교체로 보내고 있는데, 창고는 슬롯 수가 더 크다.
+- **무엇을 잰다**: 슬롯 상한 후보(60 / **120** / 240)별로 ① 열기 1회의 초기 스냅샷 바이트,
+  ② 입출금 1회의 델타 바이트, ③ 동시 개폐 500명 시나리오의 초당 총 바이트.
+- **go/no-go**: 열기 스냅샷이 **WS 메시지 상한 64 KiB 안에** 들어가고
+  (`server/src/connection.rs`의 `MAX_WS_MESSAGE_BYTES`), 델타가 스냅샷의 5% 이하면
+  120을 확정한다. 넘으면 상한을 낮추거나 페이지 단위 조회로 바꾼다.
+
+### SPK-3 — 유료 이동 로딩 폭풍
+
+- **왜**: 도착 순간 지형 타일 + 하우징 청크 + 리전 오브젝트가 동시에 요청된다.
+  여러 명이 같은 지점으로 이동하면 REST 리스너에 스파이크가 몰린다.
+- **무엇을 잰다**: ① 도착 후 첫 렌더까지의 시간, ② 발생 HTTP 요청 수와 총 바이트,
+  ③ 같은 목적지로 동시 50명 이동 시 REST 응답 p95.
+  기준선은 [LOADING_OPTIMIZATION.md](LOADING_OPTIMIZATION.md).
+- **go/no-go**: 동시 50명에서 REST p95가 걸어서 진입할 때 대비 2배 이내면 go.
+  넘으면 목적지 수를 더 줄이고 타일 캐시 예열을 선행 작업으로 분리한다.
+
+### 스파이크가 아니지만 주의할 것
+
+- **캐릭터당 상태 증가** — 창고·퀘스트 진행도·길드·우편은 전부 캐릭터당 상태를 늘린다.
+  **5,000 × 상태 크기**를 계산해서 PR 본문에 적는다.
+- **던전 결정성** — IMP-4.2는 `shared/src/dungeon/`의 시드를 다룬다.
+  `dungeon_seed`의 출력은 **바뀌면 안 되고**, 골든 해시 테스트는 갱신 대상이 아니라
+  **게이트**다. `ChaCha8Rng`만 쓰고 `HashMap` 순회·플랫폼 의존 부동소수를 넣지 않는다.
+- **DB 마이그레이션** — IMP-2.1 / IMP-2.2 / IMP-2.3 / IMP-2.5 / IMP-4.1은 전부
+  `server/src/auth.rs`에 `ensure_*` 마이그레이션을 추가한다. 기존 캐릭터가 깨지지 않는
+  기본값을 반드시 넣는다.
+
+---
+
+## 8. 되돌릴 수 없는 결정
+
+처음에 맞게 정해야 하는 것들. **나중에 넣으면 너프로 읽히거나 구조를 갈아엎어야 한다**
+([09_OPENMMO_GAP_ANALYSIS](ragnarok/09_OPENMMO_GAP_ANALYSIS.md) §4의 3번 기준).
+확정 시점이 IMP-0.1인 네 건은 **코드를 쓰기 전에** 13 IMP-0.1의 표에 수치로 적는다.
+
+| # | 결정 | 확정 시점 | 근거 (한 줄) |
+|---|------|-----------|--------------|
+| 1 | **일일 한도** — 반복 콘텐츠는 1일차부터 한도를 갖고 출시 | IMP-0.1 (IMP-2.6 착수 전) | 나중에 붙이는 한도는 예외 없이 너프로 인식된다 |
+| 2 | **인스턴스 개인 쿨다운** — 파티 단위가 아니라 처음부터 개인 단위 | IMP-0.1 (IMP-4.2 착수 전) | 파티 쿨다운은 "쿨 안 찬 사람 갈아끼우기"를 만들고, 개인으로 바꾸는 순간 전원이 손해를 본다 |
+| 3 | **시간 4분할** (VCT / FCT / after-cast delay / cooldown) | IMP-3.1, 스킬 정의 이전 | 스킬 하나라도 정의된 뒤에 넣으면 모든 스킬과 애니메이션 타이밍을 다시 잡아야 한다 |
+| 4 | **거래 수수료는 소각** — NPC 수입이 아니라 제니 소멸 | IMP-0.1 (IMP-3.5 착수 전) | NPC에게 가면 싱크가 아니라 순환이다. 인플레 대책은 선제적이어야 한다 |
+| 5 | **프로토콜 하위호환 없음** — `PROTOCOL_VERSION` 정확 일치, 서버·클라 동시 배포 | 이미 확정 (`shared/src/lib.rs:78`) | MessagePack이 구조체를 **위치 배열**로 인코딩한다. 중간 필드 추가·재정렬은 이후 모든 필드를 밀어버린다 |
+| 6 | **창고 슬롯 상한** — 무제한 금지 | 이미 확정 (13 IMP-2.3, `STORAGE_SLOTS = 120`). SPK-2는 **검증만** | 상한 없이 출시한 뒤 낮추는 것은 아이템 몰수다 |
+| 7 | **세이브 포인트 기본값** — 기존 캐릭터는 현행 리스폰 규칙 유지 | IMP-2.2 | 마이그레이션에서 `NULL`을 잘못 다루면 전 캐릭터가 원점으로 리스폰한다 |
+| 8 | **던전은 유료 이동 목적지가 아니다** | IMP-2.4 | 이걸 열면 32km 월드를 만든 이유가 사라진다. 열었다가 닫는 것은 접근성 회수다 |
+| 9 | **에이전트-인간 동등성** — 에이전트 전용 API 없음 | 이미 확정 ([REMOTE_AGENT_CLIENT.md](REMOTE_AGENT_CLIENT.md)) | 한 번 갈라지면 이후 모든 기능이 두 경로를 유지해야 한다 |
+
+기각 결정도 되돌리지 않는다 — 카드/슬롯, 속성 상성 10×10×4, 종족 축, 스탯 포인트 배분,
+PvP 아이템 드랍, 맵 전환 로딩. 근거는
+[09_OPENMMO_GAP_ANALYSIS](ragnarok/09_OPENMMO_GAP_ANALYSIS.md) §3과
+[13 기각 항목 표](ragnarok/13_IMPLEMENTATION_DIRECTION.md).
+
+---
+
+## 9. 체크리스트 (항목마다 복사해서 쓴다)
+
+```markdown
+## IMP-x.y <작업 이름>
+
+- [ ] 선행 항목이 전부 머지되었는지 확인 (마스터 플랜 §5)
+- [ ] 브랜치 생성 (kebab-case, 짧게)
+- [ ] 상세 설계 확인 — doc/ragnarok/13_IMPLEMENTATION_DIRECTION.md
+- [ ] 구현
+  - [ ] shared/ 변경 시 PROTOCOL_VERSION 증가 + lib.rs 변경 로그 `/// vNN:` 한 줄
+  - [ ] CSV 컬럼 추가 시 헤더와 **모든 행**의 필드 수 일치 (Rust 변환기가 빌드 에러를 낸다)
+  - [ ] DB 컬럼 추가 시 auth.rs의 ensure_* 마이그레이션 + 기존 행 기본값
+  - [ ] 에이전트가 써야 할 기능이면 agent-client의 AgentAction + ACTION_SPECS
+- [ ] 테스트 추가 (새 공식·불변식) / 기존 불변식 테스트 통과 확인
+- [ ] Rust 검증 (Rust를 건드렸으면)
+  - [ ] cargo fmt --all --check
+  - [ ] cargo clippy --workspace --all-targets --locked -- -D warnings
+  - [ ] cargo test --workspace --locked
+- [ ] 클라이언트 검증 (client/ 또는 shared/ 를 건드렸으면 — client/ 에서)
+  - [ ] npm run build:wasm
+  - [ ] npm test
+  - [ ] npm run check
+  - [ ] npm run lint
+  - [ ] npm run format:check
+- [ ] 문서
+  - [ ] 해당 시스템 문서 갱신 (COMBAT / DEBUFF / ECONOMY / ZONE_SYSTEM …)
+  - [ ] doc/TODO.md 대응 항목 체크
+  - [ ] 새 에셋이면 doc/assets/<분류>.md에 출처·라이선스 (+ AI/유료 툴은 티어·생성일)
+  - [ ] 마스터 플랜 §5 표에 [x] + PR 번호
+- [ ] 인게임 확인 (game-login 스킬) — 무엇을 어떻게 봤는지 PR 본문에 기록
+- [ ] 5,000 동접 가드레일 5문항 답변 (마스터 플랜 §3 D6)
+- [ ] PR 작성 — 무엇을 왜 바꿨는지 + 검증 방법. TODO 항목이면 원문 인용
+```
+
+---
+
+## 관련 문서
+
+[DEVELOPMENT.md](DEVELOPMENT.md) 환경·개발 루프·성능 기준선 ·
+[CONTRIBUTING.md](../CONTRIBUTING.md) PR 규칙 ·
+[TODO.md](TODO.md) 유지보수자 백로그 ·
+[ragnarok/README.md](ragnarok/README.md) 설계 레퍼런스 전체 ·
+[ragnarok/09_OPENMMO_GAP_ANALYSIS.md](ragnarok/09_OPENMMO_GAP_ANALYSIS.md) 채택 결정 ·
+[ragnarok/10_IMPLEMENTATION_ROADMAP.md](ragnarok/10_IMPLEMENTATION_ROADMAP.md) 파일 단위 분해 ·
+[RUNTIME_PERFORMANCE.md](RUNTIME_PERFORMANCE.md) · [LOADING_OPTIMIZATION.md](LOADING_OPTIMIZATION.md)

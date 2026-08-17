@@ -76,6 +76,8 @@ Agents and humans connect to the same world, act under the same rules, and inter
 ## Documentation
 
 - [Development Guide](doc/DEVELOPMENT.md) — bootstrap a clone, daily dev loop, common recipes, troubleshooting
+- [Architecture](doc/ARCHITECTURE.md) — crates, runtime topology, authority model, protocol and data pipeline diagrams
+- [Development Master Plan](doc/DEVELOPMENT_MASTER_PLAN.md) — what to build in what order, with gates and spikes
 - [Devlog](doc/devlog/README.md)
 
 **World & Terrain**

@@ -57,9 +57,15 @@ iW Database의 몬스터 레코드는 대략 다음을 갖는다: HP/SP, 레벨,
   `attackImpactDelay`, `behavior`, 애니메이션 클립 8종, `weapon`/`weaponBone`/
   `weaponOffset`/`weaponDropChance`, `material`, `scale`, `boss`, `hitDebuff`,
   던전 스폰용 `dungeonMinDepth`/`MaxDepth`/`Weight`/`Aggressive`.
-- 지상 스폰은 맵 에디터가 그린 사각형(`data/terrain/zones/`)이 `monsterType`,
-  `maxTotal`, `maxPerPlayer`, `spawnIntervalSecs`를 갖는다 — RO의 "맵별 정원"과
-  사실상 같은 모델이다.
+- 지상 스폰은 **플레이어를 따라다닌다.** `data-src/world.json`의 `ambientSpawns`와
+  인당 캡(`maxMonstersPerPlayer = 30`)을 `tick_monster_spawns`
+  (`server/src/game_state/monster.rs:854`)가 돌리고, 서버가 각 플레이어 주변에 스폰을
+  요청하면 소유자 클라이언트가 유효 위치를 고른다. 몬스터 자신의 레벨이 스폰 게이트다
+  (`min_ambient_player_level`).
+- 맵 에디터가 그리는 사각형(`data/terrain/zones/`)의 `monsterSpawns` 배열은 **서버가
+  읽지 않는다** — `server/src/world_config.rs:93`은 `noSpawnZones`만 읽는다.
+  즉 **RO의 "맵별 정원"에 해당하는 것이 아직 없다.** 고정 사냥터가 없으므로
+  레벨 차 페널티는 "어디로 갈까"보다 "주변 중 무엇을 잡을까"를 먼저 바꾼다.
 - **몬스터 AI는 소유자 클라이언트에서 돈다** (`monsterManager.ai_tick_brain`).
   이것이 5,000 동접을 견디는 구조적 선택이며, 아래 판단의 전제다.
 
