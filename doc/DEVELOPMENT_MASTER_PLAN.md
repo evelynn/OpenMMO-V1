@@ -268,7 +268,7 @@ Phase 번호와 1:1이다(M1 = Phase 1 …). **작업 ID는 13의 ID가 정본�
 
 | 순번 | 작업 ID | 작업 | 선행 | 크기 | 영역 | 산출물 |
 |------|---------|------|------|------|------|--------|
-| 11 | IMP-2.1 | 우편함 (Mailbox) | — | L | shared/server/client | 우편 테이블(`server/src/auth.rs`의 `ensure_*` 마이그레이션), 수령·삭제 프로토콜, 첨부 아이템 원자성, 운영 지급 경로. **콘텐츠가 아니라 운영 안전장치로 먼저 넣는다** |
+| [x] 11 | IMP-2.1 | 우편함 (Mailbox) | — | L | shared/server/client | 우편 테이블(`server/src/auth.rs`의 `ensure_*` 마이그레이션), 수령·삭제 프로토콜, 첨부 아이템 원자성, 운영 지급 경로. **콘텐츠가 아니라 운영 안전장치로 먼저 넣는다** |
 | 12 | IMP-2.2 | 세이브 포인트 + 리스폰 | — | M | shared/server/client | `ClientMessage::SetSavePoint`, 캐릭터 레코드에 `save_point`(`auth.rs`의 `CHARACTER_COLUMNS` + `CharacterSaveData` + `write_character_states`), **기본값은 현행 리스폰 유지** |
 | 13 | SPK-2 | 창고 델타 전송 스파이크 | — | S | server(test) | 슬롯 상한 후보(60 / **120** / 240)별 바이트 측정 + §7 판정. 120은 13 IMP-2.3의 확정값이므로 **검증 대상**이다 |
 | 14 | IMP-2.3 | 창고 (Storage) | IMP-2.2, SPK-2, IMP-0.1 | L | shared/server/client | `STORAGE_SLOTS = 120`, 열기/입금/출금/닫기 프로토콜(**델타**), 거리(NPC 근처)·슬롯 상한·원자성 검증 — **창고 자체에는 무게 제한이 없다**(출금 시 인벤토리 `max_carry_weight`만 검사), 기존 배치 세이브 합류, UI + `overlayStack.ts` 등록 |
@@ -430,7 +430,8 @@ PvP 아이템 드랍, 맵 전환 로딩. 근거는
 
 - [ ] 선행 항목이 전부 머지되었는지 확인 (마스터 플랜 §5)
 - [ ] 브랜치 생성 (kebab-case, 짧게)
-- [ ] 상세 설계 확인 — doc/ragnarok/13_IMPLEMENTATION_DIRECTION.md
+- [ ] 상세 설계 확인 — doc/ragnarok/13_IMPLEMENTATION_DIRECTION.md의 해당 IMP 절을 **끝까지 읽고 시작**
+- [ ] 설계와 다르게 가야 한다면 **13을 먼저 고치고**(이유 포함) 그다음 코드를 쓴다 — 코드와 설계가 어긋난 채로 머지하지 않는다
 - [ ] 구현
   - [ ] shared/ 변경 시 PROTOCOL_VERSION 증가 + lib.rs 변경 로그 `/// vNN:` 한 줄
   - [ ] CSV 컬럼 추가 시 헤더와 **모든 행**의 필드 수 일치 (Rust 변환기가 빌드 에러를 낸다)

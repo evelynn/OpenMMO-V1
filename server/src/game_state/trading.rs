@@ -138,7 +138,7 @@ impl super::GameState {
         }
     }
 
-    async fn send_gold_update(&self, player_id: &PlayerId) {
+    pub(super) async fn send_gold_update(&self, player_id: &PlayerId) {
         let gold = self.get_player_gold(player_id).await;
         self.send_direct_message(player_id, ServerMessage::GoldUpdate { gold })
             .await;

@@ -265,7 +265,11 @@ impl super::GameState {
     /// pushing the guard (and the main-hand broadcast, which no-ops when
     /// unchanged) from this one spot keeps everything in sync without each
     /// mutation site having to remember to send it.
-    async fn send_inventory_snapshot(&self, player_id: &PlayerId, inventory: PlayerInventory) {
+    pub(super) async fn send_inventory_snapshot(
+        &self,
+        player_id: &PlayerId,
+        inventory: PlayerInventory,
+    ) {
         self.set_player_main_hand(player_id, inventory.main_hand_def_id())
             .await;
         self.refresh_hunger_gear_drain(player_id, &inventory).await;

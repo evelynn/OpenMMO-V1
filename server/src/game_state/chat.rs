@@ -230,6 +230,12 @@ pub(crate) enum AdminCommand<'a> {
         monster_type: &'a str,
         count: Option<&'a str>,
     },
+    /// `/mail <name> <message>` — the operator's delivery path. Reaches
+    /// offline characters and full bags, which is the whole point of mail.
+    Mail {
+        name: &'a str,
+        message: &'a str,
+    },
 }
 
 pub(crate) fn parse_admin_command(message: &str) -> Option<AdminCommand<'_>> {
@@ -250,6 +256,13 @@ pub(crate) fn parse_admin_command(message: &str) -> Option<AdminCommand<'_>> {
     if let Some(rest) = strip_command(message, "/mute") {
         let (name, minutes) = split_name_and_arg(rest);
         return Some(AdminCommand::Mute { name, minutes });
+    }
+    if let Some(rest) = strip_command(message, "/mail") {
+        let (name, message) = split_name_and_arg(rest);
+        return Some(AdminCommand::Mail {
+            name,
+            message: message.unwrap_or(""),
+        });
     }
     if let Some(rest) = strip_command(message, "/summon") {
         return Some(AdminCommand::Summon(rest));
@@ -298,7 +311,7 @@ impl super::GameState {
         &self,
         player_id: &PlayerId,
         message: String,
-        auth: &AuthService,
+        auth: &std::sync::Arc<AuthService>,
     ) {
         if let Some(notice) = parse_notice_command(&message) {
             info!(
@@ -918,7 +931,7 @@ impl super::GameState {
         &self,
         admin_id: &PlayerId,
         command: AdminCommand<'_>,
-        auth: &AuthService,
+        auth: &std::sync::Arc<AuthService>,
     ) {
         let reply = match command {
             AdminCommand::Kick(name) => self.kick_command(admin_id, name, auth).await,
@@ -930,6 +943,9 @@ impl super::GameState {
                 self.ban_command(admin_id, name, minutes, auth).await
             }
             AdminCommand::Unban(name) => self.unban_command(name, auth).await,
+            AdminCommand::Mail { name, message } => {
+                self.mail_command(admin_id, name, message, auth).await
+            }
             AdminCommand::Summon(name) => self.summon_command(admin_id, name).await,
             AdminCommand::Goto(name) => self.goto_command(admin_id, name).await,
             AdminCommand::Spawnmob {

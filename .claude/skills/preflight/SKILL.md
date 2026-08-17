@@ -45,6 +45,11 @@ npm run format:check
 
 ## 4. Before declaring it green
 
+- **Spec match.** Diff the change against its `IMP-x.y` entry in
+  [doc/ragnarok/13_IMPLEMENTATION_DIRECTION.md](../../../doc/ragnarok/13_IMPLEMENTATION_DIRECTION.md):
+  same files, same schema, same protocol shape, same verification. Any deviation
+  must appear as an amendment to that entry **in this same change**, with the
+  reason. Code and spec never disagree.
 - Report the actual output. A skipped step is a skipped step — say so.
 - New warnings count as failures under `-D warnings`.
 - New asset added? `doc/assets/` must record its source and license (AI/paid

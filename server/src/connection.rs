@@ -1162,6 +1162,12 @@ async fn handle_client_message(
                 entrance_ids: discovered_dungeons,
             });
 
+            match auth_service.unread_mail_count(selected_character.id) {
+                Ok(count) if count > 0 => responses.push(ServerMessage::MailUnread { count }),
+                Ok(_) => {}
+                Err(err) => warn!("Unread mail count failed for {}: {}", id, err),
+            }
+
             if !state.is_official_npc {
                 responses.push(crate::game_state::hunger::hunger_update_msg(
                     selected_character.satiation,
@@ -1705,6 +1711,21 @@ async fn handle_client_message(
             }
         }
 
+        ClientMessage::OpenMailbox => {
+            if let Some(id) = &state.player_id {
+                game_state.open_mailbox(auth_service, id).await;
+            }
+        }
+        ClientMessage::ClaimMail { mail_id } => {
+            if let Some(id) = &state.player_id {
+                game_state.claim_mail(auth_service, id, mail_id).await;
+            }
+        }
+        ClientMessage::DeleteMail { mail_id } => {
+            if let Some(id) = &state.player_id {
+                game_state.delete_mail(auth_service, id, mail_id).await;
+            }
+        }
         ClientMessage::FriendRemove { name } => {
             if let Some(id) = &state.player_id {
                 game_state

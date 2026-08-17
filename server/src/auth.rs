@@ -1,11 +1,31 @@
 use crate::types::{CharacterAttributes, GameDateTime};
 use crate::world_config::world_config;
+use onlinerpg_shared::messages::{MailAttachment, MailSummary};
 use onlinerpg_shared::{CharacterClass, Gender};
 use r2d2_sqlite::SqliteConnectionManager;
 use rusqlite::{params, Connection, OptionalExtension};
 use std::collections::HashSet;
 use std::fmt::{Display, Formatter};
 use std::path::PathBuf;
+
+/// How many letters one character may hold. A reward loop that misbehaves
+/// fails to deliver rather than growing a mailbox without bound.
+pub const MAX_MAILBOX: u16 = 30;
+/// Letters expire after 30 real days, swept on the hourly buyback tick.
+pub const MAIL_TTL_SECS: i64 = 30 * 24 * 60 * 60;
+
+/// One letter to deliver. Grouped so the delivery call reads as data rather
+/// than seven positional arguments.
+pub struct NewMail<'a> {
+    pub recipient_character_id: i64,
+    pub sender: &'a str,
+    pub subject: &'a str,
+    pub body: &'a str,
+    pub gold: i64,
+    pub items: &'a [MailAttachment],
+    /// Unix seconds; the caller's clock so tests can pin it.
+    pub now: i64,
+}
 
 /// New characters start with no gold: anything redeemable granted at creation
 /// would let abusers mint wealth by recycling characters (see doc/ECONOMY.md).
@@ -221,6 +241,7 @@ fn character_record_from_row(row: &rusqlite::Row) -> rusqlite::Result<CharacterR
 #[derive(Debug)]
 pub enum AuthError {
     InvalidInput(&'static str),
+    MailboxFull,
     AccountNotFound,
     InvalidCharacterName,
     CharacterLimitReached,
@@ -233,6 +254,7 @@ impl AuthError {
     pub fn client_message(&self) -> &'static str {
         match self {
             AuthError::InvalidInput(message) => message,
+            AuthError::MailboxFull => "Mailbox is full",
             AuthError::AccountNotFound => "Account not found",
             AuthError::InvalidCharacterName => {
                 "Character name must start with a letter and contain only letters, digits, or _"
@@ -397,6 +419,7 @@ impl AuthService {
         Self::ensure_world_time_schema(&conn)?;
         Self::ensure_dungeon_chest_schema(&conn)?;
         Self::ensure_dungeon_discovery_schema(&conn)?;
+        Self::ensure_mail_schema(&conn)?;
 
         Ok(Self { pool })
     }
@@ -606,6 +629,46 @@ impl AuthService {
                 PRIMARY KEY (character_id, entrance_id),
                 FOREIGN KEY (character_id) REFERENCES characters(id) ON DELETE CASCADE
             )",
+            [],
+        )?;
+        Ok(())
+    }
+
+    /// Mailbox: the delivery path for rewards that must survive a full bag or
+    /// an offline recipient. `ON DELETE CASCADE` leans on the connection's
+    /// `PRAGMA foreign_keys = ON` (set in `new`).
+    fn ensure_mail_schema(conn: &Connection) -> Result<(), rusqlite::Error> {
+        conn.execute(
+            "CREATE TABLE IF NOT EXISTS mail (
+                id INTEGER PRIMARY KEY,
+                recipient_character_id INTEGER NOT NULL
+                    REFERENCES characters(id) ON DELETE CASCADE,
+                sender TEXT NOT NULL,
+                subject TEXT NOT NULL,
+                body TEXT NOT NULL DEFAULT '',
+                gold INTEGER NOT NULL DEFAULT 0,
+                created_at INTEGER NOT NULL,
+                read_at INTEGER,
+                claimed_at INTEGER,
+                expires_at INTEGER NOT NULL
+            )",
+            [],
+        )?;
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_mail_recipient ON mail(recipient_character_id)",
+            [],
+        )?;
+        conn.execute(
+            "CREATE TABLE IF NOT EXISTS mail_items (
+                mail_id INTEGER NOT NULL REFERENCES mail(id) ON DELETE CASCADE,
+                item_def_id TEXT NOT NULL,
+                quantity INTEGER NOT NULL,
+                enchant INTEGER NOT NULL DEFAULT 0
+            )",
+            [],
+        )?;
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_mail_items_mail ON mail_items(mail_id)",
             [],
         )?;
         Ok(())
@@ -875,6 +938,138 @@ impl AuthService {
         Ok(())
     }
 
+    /// Deliver one letter. Refuses past `MAX_MAILBOX` so a broken reward loop
+    /// cannot grow a character's mailbox without bound; the caller logs and
+    /// drops the reward rather than retrying.
+    pub fn insert_mail(&self, mail: NewMail<'_>) -> Result<i64, AuthError> {
+        let mut conn = self.open_connection()?;
+        let tx = conn.transaction()?;
+        let held: i64 = tx.query_row(
+            "SELECT COUNT(*) FROM mail WHERE recipient_character_id = ?1",
+            params![mail.recipient_character_id],
+            |row| row.get(0),
+        )?;
+        if held >= i64::from(MAX_MAILBOX) {
+            return Err(AuthError::MailboxFull);
+        }
+        tx.execute(
+            "INSERT INTO mail
+                (recipient_character_id, sender, subject, body, gold, created_at, expires_at)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
+            params![
+                mail.recipient_character_id,
+                mail.sender,
+                mail.subject,
+                mail.body,
+                mail.gold,
+                mail.now,
+                mail.now + MAIL_TTL_SECS,
+            ],
+        )?;
+        let mail_id = tx.last_insert_rowid();
+        for item in mail.items {
+            tx.execute(
+                "INSERT INTO mail_items (mail_id, item_def_id, quantity, enchant) \
+                 VALUES (?1, ?2, ?3, ?4)",
+                params![mail_id, item.item_def_id, item.quantity, item.enchant],
+            )?;
+        }
+        tx.commit()?;
+        Ok(mail_id)
+    }
+
+    /// The whole mailbox, newest first, attachments included. Only the panel
+    /// asks for this — the steady-state signal is `unread_mail_count`.
+    pub fn load_mail(&self, character_id: i64) -> Result<Vec<MailSummary>, AuthError> {
+        let conn = self.open_connection()?;
+        let mut stmt = conn.prepare(
+            "SELECT id, sender, subject, body, gold, created_at, expires_at, read_at \
+             FROM mail WHERE recipient_character_id = ?1 AND claimed_at IS NULL \
+             ORDER BY created_at DESC, id DESC",
+        )?;
+        let mut mail = stmt
+            .query_map(params![character_id], |row| {
+                Ok(MailSummary {
+                    id: row.get(0)?,
+                    sender: row.get(1)?,
+                    subject: row.get(2)?,
+                    body: row.get(3)?,
+                    gold: row.get(4)?,
+                    items: Vec::new(),
+                    created_at: row.get(5)?,
+                    expires_at: row.get(6)?,
+                    read: row.get::<_, Option<i64>>(7)?.is_some(),
+                })
+            })?
+            .collect::<Result<Vec<_>, _>>()?;
+
+        let mut items = conn
+            .prepare("SELECT item_def_id, quantity, enchant FROM mail_items WHERE mail_id = ?1")?;
+        for entry in &mut mail {
+            entry.items = items
+                .query_map(params![entry.id], |row| {
+                    Ok(MailAttachment {
+                        item_def_id: row.get(0)?,
+                        quantity: row.get::<_, i64>(1)? as u32,
+                        enchant: row.get(2)?,
+                    })
+                })?
+                .collect::<Result<Vec<_>, _>>()?;
+        }
+
+        // Opening the mailbox is what marks it read; the count the client
+        // holds goes to zero in the same round trip.
+        conn.execute(
+            "UPDATE mail SET read_at = strftime('%s', 'now') \
+             WHERE recipient_character_id = ?1 AND read_at IS NULL",
+            params![character_id],
+        )?;
+        Ok(mail)
+    }
+
+    pub fn unread_mail_count(&self, character_id: i64) -> Result<u16, AuthError> {
+        let conn = self.open_connection()?;
+        let count: i64 = conn.query_row(
+            "SELECT COUNT(*) FROM mail \
+             WHERE recipient_character_id = ?1 AND read_at IS NULL AND claimed_at IS NULL",
+            params![character_id],
+            |row| row.get(0),
+        )?;
+        Ok(count.clamp(0, i64::from(u16::MAX)) as u16)
+    }
+
+    /// One letter with its attachments, for the claim path's fit check. `None`
+    /// when it is already gone or belongs to someone else.
+    pub fn load_one_mail(
+        &self,
+        character_id: i64,
+        mail_id: i64,
+    ) -> Result<Option<MailSummary>, AuthError> {
+        Ok(self
+            .load_mail(character_id)?
+            .into_iter()
+            .find(|m| m.id == mail_id))
+    }
+
+    /// Remove one letter. Used by both the claim (after the goods are banked)
+    /// and the discard path, so a claimed letter can never be claimed twice.
+    /// Returns false when the row was already gone.
+    pub fn delete_mail(&self, character_id: i64, mail_id: i64) -> Result<bool, AuthError> {
+        let conn = self.open_connection()?;
+        let removed = conn.execute(
+            "DELETE FROM mail WHERE id = ?1 AND recipient_character_id = ?2",
+            params![mail_id, character_id],
+        )?;
+        Ok(removed > 0)
+    }
+
+    /// Drop expired letters globally. Runs on the hourly buyback sweep, not on
+    /// a per-player tick.
+    pub fn delete_expired_mail(&self, now: i64) -> Result<usize, AuthError> {
+        let conn = self.open_connection()?;
+        Ok(conn.execute("DELETE FROM mail WHERE expires_at < ?1", params![now])?)
+    }
+
     pub fn load_blocked_names(&self, character_id: i64) -> Result<Vec<String>, AuthError> {
         let conn = self.open_connection()?;
         let mut stmt =
@@ -906,6 +1101,19 @@ impl AuthService {
     /// Canonical name and owning account for a character, matched ignoring
     /// ASCII case like the other name lookups. `None` when no such character
     /// exists.
+    /// Character id for an exact (case-insensitive) name. Used by the admin
+    /// mail command, which must reach offline characters too.
+    pub fn character_id_of_name(&self, character_name: &str) -> Result<Option<i64>, AuthError> {
+        let conn = self.open_connection()?;
+        Ok(conn
+            .query_row(
+                "SELECT id FROM characters WHERE character_name = ?1 COLLATE NOCASE",
+                params![character_name],
+                |row| row.get(0),
+            )
+            .optional()?)
+    }
+
     pub fn account_of_character(
         &self,
         character_name: &str,
@@ -1405,6 +1613,131 @@ mod tests {
             .unwrap();
         let items = auth.load_inventory(knight.id).unwrap();
         assert!(items.iter().all(|r| r.item_def_id != "worn_mandolin"));
+    }
+
+    fn mail_test_service(tag: &str) -> (AuthService, i64) {
+        let db_path =
+            std::env::temp_dir().join(format!("onlinerpg_auth_{tag}_{}.db", uuid::Uuid::new_v4()));
+        let auth = AuthService::new(db_path).unwrap();
+        let account = auth.login_google(&format!("sub-{tag}")).unwrap();
+        let attributes = CharacterAttributes {
+            r#str: 12,
+            dex: 10,
+            con: 10,
+            int: 10,
+            wis: 10,
+            cha: 10,
+            guard: 0,
+        };
+        let character = auth
+            .create_character(
+                &account,
+                "Postie",
+                &attributes,
+                14,
+                CharacterClass::Knight,
+                Gender::Female,
+            )
+            .unwrap();
+        (auth, character.id)
+    }
+
+    fn letter<'a>(
+        recipient: i64,
+        subject: &'a str,
+        items: &'a [MailAttachment],
+        now: i64,
+    ) -> NewMail<'a> {
+        NewMail {
+            recipient_character_id: recipient,
+            sender: "System",
+            subject,
+            body: "",
+            gold: 5,
+            items,
+            now,
+        }
+    }
+
+    #[test]
+    fn mail_round_trips_with_its_attachments() {
+        let (auth, character_id) = mail_test_service("mail_round_trip");
+        let items = vec![MailAttachment {
+            item_def_id: "apple".to_string(),
+            quantity: 3,
+            enchant: 0,
+        }];
+        let id = auth
+            .insert_mail(letter(character_id, "Reward", &items, 1_000))
+            .unwrap();
+
+        assert_eq!(auth.unread_mail_count(character_id).unwrap(), 1);
+        let mail = auth.load_mail(character_id).unwrap();
+        assert_eq!(mail.len(), 1);
+        assert_eq!(mail[0].id, id);
+        assert_eq!(mail[0].gold, 5);
+        assert_eq!(mail[0].items.len(), 1);
+        assert_eq!(mail[0].items[0].quantity, 3);
+        assert_eq!(mail[0].expires_at, 1_000 + MAIL_TTL_SECS);
+        // Reading the list is what clears the badge.
+        assert_eq!(auth.unread_mail_count(character_id).unwrap(), 0);
+
+        assert!(auth.delete_mail(character_id, id).unwrap());
+        assert!(auth.load_mail(character_id).unwrap().is_empty());
+        assert!(!auth.delete_mail(character_id, id).unwrap());
+    }
+
+    #[test]
+    fn a_full_mailbox_refuses_delivery() {
+        let (auth, character_id) = mail_test_service("mail_full");
+        for i in 0..MAX_MAILBOX {
+            auth.insert_mail(letter(character_id, &format!("n{i}"), &[], 1_000))
+                .unwrap();
+        }
+        assert!(matches!(
+            auth.insert_mail(letter(character_id, "one too many", &[], 1_000)),
+            Err(AuthError::MailboxFull)
+        ));
+    }
+
+    #[test]
+    fn expired_mail_is_swept_and_live_mail_is_not() {
+        let (auth, character_id) = mail_test_service("mail_expiry");
+        auth.insert_mail(letter(character_id, "old", &[], 0))
+            .unwrap();
+        auth.insert_mail(letter(character_id, "new", &[], MAIL_TTL_SECS))
+            .unwrap();
+        let removed = auth.delete_expired_mail(MAIL_TTL_SECS + 1).unwrap();
+        assert_eq!(removed, 1);
+        let left = auth.load_mail(character_id).unwrap();
+        assert_eq!(left.len(), 1);
+        assert_eq!(left[0].subject, "new");
+    }
+
+    #[test]
+    fn deleting_a_character_cascades_its_mail() {
+        let (auth, character_id) = mail_test_service("mail_cascade");
+        let account = auth.login_google("sub-mail_cascade").unwrap();
+        let items = vec![MailAttachment {
+            item_def_id: "apple".to_string(),
+            quantity: 1,
+            enchant: 0,
+        }];
+        let id = auth
+            .insert_mail(letter(character_id, "Reward", &items, 1_000))
+            .unwrap();
+        auth.delete_character(&account, character_id).unwrap();
+        assert!(auth.load_mail(character_id).unwrap().is_empty());
+        // The attachment row must go with it, or mail_items leaks forever.
+        let conn = auth.open_connection().unwrap();
+        let orphans: i64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM mail_items WHERE mail_id = ?1",
+                params![id],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(orphans, 0);
     }
 
     #[test]

@@ -228,6 +228,44 @@ pub fn resolve_title<'a>(
         .or_else(|| titles.find(|t| t.to_lowercase().contains(&wanted)))
 }
 
+/// One attachment row on a piece of mail. Mirrors `mail_items`.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct MailAttachment {
+    pub item_def_id: String,
+    pub quantity: u32,
+    pub enchant: i32,
+}
+
+/// A mailbox entry as the panel shows it. Sent only when the player opens the
+/// mailbox — the steady-state push is `MailUnread`, a single count.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct MailSummary {
+    pub id: i64,
+    /// "System" or an NPC name. Player-to-player mail is out of scope.
+    pub sender: String,
+    pub subject: String,
+    pub body: String,
+    pub gold: i64,
+    pub items: Vec<MailAttachment>,
+    /// Unix seconds.
+    pub created_at: i64,
+    pub expires_at: i64,
+    pub read: bool,
+}
+
+/// What happened to one piece of mail, so the client can patch a single row
+/// instead of refetching the list.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum MailState {
+    /// Attachments moved to the bag; the row is gone.
+    Claimed,
+    /// Discarded by the player; the row is gone.
+    Deleted,
+    /// Nothing moved — the bag could not take the whole load. Claiming is
+    /// all-or-nothing, so the mail is untouched and still claimable.
+    ClaimBlocked,
+}
+
 #[derive(Debug, Serialize, Deserialize)]
 pub enum ClientMessage {
     /// Mandatory first message: protocol check plus who is connecting. The
@@ -534,6 +572,18 @@ pub enum ClientMessage {
     /// friend may be offline, so no player id exists to name them by.
     FriendRemove {
         name: String,
+    },
+    /// Ask for the full mailbox. The list is pulled, never pushed: the
+    /// steady-state signal is `MailUnread`'s count.
+    OpenMailbox,
+    /// Take one piece of mail's gold and attachments. All-or-nothing — a bag
+    /// that cannot hold the whole load leaves the mail untouched.
+    ClaimMail {
+        mail_id: i64,
+    },
+    /// Discard one piece of mail, attachments included.
+    DeleteMail {
+        mail_id: i64,
     },
     /// Ask which of the sender's friends are online right now. Polled by the
     /// client (faster while the panel is open); there is no presence push.
@@ -872,6 +922,20 @@ pub enum ServerMessage {
         /// percentage (100 = no adjustment). Display only — the server has
         /// banked the adjusted amount. 100 on the death-penalty notice.
         xp_mult_pct: u8,
+    },
+    /// Direct message: the mailbox contents, in reply to `OpenMailbox`.
+    MailList {
+        mail: Vec<MailSummary>,
+    },
+    /// Direct message: one row changed. `ClaimBlocked` means nothing moved.
+    MailUpdated {
+        mail_id: i64,
+        state: MailState,
+    },
+    /// Direct message: how many unread letters are waiting. Sent on join and
+    /// whenever mail arrives — the badge needs a number, not the letters.
+    MailUnread {
+        count: u16,
     },
     /// Direct message: the receiving player's full trained-skill map, sent
     /// once on EnterGame. Skills stay out of the broadcast `Player` struct —

@@ -241,6 +241,7 @@ mod dungeon;
 mod friends;
 pub(crate) mod hunger;
 mod inventory;
+mod mail;
 mod monster;
 mod party;
 mod passability;

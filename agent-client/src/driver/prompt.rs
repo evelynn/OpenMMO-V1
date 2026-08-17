@@ -431,6 +431,46 @@ pub(crate) fn format_event(state: &SharedState, msg: &ServerMessage) -> Option<S
                 player.name, player.health, player.max_health
             ))
         }
+        ServerMessage::MailUnread { count } => {
+            Some(format!("[Mail] {count} unread — use check_mail to read them"))
+        }
+        ServerMessage::MailList { mail } => {
+            if mail.is_empty() {
+                return Some("[Mail] mailbox empty".to_string());
+            }
+            let lines: Vec<String> = mail
+                .iter()
+                .map(|m| {
+                    let mut what: Vec<String> = Vec::new();
+                    if m.gold > 0 {
+                        what.push(format!("{}c", m.gold));
+                    }
+                    what.extend(
+                        m.items
+                            .iter()
+                            .map(|i| format!("{} x{}", i.item_def_id, i.quantity)),
+                    );
+                    let goods = if what.is_empty() {
+                        "no attachments".to_string()
+                    } else {
+                        what.join(", ")
+                    };
+                    format!("  #{} {} from {} — {goods}", m.id, m.subject, m.sender)
+                })
+                .collect();
+            Some(format!("[Mail] {} letter(s):\n{}", mail.len(), lines.join("\n")))
+        }
+        ServerMessage::MailUpdated { mail_id, state } => Some(match state {
+            onlinerpg_shared::messages::MailState::Claimed => {
+                format!("[Mail] claimed #{mail_id}")
+            }
+            onlinerpg_shared::messages::MailState::Deleted => {
+                format!("[Mail] deleted #{mail_id}")
+            }
+            onlinerpg_shared::messages::MailState::ClaimBlocked => format!(
+                "[Mail] #{mail_id} not claimed — your bag cannot hold all of it. Make room and retry."
+            ),
+        }),
         ServerMessage::XpGained {
             xp_amount,
             total_xp,

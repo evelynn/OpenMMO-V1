@@ -137,6 +137,11 @@ impl SharedState {
             | ServerMessage::MonsterDead { .. }
             | ServerMessage::MonsterRemoved { .. }
             | ServerMessage::XpGained { .. }
+            // New mail can wait for the next batched prompt: it keeps for 30
+            // days and waking the LLM for it is pure cost.
+            | ServerMessage::MailUnread { .. }
+            | ServerMessage::MailList { .. }
+            | ServerMessage::MailUpdated { .. }
             | ServerMessage::PlayerHealthUpdate { .. }
             | ServerMessage::PlayerTorchToggled { .. }
             | ServerMessage::PlayerMainHandChanged { .. } => EventUrgency::Routine,

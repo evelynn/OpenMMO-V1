@@ -703,6 +703,19 @@ class NetworkManager {
     this.sendMessage('RequestFriendsOnline')
   }
 
+  /** Ask for the mailbox contents; the badge count is pushed, the list is not. */
+  sendOpenMailbox() {
+    this.sendMessage('OpenMailbox')
+  }
+
+  sendClaimMail(mailId: number) {
+    this.sendMessage({ ClaimMail: { mail_id: mailId } })
+  }
+
+  sendDeleteMail(mailId: number) {
+    this.sendMessage({ DeleteMail: { mail_id: mailId } })
+  }
+
   sendBuyItem(merchantPlayerId: number, itemDefId: string) {
     this.sendMessage({
       BuyItem: { merchant_player_id: merchantPlayerId, item_def_id: itemDefId },

@@ -528,16 +528,29 @@ LLM의 재량이 아니라 **결정적 서버 판정**이어야 하므로, NPC�
 | 결정 | 채택 (12 §4 — 운영 안전장치) |
 | 난이도 | 중 |
 | 선행 조건 | 없음 |
-| 프로토콜 변경 | 있음 — `OpenMailbox` / `ClaimMail` / `DeleteMail`, `MailList` / `MailUpdated` / `MailUnread` |
+| 프로토콜 변경 | 있음 — `OpenMailbox` / `ClaimMail` / `DeleteMail`, `MailList` / `MailUpdated` / `MailUnread` (v30 → **v31**) |
 | 저장 스키마 변경 | 있음 — `mail`, `mail_items` 두 테이블 |
 
 **손댈 파일**
-- `server/src/auth.rs` — `ensure_mail_schema` 추가 후 `AuthService::new`(:371)의
-  마이그레이션 블록(:390~:399)에서 호출. 읽기/쓰기 메서드 4개.
+- `server/src/auth.rs` — `ensure_mail_schema` 추가 후 `AuthService::new`의
+  마이그레이션 블록에서 호출. **구현 결과 메서드는 6개**: `insert_mail`(상한 검사 포함),
+  `load_mail`(읽음 표시까지), `load_one_mail`, `unread_mail_count`, `delete_mail`,
+  `delete_expired_mail`. 페이로드는 `NewMail<'_>` 구조체로 묶었다 — 인자 7개짜리
+  호출부는 읽히지 않는다. `character_id_of_name`도 함께 추가(관리자 명령이 오프라인
+  캐릭터를 찾아야 한다). `AuthError::MailboxFull` 신설.
 - `shared/src/messages.rs:232`/`:577` — 메시지 6종 + `MailSummary` 페이로드 구조체.
 - `shared/src/lib.rs:78` — 버전 +1 및 체인지로그.
 - `server/src/connection.rs:733` — 디스패치 arm 3개.
-- `server/src/game_state/mail.rs` (신규) — `impl super::GameState` 블록.
+- `server/src/game_state/mail.rs` (신규) — `impl super::GameState` 블록 +
+  `Letter` 구조체(발신자·제목·본문·골드·첨부). 블로킹 DB 호출은 `spawn_blocking`을
+  직접 쓰지 않고 기존 `game_state::auth_db` 래퍼를 쓴다 — 같은 동작이고 에러 변환이
+  한 곳에 모인다.
+- `server/src/game_state/chat.rs` — **관리자 명령 `/mail <name> <message>`**
+  (`AdminCommand::Mail`, `parse_admin_command`, `requires_admin` 경유). 마스터 플랜
+  §5 row 11의 "운영 지급 경로"가 이것이고, 동시에 우편의 **첫 생산 호출부**다.
+  이것이 없으면 배달 경로 전체가 죽은 코드로 남아 clippy `-D warnings`를 통과하지 못한다.
+  이 명령을 위해 `send_chat_message`/`handle_admin_command`가 `&Arc<AuthService>`를
+  받도록 넓혔고, 테스트 헬퍼 `make_test_auth`도 `Arc`를 반환한다.
 - `server/src/game_state/mod.rs` — `mod mail;`.
 - `client/src/lib/stores/mailStore.ts`(신규), `MailPanel.svelte`(신규),
   `GameHud.svelte` 마운트, `overlayStack.ts:24` `OVERLAYS`에 `mail` 등록(layer 0).
@@ -561,7 +574,11 @@ LLM의 재량이 아니라 **결정적 서버 판정**이어야 하므로, NPC�
 저장해야 하고 그것이 곧 두 번째 인벤토리가 된다.
 전송은 델타다: 접속 시 `MailUnread { count }`만 보내고, 패널을 열 때 `MailList`,
 이후 변화는 `MailUpdated { mail_id, state }` 단건. 이것이 5,000명에게 우편함 전체를
-밀지 않기 위한 유일한 이유다.
+밀지 않기 위한 유일한 이유다. `state`는 `MailState { Claimed, Deleted, ClaimBlocked }` —
+`ClaimBlocked`는 **아무것도 움직이지 않았다**는 뜻이고 편지는 그대로 남는다(전부-아니면-전무
+규칙의 클라이언트 쪽 표현). 새 편지가 도착하면 요약이 아니라 `MailUnread`를 다시 밀고,
+목록은 플레이어가 패널을 열 때만 간다. `MailList` 직후에는 `MailUnread { count: 0 }`가
+따라간다 — 목록을 읽는 것이 곧 읽음 처리이기 때문이다.
 
 **데이터 스키마**
 
@@ -587,15 +604,23 @@ CREATE TABLE IF NOT EXISTS mail_items (
 );
 ```
 
-상수: `MAX_MAILBOX = 30`(초과 시 발신 실패 + 로그), `MAIL_TTL_DAYS = 30`(실시간).
+상수: `MAX_MAILBOX: u16 = 30`(초과 시 `MailboxFull` + 로그),
+`MAIL_TTL_SECS: i64 = 30 * 24 * 60 * 60`(30 실시간일. 초 단위로 두는 편이 `expires_at`
+계산과 테스트 고정에 곧바로 쓰인다).
 
 **마이그레이션** — 신규 테이블뿐. 기존 캐릭터는 빈 우편함으로 시작한다.
 `ON DELETE CASCADE`가 `PRAGMA foreign_keys = ON`(`AuthService::new`)에 의존하므로
 그 설정이 켜져 있는지 확인 후 병합할 것.
 
-**검증**
-- `server/src/auth.rs` 테스트: 삽입/조회/수령/만료 삭제, 캐릭터 삭제 시 캐스케이드.
-- `game_state` 테스트: 무게 초과 시 수령 거부 후 우편이 남는지, 상한 30 초과 발신 거부.
+**검증** (구현 완료 — 8개 테스트)
+- `server/src/auth.rs`: `mail_round_trips_with_its_attachments`,
+  `a_full_mailbox_refuses_delivery`, `expired_mail_is_swept_and_live_mail_is_not`,
+  `deleting_a_character_cascades_its_mail`(첨부 행까지 확인).
+- `server/src/game_state/tests/mail_tests.rs`:
+  `claiming_moves_gold_and_attachments_into_the_bag`,
+  `an_overweight_claim_is_refused_and_the_mail_stays`(거부 시 인벤토리 메시지가
+  나가지 않는 것까지 확인), `delivery_pushes_the_unread_badge_and_opening_clears_it`,
+  `the_hourly_sweep_drops_expired_mail`.
 - 인게임: 인벤토리를 가득 채운 상태에서 보상 지급 → 우편 도착 → 정리 후 수령.
 - 에이전트: 봇에게 우편을 보내고 `check_mail` → `claim_mail`로 회수되는지
   (되지 않으면 동등성 위반이다).

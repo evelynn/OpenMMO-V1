@@ -78,7 +78,9 @@ pub const NPC_TOKEN_FILENAME: &str = "npc_token";
 /// v30: XpGained carries `xp_mult_pct`, the level-gap multiplier already
 ///      applied to the award — doc/ragnarok/13_IMPLEMENTATION_DIRECTION.md
 ///      IMP-1.1.
-pub const PROTOCOL_VERSION: u32 = 30;
+/// v31: mailbox (OpenMailbox/ClaimMail/DeleteMail →
+///      MailList/MailUpdated/MailUnread) — IMP-2.1.
+pub const PROTOCOL_VERSION: u32 = 31;
 
 /// WebSocket close code sent when the handshake is refused (wrong protocol
 /// version, or traffic before `ClientInfo`). Lives outside the serialized

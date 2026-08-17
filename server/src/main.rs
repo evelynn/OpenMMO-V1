@@ -510,13 +510,20 @@ async fn main() -> ExitCode {
     // Reclaim buyback entries for characters who never trade again; trades
     // filter expiry inline, so this only has to beat memory growth.
     let game_state_for_buybacks = Arc::clone(&game_state);
+    let auth_for_buybacks = Arc::clone(&auth_service);
     background.spawn(run_ticks(
         "buyback expiry",
         game_state::BUYBACK_SWEEP_PERIOD,
         drain_shutdown.clone(),
         move || {
             let game_state = Arc::clone(&game_state_for_buybacks);
-            async move { game_state.tick_buyback_expiry().await }
+            let auth_service = Arc::clone(&auth_for_buybacks);
+            // Mail expiry rides this tick rather than a per-player sweep: one
+            // DELETE covers every mailbox on the server.
+            async move {
+                game_state.tick_buyback_expiry().await;
+                game_state.sweep_expired_mail(&auth_service).await;
+            }
         },
     ));
 

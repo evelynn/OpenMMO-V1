@@ -52,6 +52,17 @@ pub(super) enum AgentAction {
     },
     #[serde(rename = "respawn")]
     Respawn,
+    /// Read the mailbox. Rewards land here when the bag is full or the
+    /// recipient is offline, so a bot that never checks loses them.
+    #[serde(rename = "check_mail", alias = "read_mail", alias = "mailbox")]
+    CheckMail,
+    /// Take one letter's gold and attachments. All-or-nothing: a full bag
+    /// leaves the letter untouched.
+    #[serde(rename = "claim_mail")]
+    ClaimMail {
+        #[serde(alias = "id", alias = "mailId")]
+        mail_id: i64,
+    },
     /// Cast the rod at (x, z), or 4 m south when omitted; server validates.
     /// Reflexes (the state module) fight the fish — this is only the decision to fish.
     #[serde(rename = "fish")]
@@ -390,6 +401,21 @@ pub(super) const ACTION_SPECS: &[ActionSpec] = &[
   {"type": "respawn"}"#,
     },
     ActionSpec {
+        names: &["check_mail"],
+        aliases: &["read_mail", "mailbox"],
+        doc: r#"- Read your mailbox. Rewards arrive here when your bag was full or you
+  were offline, and they expire, so check when a [Mail] event says one is
+  waiting:
+  {"type": "check_mail"}"#,
+    },
+    ActionSpec {
+        names: &["claim_mail"],
+        aliases: &[],
+        doc: r#"- Take one letter's gold and items. All or nothing — make room first if
+  your bag is full. The id comes from check_mail:
+  {"type": "claim_mail", "mail_id": 7}"#,
+    },
+    ActionSpec {
         names: &["wait"],
         aliases: &["idle", "observe", "none"],
         doc: r#"- Do nothing (idle/observe/skip turn):
@@ -638,6 +664,7 @@ impl AgentAction {
             | Self::Buyback { .. }
             | Self::Fish { .. }
             | Self::Respawn => true,
+            Self::CheckMail | Self::ClaimMail { .. } => false,
             Self::Say { .. }
             | Self::StopFishing
             | Self::OfferDeal { .. }
@@ -691,7 +718,11 @@ impl AgentAction {
     /// Whether the action needs no additional outcome event.
     pub(super) fn outcome_speaks_for_itself(&self) -> bool {
         match self {
-            Self::Say { .. } | Self::PartySay { .. } | Self::Wait => true,
+            Self::Say { .. }
+            | Self::PartySay { .. }
+            | Self::Wait
+            | Self::CheckMail
+            | Self::ClaimMail { .. } => true,
             Self::Move { .. }
             | Self::Attack { .. }
             | Self::Follow { .. }
@@ -734,6 +765,8 @@ impl AgentAction {
             Self::Move { .. } => "move",
             Self::Follow { .. } => "follow",
             Self::Respawn => "respawn",
+            Self::CheckMail => "check_mail",
+            Self::ClaimMail { .. } => "claim_mail",
             Self::Fish { .. } => "fish",
             Self::StopFishing => "stop_fishing",
             Self::OfferDeal { .. } => "offer_deal",
@@ -1178,6 +1211,8 @@ pub(super) fn action_to_command(
             ))
         }
         AgentAction::Respawn => Some(ClientMessage::RequestRespawn),
+        AgentAction::CheckMail => Some(ClientMessage::OpenMailbox),
+        AgentAction::ClaimMail { mail_id } => Some(ClientMessage::ClaimMail { mail_id: *mail_id }),
         AgentAction::Fish { x, z } => {
             // Explicit coordinates, or a fixed short cast south of the agent.
             // The server is the judge of whether that spot is water.

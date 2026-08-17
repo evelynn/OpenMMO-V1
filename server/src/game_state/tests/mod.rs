@@ -21,6 +21,7 @@ mod fishing_tests;
 mod friend_tests;
 mod hunger_tests;
 mod inventory_tests;
+mod mail_tests;
 mod movement_tests;
 mod party_tests;
 mod persistence_tests;
@@ -295,8 +296,10 @@ pub(crate) fn make_test_game_state(test_name: &str) -> GameState {
 }
 
 /// Temp-file AuthService for tests whose paths touch the auth DB.
-pub(crate) fn make_test_auth(test_name: &str) -> crate::auth::AuthService {
-    make_test_auth_with_path(test_name).0
+/// Arc-wrapped so tests can hand it to paths that spawn blocking DB work
+/// (chat's admin commands, mail). `&auth` still coerces to `&AuthService`.
+pub(crate) fn make_test_auth(test_name: &str) -> Arc<crate::auth::AuthService> {
+    Arc::new(make_test_auth_with_path(test_name).0)
 }
 
 /// Variant exposing the DB path for tests that open a second connection.

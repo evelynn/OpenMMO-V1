@@ -19,6 +19,7 @@
   import PartyPanel from './PartyPanel.svelte'
   import FriendRequestToast from './FriendRequestToast.svelte'
   import FriendPanel from './FriendPanel.svelte'
+  import MailPanel from './MailPanel.svelte'
   import NpcContextMenu from './NpcContextMenu.svelte'
   import DragGhost from './DragGhost.svelte'
   import LoadingDialog from './LoadingDialog.svelte'
@@ -36,6 +37,7 @@
   } from '../stores/debugStore'
   import { minimapEnabled } from '../stores/minimapStore'
   import { friendPanelVisible } from '../stores/friendStore'
+  import { mailPanelVisible, unreadMail } from '../stores/mailStore'
   import { networkManager, type AccountCharacter } from '../network/socket'
   import { tipHatDialog } from '../stores/tipHatStore'
 
@@ -122,6 +124,7 @@
     <!-- Always mounted: it drives the presence poll, whose answers feed the
          online notice whether or not the list is on screen. -->
     <FriendPanel />
+    <MailPanel />
     <NpcContextMenu />
     <FishingPrompt />
   {/if}
@@ -210,6 +213,25 @@
               d="M384 476.1L192 421.2V35.9L384 90.8zM416 88.4V456l138.5-69.3c11.9-5.9 21.5-17.4 21.5-30.7V32c0-22-21.5-37.5-42.7-30.7L416 88.4zM160 421.2l-25.5-8.5C94 400.3 64 363.6 64 321.4V280h32c17.7 0 32-14.3 32-32s-14.3-32-32-32H64V192c0-17.7-14.3-32-32-32S0 174.3 0 192v129.4C0 383.5 38.3 439 91.3 457.2l68.7 22.9V88.4L21.2 33.7C9.3 39.6 0 51.1 0 64.4v1.6h32c17.7 0 32 14.3 32 32s-14.3 32-32 32H0v24h64c17.7 0 32 14.3 32 32s-14.3 32-32 32H0v105.4c0 62.1 38.3 117.6 91.3 135.8l68.7 22.9z"
             /></svg
           >
+        </button>
+        <button
+          class="corner-btn"
+          onclick={() => mailPanelVisible.update((v) => !v)}
+          title="Mailbox"
+        >
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            width="512"
+            height="512"
+            viewBox="0 0 512 512"
+            ><path
+              fill="currentColor"
+              d="M64 112c-8.8 0-16 7.2-16 16v22.1L220.5 291.7c20.7 17 50.4 17 71.1 0L464 150.1V128c0-8.8-7.2-16-16-16H64zM48 212.2V384c0 8.8 7.2 16 16 16H448c8.8 0 16-7.2 16-16V212.2L322.1 328.8c-38.4 31.5-93.7 31.5-132.1 0L48 212.2zM0 128C0 92.7 28.7 64 64 64H448c35.3 0 64 28.7 64 64V384c0 35.3-28.7 64-64 64H64c-35.3 0-64-28.7-64-64V128z"
+            /></svg
+          >
+          {#if $unreadMail > 0}
+            <span class="mail-badge">{$unreadMail}</span>
+          {/if}
         </button>
         <button
           class="corner-btn"
@@ -367,6 +389,7 @@
     display: flex;
     align-items: center;
     justify-content: center;
+    position: relative;
   }
 
   .corner-btn svg {
@@ -396,6 +419,21 @@
   .corner-btn:hover {
     background: rgba(80, 80, 80, 0.95);
     color: #fff;
+  }
+
+  .mail-badge {
+    position: absolute;
+    top: -4px;
+    right: -4px;
+    min-width: 15px;
+    padding: 0 3px;
+    border-radius: 8px;
+    background: #b4462a;
+    color: #fff;
+    font-size: 10px;
+    line-height: 15px;
+    text-align: center;
+    pointer-events: none;
   }
 
   /* Below 1000px the menu wraps to a narrow two-row (3+2) block; at >=1000px

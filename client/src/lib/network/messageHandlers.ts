@@ -78,6 +78,13 @@ import {
   resetFriendStores,
   MAX_PENDING_FRIEND_REQUESTS,
 } from '../stores/friendStore'
+import {
+  mailList,
+  mailLoading,
+  unreadMail,
+  resetMailStores,
+  type MailEntry,
+} from '../stores/mailStore'
 import { enqueueConsent } from '../stores/consentQueue'
 import { editorTreeDataManager } from '../stores/editorStore'
 import { discoveredDungeonIds } from '../stores/dungeonStore'
@@ -640,6 +647,9 @@ export function handleServerMessage(
       // Friendships persist, but this session's roster arrives as its own
       // FriendList; anything held from the old one is stale.
       resetFriendStores()
+      // Mail is per character; a fresh session refetches the badge from the
+      // join snapshot and the list only when the panel is opened.
+      resetMailStores()
       gameStore.update((state) => {
         state.otherPlayers.clear()
         remotePlayerManager.reset()
@@ -1269,6 +1279,33 @@ export function handleServerMessage(
           : session
       )
       break
+
+    case 'MailUnread': {
+      unreadMail.set(data.count)
+      break
+    }
+
+    case 'MailList': {
+      mailList.set(data.mail as MailEntry[])
+      mailLoading.set(false)
+      unreadMail.set(0)
+      break
+    }
+
+    case 'MailUpdated': {
+      const state = data.state as 'Claimed' | 'Deleted' | 'ClaimBlocked'
+      if (state === 'ClaimBlocked') {
+        addCombatMessage({
+          text: 'Your bag cannot hold that letter — claiming is all or nothing.',
+          sender: 'local',
+        })
+        break
+      }
+      mailList.update((list) =>
+        list.filter((entry) => entry.id !== data.mail_id)
+      )
+      break
+    }
 
     case 'XpGained': {
       const gameState = get(gameStore)
