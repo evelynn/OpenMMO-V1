@@ -7,6 +7,8 @@
     chatChannel,
     shouldBlockNpcTalkForPartyDraft,
     shouldRevertToSay,
+    channelPrefixOf,
+    unescapeChannelPrefix,
     type ChatChannel,
   } from '../stores/chatChannelStore'
   import { networkManager } from '../network/socket'
@@ -212,14 +214,27 @@
       return
     }
     if (isConnected) {
-      if ($chatChannel === 'party' && !trimmed.startsWith('/')) {
-        networkManager.sendPartyChat(trimmed)
+      if (channelPrefixOf(trimmed)) {
+        // Prefixed lines go through ordinary chat so the server's parser —
+        // the authority — routes them. The sticky channel is untouched: a
+        // prefix addresses this line and no other.
+        networkManager.sendChatMessage(trimmed)
+      } else if ($chatChannel === 'party' && !trimmed.startsWith('/')) {
+        networkManager.sendPartyChat(unescapeChannelPrefix(trimmed))
       } else {
         networkManager.sendChatMessage(trimmed)
       }
       messageInput = ''
     }
   }
+
+  // Where this line is headed, previewed on the channel button. The parse
+  // mirrors shared/src/messages.rs `split_channel_prefix`; the server decides
+  // for real, so a drift here costs a wrong label, never a wrong recipient.
+  let lineChannel = $derived(
+    channelPrefixOf(messageInput.trim()) ??
+      ($chatChannel === 'party' ? '%' : null)
+  )
 
   let commandMatches = $derived(
     commandCompletions(messageInput, visibleCommandNames())
@@ -475,13 +490,13 @@
         class="channel-btn"
         aria-haspopup="menu"
         aria-expanded={channelMenuOpen}
-        title="Choose where your messages go (/p and /s)"
+        title="Choose where your messages go (/p and /s, or % for one line)"
         onclick={(e) => {
           e.stopPropagation()
           channelMenuOpen = !channelMenuOpen
         }}
       >
-        {$chatChannel === 'party' ? 'Party' : 'Say'}
+        {lineChannel === '%' ? 'Party' : lineChannel === '$' ? 'Guild' : 'Say'}
         <span class="caret" aria-hidden="true">▴</span>
       </button>
     </div>

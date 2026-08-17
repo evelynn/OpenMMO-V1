@@ -1,7 +1,9 @@
 import { describe, it, expect } from 'vitest'
 import {
+  channelPrefixOf,
   shouldBlockNpcTalkForPartyDraft,
   shouldRevertToSay,
+  unescapeChannelPrefix,
 } from './chatChannelStore'
 
 describe('shouldRevertToSay', () => {
@@ -34,5 +36,33 @@ describe('shouldBlockNpcTalkForPartyDraft', () => {
   it('allows NPC talk when no party draft would be exposed', () => {
     expect(shouldBlockNpcTalkForPartyDraft('party', '   ')).toBe(false)
     expect(shouldBlockNpcTalkForPartyDraft('say', 'hello')).toBe(false)
+  })
+})
+
+describe('channelPrefixOf', () => {
+  it('reads the channel a line addresses', () => {
+    expect(channelPrefixOf('%hi')).toBe('%')
+    expect(channelPrefixOf('$hi')).toBe('$')
+    expect(channelPrefixOf('hi')).toBe(null)
+    expect(channelPrefixOf('')).toBe(null)
+  })
+
+  it('treats a doubled prefix as an escape, not an address', () => {
+    expect(channelPrefixOf('%%hi')).toBe(null)
+    expect(channelPrefixOf('$$hi')).toBe(null)
+  })
+
+  it('treats a bare prefix as plain text', () => {
+    expect(channelPrefixOf('%')).toBe(null)
+    expect(channelPrefixOf('$')).toBe(null)
+  })
+})
+
+describe('unescapeChannelPrefix', () => {
+  it('drops the escape and nothing else', () => {
+    expect(unescapeChannelPrefix('%%50 off')).toBe('%50 off')
+    expect(unescapeChannelPrefix('%hi')).toBe('%hi')
+    expect(unescapeChannelPrefix('hi')).toBe('hi')
+    expect(unescapeChannelPrefix('')).toBe('')
   })
 })

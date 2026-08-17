@@ -1921,3 +1921,80 @@ async fn partyless_kill_xp_is_unchanged() {
 
     assert_eq!(xp_gains(&mut alice_rx), [SHARED_KILL_XP]);
 }
+
+// --- Channel prefixes (IMP-1.7) ---
+
+/// The prefix has to be honoured here and not only in the web client's
+/// channel UI, or a client without that UI leaks its party line to everyone
+/// nearby (doc/REMOTE_AGENT_CLIENT.md).
+#[tokio::test]
+async fn a_percent_prefix_sends_the_line_to_the_party() {
+    let game_state = make_test_game_state("prefix_party_chat");
+    let auth = make_test_auth("prefix_party_chat");
+    let mut alice_rx = add(&game_state, "alice", 0.0).await;
+    let mut bob_rx = add(&game_state, "bob", 500.0).await;
+    form_party(&game_state, "alice", "bob").await;
+    drain(&mut alice_rx);
+    drain(&mut bob_rx);
+
+    game_state
+        .send_chat_message(&pid("bob"), "%to the dungeon!".to_string(), &auth)
+        .await;
+
+    match alice_rx.try_recv() {
+        Ok(ServerMessage::PartyChatMessage { from, message }) => {
+            assert_eq!(
+                (from.as_str(), message.as_str()),
+                ("bob", "to the dungeon!")
+            );
+        }
+        other => panic!("Expected party chat, got {:?}", other),
+    }
+}
+
+/// The escape is what lets a line that genuinely opens with `%` be said at
+/// all — and the escape character itself must not survive into it.
+#[tokio::test]
+async fn a_doubled_percent_speaks_the_line_out_loud() {
+    let game_state = make_test_game_state("prefix_escape");
+    let auth = make_test_auth("prefix_escape");
+    let mut alice_rx = add(&game_state, "alice", 0.0).await;
+    let mut bob_rx = add(&game_state, "bob", 1.0).await;
+    form_party(&game_state, "alice", "bob").await;
+    drain(&mut alice_rx);
+    drain(&mut bob_rx);
+
+    game_state
+        .send_chat_message(&pid("bob"), "%%50 off".to_string(), &auth)
+        .await;
+
+    match alice_rx.try_recv() {
+        Ok(ServerMessage::ChatMessage { message, .. }) => assert_eq!(message, "%50 off"),
+        other => panic!("Expected local chat, got {:?}", other),
+    }
+}
+
+#[tokio::test]
+async fn the_guild_prefix_is_parsed_and_refused_for_now() {
+    let game_state = make_test_game_state("prefix_guild");
+    let auth = make_test_auth("prefix_guild");
+    let mut alice_rx = add(&game_state, "alice", 0.0).await;
+    let mut bob_rx = add(&game_state, "bob", 1.0).await;
+    drain(&mut alice_rx);
+    drain(&mut bob_rx);
+
+    game_state
+        .send_chat_message(&pid("bob"), "$hello".to_string(), &auth)
+        .await;
+
+    match bob_rx.try_recv() {
+        Ok(ServerMessage::SystemMessage { message }) => {
+            assert!(message.contains("Guild chat"), "{message}")
+        }
+        other => panic!("Expected refusal, got {:?}", other),
+    }
+    assert!(
+        matches!(alice_rx.try_recv(), Err(MpscTryRecvError::Empty)),
+        "and nobody nearby heard it"
+    );
+}

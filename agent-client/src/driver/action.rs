@@ -361,6 +361,10 @@ pub(super) const ACTION_SPECS: &[ActionSpec] = &[
   distance, prefix "/w " and their name (a [Whisper] event means someone
   whispered to you; answer the same way):
   {"type": "say", "message": "/w PlayerName hello"}
+  To send one line to your party only, start it with "%" (equivalent to
+  "/p "). It affects that line and nothing after it. To say a literal
+  "%" at the start of a line, double it:
+  {"type": "say", "message": "%on my way"}
   Players speak many languages; answer each message in the language it
   was written in. Remember each player's language (a memory_update
   note), and use it when speaking to them first."#,

@@ -2,7 +2,7 @@ use super::auth_db;
 use crate::auth::{ban_message, unix_now, AuthService, DEFAULT_BAN_REASON};
 use crate::types::{ClientKind, Player, PlayerId, ServerMessage};
 use crate::world_config::world_config;
-use onlinerpg_shared::messages::strip_command;
+use onlinerpg_shared::messages::{split_channel_prefix, strip_command, ChatChannelHint};
 use std::collections::HashMap;
 use std::time::{Duration, Instant};
 use tracing::{error, info, warn};
@@ -447,6 +447,36 @@ impl super::GameState {
             }
             return;
         }
+
+        // One-line channel prefixes (doc/ragnarok/12_UX_SERVICES.md §2).
+        // Parsed after the slash commands so a prefix can never shadow one,
+        // and here rather than in the web client's channel UI so a client
+        // without that UI — the agent, a third-party one — cannot leak a
+        // party line to everyone nearby (doc/REMOTE_AGENT_CLIENT.md).
+        let message = {
+            let (channel, said) = split_channel_prefix(message.trim());
+            match channel {
+                Some(ChatChannelHint::Party) if said.trim().is_empty() => {
+                    self.send_system_message(player_id, "Party chat: %<message>")
+                        .await;
+                    return;
+                }
+                Some(ChatChannelHint::Party) => {
+                    let said = said.trim().to_string();
+                    self.send_party_chat(player_id, said).await;
+                    return;
+                }
+                Some(ChatChannelHint::Guild) => {
+                    self.send_system_message(player_id, "Guild chat isn't available yet.")
+                        .await;
+                    return;
+                }
+                // An escaped prefix speaks the literal text; the escape itself
+                // must not survive into what everyone reads.
+                None if said.len() != message.trim().len() => said.to_string(),
+                None => message,
+            }
+        };
 
         if let Some(party_message) = parse_party_chat_command(&message) {
             if party_message.is_empty() {

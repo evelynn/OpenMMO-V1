@@ -209,6 +209,55 @@ pub fn strip_command<'a>(message: &'a str, prefix: &str) -> Option<&'a str> {
     (rest.is_empty() || rest.starts_with(' ')).then(|| rest.trim())
 }
 
+/// Prefix that sends one line to the party (doc/ragnarok/12_UX_SERVICES.md §2).
+pub const PARTY_CHAT_PREFIX: char = '%';
+/// Prefix reserved for guild chat. Parsed now and refused, so nobody has to
+/// learn a new key once guilds land (IMP-4.1).
+pub const GUILD_CHAT_PREFIX: char = '$';
+
+/// Which channel one line of chat is addressed to, when the text says so.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ChatChannelHint {
+    Party,
+    Guild,
+}
+
+/// Split a leading channel prefix off one line. Doubling the prefix escapes
+/// it (`%%hi` says a literal `%hi`), so a line that genuinely starts with one
+/// can still be spoken. A prefix on its own is not an address — there is
+/// nothing to send.
+///
+/// Lives in `shared` because the server has the last word: a client-only
+/// parser would let an agent's `%hi` reach everyone nearby as local chat,
+/// which is exactly the agent-human equivalence this project refuses to break
+/// (doc/REMOTE_AGENT_CLIENT.md).
+pub fn split_channel_prefix(text: &str) -> (Option<ChatChannelHint>, &str) {
+    let channel = match text.chars().next() {
+        Some(PARTY_CHAT_PREFIX) => ChatChannelHint::Party,
+        Some(GUILD_CHAT_PREFIX) => ChatChannelHint::Guild,
+        _ => return (None, text),
+    };
+    let rest = &text[channel.prefix().len_utf8()..];
+    if rest.is_empty() {
+        // A bare prefix addresses nothing; there is no message to send.
+        return (None, text);
+    }
+    if rest.starts_with(channel.prefix()) {
+        // Doubled: one prefix is consumed, the rest is spoken as written.
+        return (None, rest);
+    }
+    (Some(channel), rest)
+}
+
+impl ChatChannelHint {
+    pub fn prefix(self) -> char {
+        match self {
+            Self::Party => PARTY_CHAT_PREFIX,
+            Self::Guild => GUILD_CHAT_PREFIX,
+        }
+    }
+}
+
 /// The title a `/play_music` argument names: a whole title first, then a
 /// fragment of one, ignoring case. Shared for the same reason as
 /// `strip_command` — the server resolves the query and the agent-client
@@ -1356,4 +1405,58 @@ pub fn serialize_server_msg(msg: &ServerMessage) -> Result<Vec<u8>, rmp_serde::e
 #[inline]
 pub fn deserialize_server_msg(bytes: &[u8]) -> Result<ServerMessage, rmp_serde::decode::Error> {
     rmp_serde::from_slice(bytes)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{split_channel_prefix, strip_command, ChatChannelHint};
+
+    #[test]
+    fn a_prefix_addresses_one_line_to_a_channel() {
+        assert_eq!(
+            split_channel_prefix("%hi"),
+            (Some(ChatChannelHint::Party), "hi")
+        );
+        assert_eq!(
+            split_channel_prefix("$hi"),
+            (Some(ChatChannelHint::Guild), "hi")
+        );
+        assert_eq!(split_channel_prefix("hi"), (None, "hi"));
+        assert_eq!(split_channel_prefix(""), (None, ""));
+    }
+
+    /// Without an escape, a line that genuinely opens with `%` could never be
+    /// said out loud.
+    #[test]
+    fn doubling_the_prefix_speaks_it_literally() {
+        assert_eq!(split_channel_prefix("%%hi"), (None, "%hi"));
+        assert_eq!(split_channel_prefix("$$hi"), (None, "$hi"));
+        assert_eq!(split_channel_prefix("%%"), (None, "%"));
+    }
+
+    /// A prefix with nothing after it is not an address — there is no message.
+    #[test]
+    fn a_bare_prefix_is_just_text() {
+        assert_eq!(split_channel_prefix("%"), (None, "%"));
+        assert_eq!(split_channel_prefix("$"), (None, "$"));
+    }
+
+    /// The prefix is shorthand for the slash command, not a second dialect.
+    #[test]
+    fn the_prefix_and_the_slash_command_carry_the_same_text() {
+        assert_eq!(
+            split_channel_prefix("%on my way").1,
+            strip_command("/p on my way", "/p").expect("the command parses")
+        );
+    }
+
+    /// Multi-byte text after the prefix must not be sliced mid-character.
+    #[test]
+    fn the_prefix_splits_on_a_character_not_a_byte() {
+        assert_eq!(
+            split_channel_prefix("%안녕"),
+            (Some(ChatChannelHint::Party), "안녕")
+        );
+        assert_eq!(split_channel_prefix("안녕"), (None, "안녕"));
+    }
 }
