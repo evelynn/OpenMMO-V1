@@ -5,9 +5,9 @@
 
 use super::tree::BehaviorStatus;
 use super::{
-    AiCommand, AiState, BehaviorTree, NearbyPlayer, PathProvider, TickResult, DEFAULT_ATTACK_RANGE,
-    DEFAULT_CHASE_RANGE, DEFAULT_HIT_STAGGER_MS, DEFAULT_MAX_MOVE_DIST, DEFAULT_MIN_MOVE_DIST,
-    NETWORK_SYNC_INTERVAL_MS,
+    AiCommand, AiState, BehaviorTree, NearbyGroundItem, NearbyPlayer, PathProvider, TickResult,
+    DEFAULT_ATTACK_RANGE, DEFAULT_CHASE_RANGE, DEFAULT_HIT_STAGGER_MS, DEFAULT_MAX_MOVE_DIST,
+    DEFAULT_MIN_MOVE_DIST, NETWORK_SYNC_INTERVAL_MS,
 };
 use crate::pathfinding::PathWaypoint;
 use crate::{MonsterState, PlayerId, Position};
@@ -66,6 +66,17 @@ pub struct MonsterBrain {
     /// Time left in the swing currently being delivered.
     #[serde(default)]
     pub(super) swing_left_ms: f32,
+    /// Ground item this looter is walking to, held across ticks so it does
+    /// not re-pick the nearest one every frame and oscillate between two.
+    #[serde(default)]
+    pub(super) loot_target: Option<u64>,
+    /// Stacks requested so far, against [`MONSTER_LOOT_STACK_LIMIT`]. The
+    /// server owns the real count; this only stops the asking.
+    #[serde(default)]
+    pub(super) carried_stacks: usize,
+    /// Time left before another pickup request is allowed.
+    #[serde(default)]
+    pub(super) pickup_cooldown_left_ms: f32,
 }
 
 impl MonsterBrain {
@@ -122,6 +133,9 @@ impl MonsterBrain {
             attack_cooldown_left_ms: 0.0,
             swing_commit_ms,
             swing_left_ms: 0.0,
+            loot_target: None,
+            carried_stacks: 0,
+            pickup_cooldown_left_ms: 0.0,
         }
     }
 
@@ -209,10 +223,34 @@ impl MonsterBrain {
         }
     }
 
+    /// Tick with no ground items in sight — every non-looter tree ignores
+    /// them, so this is the shape most callers want.
     pub fn tick_with_behavior_tree(
         &mut self,
         delta_ms: f32,
         nearby_players: &[NearbyPlayer],
+        behavior_tree: &BehaviorTree,
+        path_provider: &dyn PathProvider,
+        rng: &mut impl Rng,
+    ) -> TickResult {
+        self.tick_with_loot(
+            delta_ms,
+            nearby_players,
+            &[],
+            behavior_tree,
+            path_provider,
+            rng,
+        )
+    }
+
+    /// `ground_items` must already be filtered to this monster's floor: the
+    /// brain has no floor of its own to compare against.
+    #[allow(clippy::too_many_arguments)]
+    pub fn tick_with_loot(
+        &mut self,
+        delta_ms: f32,
+        nearby_players: &[NearbyPlayer],
+        ground_items: &[NearbyGroundItem],
         behavior_tree: &BehaviorTree,
         path_provider: &dyn PathProvider,
         rng: &mut impl Rng,
@@ -226,6 +264,7 @@ impl MonsterBrain {
         self.sync_elapsed_ms += delta_ms;
         self.attack_cooldown_left_ms = (self.attack_cooldown_left_ms - delta_ms).max(0.0);
         self.swing_left_ms = (self.swing_left_ms - delta_ms).max(0.0);
+        self.pickup_cooldown_left_ms = (self.pickup_cooldown_left_ms - delta_ms).max(0.0);
         let mut commands = Vec::new();
 
         if self.state == AiState::Hit {
@@ -243,6 +282,7 @@ impl MonsterBrain {
                 &behavior_tree.root,
                 delta_ms,
                 nearby_players,
+                ground_items,
                 &mut commands,
                 path_provider,
                 rng,

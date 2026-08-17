@@ -3,22 +3,25 @@
 
 use super::tree::BehaviorStatus;
 use super::{
-    param, AiCommand, AiState, BehaviorNode, MonsterBrain, NearbyPlayer, PathProvider,
-    ATTACK_RELEASE_MARGIN_METERS, DEFAULT_FLEE_HEALTH_RATIO, DEFAULT_FLEE_MAX_DURATION_MS,
-    DEFAULT_IDLE_CHECK_MS, DEFAULT_LEASH_RANGE, DEFAULT_MAX_MOVE_DIST, DEFAULT_MIN_MOVE_DIST,
-    DEFAULT_PATH_RECALC_MS, DEFAULT_RETURN_ARRIVE_DIST, DEFAULT_TARGET_MOVE_THRESHOLD,
-    FLEE_SAFE_DIST_MARGIN,
+    param, AiCommand, AiState, BehaviorNode, MonsterBrain, NearbyGroundItem, NearbyPlayer,
+    PathProvider, ATTACK_RELEASE_MARGIN_METERS, DEFAULT_FLEE_HEALTH_RATIO,
+    DEFAULT_FLEE_MAX_DURATION_MS, DEFAULT_IDLE_CHECK_MS, DEFAULT_LEASH_RANGE,
+    DEFAULT_LOOT_SIGHT_RANGE, DEFAULT_MAX_MOVE_DIST, DEFAULT_MIN_MOVE_DIST, DEFAULT_PATH_RECALC_MS,
+    DEFAULT_PICKUP_RANGE, DEFAULT_RETURN_ARRIVE_DIST, DEFAULT_TARGET_MOVE_THRESHOLD,
+    FLEE_SAFE_DIST_MARGIN, MONSTER_LOOT_STACK_LIMIT, PICKUP_COOLDOWN_MS,
 };
 use crate::MonsterState;
 use rand::Rng;
 use std::collections::HashMap;
 
 impl MonsterBrain {
+    #[allow(clippy::too_many_arguments)]
     pub(super) fn eval_behavior_node(
         &mut self,
         node: &BehaviorNode,
         delta_ms: f32,
         nearby_players: &[NearbyPlayer],
+        ground_items: &[NearbyGroundItem],
         commands: &mut Vec<AiCommand>,
         path_provider: &dyn PathProvider,
         rng: &mut impl Rng,
@@ -30,6 +33,7 @@ impl MonsterBrain {
                         child,
                         delta_ms,
                         nearby_players,
+                        ground_items,
                         commands,
                         path_provider,
                         rng,
@@ -46,6 +50,7 @@ impl MonsterBrain {
                         child,
                         delta_ms,
                         nearby_players,
+                        ground_items,
                         commands,
                         path_provider,
                         rng,
@@ -57,13 +62,14 @@ impl MonsterBrain {
                 BehaviorStatus::Success
             }
             BehaviorNode::Condition { name, params } => {
-                self.eval_condition(name, params, nearby_players, rng)
+                self.eval_condition(name, params, nearby_players, ground_items, rng)
             }
             BehaviorNode::Action { name, params } => self.eval_action(
                 name,
                 params,
                 delta_ms,
                 nearby_players,
+                ground_items,
                 commands,
                 path_provider,
                 rng,
@@ -76,6 +82,7 @@ impl MonsterBrain {
         name: &str,
         params: &HashMap<String, f32>,
         nearby_players: &[NearbyPlayer],
+        ground_items: &[NearbyGroundItem],
         rng: &mut impl Rng,
     ) -> BehaviorStatus {
         match name {
@@ -99,6 +106,10 @@ impl MonsterBrain {
                 };
                 (self.state == AiState::Flee || health_ratio <= ratio).into()
             }
+            "ground_item_in_range" => {
+                let range = param(params, "range", DEFAULT_LOOT_SIGHT_RANGE);
+                self.select_loot_in_range(ground_items, range).into()
+            }
             "chance" => {
                 let probability = param(params, "probability", 0.0).clamp(0.0, 1.0);
                 (matches!(self.state, AiState::Flee | AiState::Return)
@@ -116,6 +127,7 @@ impl MonsterBrain {
         params: &HashMap<String, f32>,
         delta_ms: f32,
         nearby_players: &[NearbyPlayer],
+        ground_items: &[NearbyGroundItem],
         commands: &mut Vec<AiCommand>,
         path_provider: &dyn PathProvider,
         rng: &mut impl Rng,
@@ -138,6 +150,10 @@ impl MonsterBrain {
             "chase_target" => {
                 self.bt_chase_target(params, delta_ms, nearby_players, commands, path_provider)
             }
+            "move_to_ground_item" => {
+                self.bt_move_to_ground_item(params, delta_ms, ground_items, commands, path_provider)
+            }
+            "pick_up_ground_item" => self.bt_pick_up_ground_item(params, ground_items, commands),
             _ => BehaviorStatus::Failure,
         }
     }
@@ -381,6 +397,120 @@ impl MonsterBrain {
             });
         }
         BehaviorStatus::Running
+    }
+
+    /// Walk to the item `ground_item_in_range` settled on. Fails — releasing
+    /// the tree to the next branch — the moment the item is gone from sight,
+    /// which is what happens when a player picks it up first.
+    fn bt_move_to_ground_item(
+        &mut self,
+        params: &HashMap<String, f32>,
+        delta_ms: f32,
+        ground_items: &[NearbyGroundItem],
+        commands: &mut Vec<AiCommand>,
+        path_provider: &dyn PathProvider,
+    ) -> BehaviorStatus {
+        let Some(item) = self.current_loot(ground_items) else {
+            self.loot_target = None;
+            return BehaviorStatus::Failure;
+        };
+        let item_pos = item.position;
+        let pickup_range = param(params, "range", DEFAULT_PICKUP_RANGE);
+        if self.position.dist_xz_sq(&item_pos) <= pickup_range * pickup_range {
+            return BehaviorStatus::Success;
+        }
+
+        let path_recalc_ms = param(params, "pathRecalcMs", DEFAULT_PATH_RECALC_MS);
+        // Run, matching the Chase state it reports: a monster playing the run
+        // clip while drifting at walking pace reads as broken.
+        self.state = AiState::Chase;
+        self.move_speed = self.run_speed;
+
+        if self.waypoints.is_empty()
+            || self.current_waypoint_idx >= self.waypoints.len()
+            || self.path_elapsed_ms > path_recalc_ms
+        {
+            self.compute_path(item_pos.x, item_pos.z, path_provider);
+            if self.waypoints.is_empty() {
+                // Unreachable — forget it rather than orbit it forever.
+                self.loot_target = None;
+                return BehaviorStatus::Failure;
+            }
+        }
+
+        self.follow_path(delta_ms);
+        if self.should_sync_move() {
+            commands.push(AiCommand::Move {
+                monster_id: self.monster_id.clone(),
+                position: self.position,
+                rotation: self.rotation,
+                state: MonsterState::Run,
+                target_position: item_pos,
+            });
+        }
+        BehaviorStatus::Running
+    }
+
+    /// Ask the server for the item underfoot. Success either way: the request
+    /// went out, and whether it lands is not the brain's to know.
+    fn bt_pick_up_ground_item(
+        &mut self,
+        params: &HashMap<String, f32>,
+        ground_items: &[NearbyGroundItem],
+        commands: &mut Vec<AiCommand>,
+    ) -> BehaviorStatus {
+        let Some(item) = self.current_loot(ground_items) else {
+            self.loot_target = None;
+            return BehaviorStatus::Failure;
+        };
+        let range = param(params, "range", DEFAULT_PICKUP_RANGE);
+        if self.position.dist_xz_sq(&item.position) > range * range {
+            return BehaviorStatus::Failure;
+        }
+        let instance_id = item.instance_id;
+
+        self.pickup_cooldown_left_ms = PICKUP_COOLDOWN_MS;
+        self.carried_stacks += 1;
+        self.loot_target = None;
+        self.transition_to_idle(commands);
+        commands.push(AiCommand::PickUpItem {
+            monster_id: self.monster_id.clone(),
+            instance_id,
+        });
+        BehaviorStatus::Success
+    }
+
+    /// Keep the item already chosen while it is still there; otherwise take
+    /// the nearest one in range. False while full or on cooldown, so the
+    /// looter branch drops through to ordinary wandering instead of standing
+    /// over a pile it cannot take.
+    fn select_loot_in_range(&mut self, ground_items: &[NearbyGroundItem], range: f32) -> bool {
+        if self.carried_stacks >= MONSTER_LOOT_STACK_LIMIT || self.pickup_cooldown_left_ms > 0.0 {
+            self.loot_target = None;
+            return false;
+        }
+        if self.current_loot(ground_items).is_some() {
+            return true;
+        }
+
+        let range_sq = range * range;
+        self.loot_target = ground_items
+            .iter()
+            .filter_map(|item| {
+                let dist_sq = self.position.dist_xz_sq(&item.position);
+                (dist_sq <= range_sq).then_some((dist_sq, item.instance_id))
+            })
+            .min_by(|a, b| a.0.total_cmp(&b.0))
+            .map(|(_, id)| id);
+        self.loot_target.is_some()
+    }
+
+    fn current_loot<'a>(
+        &self,
+        ground_items: &'a [NearbyGroundItem],
+    ) -> Option<&'a NearbyGroundItem> {
+        let target = self.loot_target?;
+        ground_items.iter().find(|i| i.instance_id == target)
     }
 
     fn select_target_in_range(&mut self, nearby_players: &[NearbyPlayer], range: f32) -> bool {

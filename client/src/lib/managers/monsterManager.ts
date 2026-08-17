@@ -14,6 +14,7 @@ import {
   getMaterialMissSoundUrl,
 } from '../data/materialImpactSounds'
 import { dungeonManager } from './dungeonManager'
+import { groundItemManager } from './groundItemManager'
 import type { Position } from '../utils/movementUtils'
 import type { TerrainHeightManager } from './terrainHeightManager'
 import type { TerrainSplatManager } from './terrainSplatManager'
@@ -45,13 +46,14 @@ import monstersJson from '../../../../data/monsters.json'
 type MonsterState = MonsterData['state']
 
 interface AiCommand {
-  type: 'Move' | 'Attack'
+  type: 'Move' | 'Attack' | 'PickUpItem'
   monster_id: string
   position?: { x: number; y: number; z: number }
   rotation?: number
   state?: MonsterState
   target_position?: { x: number; y: number; z: number }
   target_player_id?: number
+  instance_id?: number
 }
 
 interface TickResult {
@@ -562,7 +564,12 @@ class MonsterManager {
           continue
         }
 
-        const raw = ai_tick_brain(monster.id, deltaTime, nearbyPlayers)
+        const raw = ai_tick_brain(
+          monster.id,
+          deltaTime,
+          nearbyPlayers,
+          this.lootFor(monster)
+        )
         // ai_tick_brain returns a TickResult object with commands, position, rotation, state
         const result = raw as TickResult
 
@@ -613,6 +620,26 @@ class MonsterManager {
         }
       }
     }
+  }
+
+  // Ground items on the monster's own floor, for the looter tree. Non-looters
+  // never read it, so the scan is skipped for them entirely — this runs once
+  // per owned monster per frame.
+  private lootFor(monster: MonsterData): Array<{
+    instance_id: number
+    position: { x: number; y: number; z: number }
+  }> {
+    if (getMonsterDef(monster.type)?.behavior !== 'looter') return []
+    const loot: Array<{
+      instance_id: number
+      position: { x: number; y: number; z: number }
+    }> = []
+    const floor = monster.floorLevel ?? 0
+    for (const item of groundItemManager.items.values()) {
+      if (item.floorLevel !== floor) continue
+      loot.push({ instance_id: item.instanceId, position: item.position })
+    }
+    return loot
   }
 
   private buildNearbyPlayers(gameState: GameState): Array<{
@@ -747,6 +774,10 @@ class MonsterManager {
       } else if (cmd.type === 'Attack' && cmd.target_player_id) {
         this.handleMonsterAttackStarted(cmd.monster_id)
         networkManager.sendMonsterAttack(cmd.monster_id, cmd.target_player_id)
+      } else if (cmd.type === 'PickUpItem' && cmd.instance_id !== undefined) {
+        // A request, not a transfer: the item leaves the ground only when the
+        // server answers with GroundItemRemoved.
+        networkManager.sendMonsterPickupItem(cmd.monster_id, cmd.instance_id)
       }
     }
   }

@@ -25,7 +25,7 @@ mod tree;
 mod tests;
 
 pub use brain::MonsterBrain;
-pub use command::{AiCommand, AiState, NearbyPlayer, TickResult};
+pub use command::{AiCommand, AiState, NearbyGroundItem, NearbyPlayer, TickResult};
 pub use path::{CachePathProvider, PathProvider};
 pub use tree::{behavior_tree_for, load_behavior_trees, BehaviorNode, BehaviorTree};
 
@@ -82,6 +82,18 @@ const ATTACK_RELEASE_MARGIN_METERS: f32 = 0.5;
 /// interpolate toward `target_position` in between, and state changes still sync
 /// immediately. Server-authoritative movement (F-006) absorbs the coarser rate.
 const NETWORK_SYNC_INTERVAL_MS: f32 = 500.0;
+/// Stacks a monster may carry at once. Without a cap, an unattended pile of
+/// ground items collects on one looter and comes back all at once when it
+/// dies. Enforced on the server; the brain stops asking at the same number.
+pub const MONSTER_LOOT_STACK_LIMIT: usize = 4;
+/// How close a looter must be to grab what it walked to.
+pub const DEFAULT_PICKUP_RANGE: f32 = 1.5;
+/// How far a looter will notice a ground item.
+const DEFAULT_LOOT_SIGHT_RANGE: f32 = 15.0;
+/// Least time between pickup requests from one monster. The server may refuse
+/// (gone, too far, full), and the brain does not hear about it — the cooldown
+/// is what keeps a refusal from becoming a request every frame.
+const PICKUP_COOLDOWN_MS: f32 = 2000.0;
 pub const DEFAULT_BEHAVIOR: &str = "brave";
 /// Behavior tree used by proactive (선공형) monsters that acquire and attack
 /// targets on sight. Selected when `Monster::aggressive` is set, overriding the

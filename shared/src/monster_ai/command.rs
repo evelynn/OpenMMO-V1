@@ -43,6 +43,15 @@ pub struct NearbyPlayer {
     pub health: u32,
 }
 
+/// Minimal ground-item projection for looter behavior. The caller filters to
+/// the monster's own floor, so the brain never sees an item it could not
+/// legally reach — the server re-checks anyway.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct NearbyGroundItem {
+    pub instance_id: u64,
+    pub position: Position,
+}
+
 /// Behavior output — translated by the caller into network messages.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "type")]
@@ -57,6 +66,12 @@ pub enum AiCommand {
     Attack {
         monster_id: String,
         target_player_id: PlayerId,
+    },
+    /// A looter wants the ground item it is standing over. The server owns
+    /// the decision: this is a request, never a transfer.
+    PickUpItem {
+        monster_id: String,
+        instance_id: u64,
     },
 }
 

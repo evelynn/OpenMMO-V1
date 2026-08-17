@@ -4,6 +4,7 @@ use crate::types::{PlayerId, ServerMessage};
 use crate::world_config::world_config;
 use onlinerpg_shared::inventory::{EquipSlot, GroundItem, ItemInstance, PlayerInventory};
 use onlinerpg_shared::messages::BagLineItem;
+use onlinerpg_shared::monster_ai::MONSTER_LOOT_STACK_LIMIT;
 use rand::Rng;
 use tracing::{info, warn};
 
@@ -1420,6 +1421,96 @@ impl super::GameState {
             dropped_by: Some(*player_id),
         })
         .await;
+    }
+
+    /// A looter the requester owns takes a ground item (IMP-1.4). The AI that
+    /// decided this ran on the requester's client, so nothing it claims is
+    /// trusted: ownership, floor, distance and the carry cap are all checked
+    /// here, and the quantity is re-read under the `ground_items` write lock.
+    /// Silent on refusal — the monster's brain has no error path, and a
+    /// message would only tell a modified client what it already tried.
+    pub async fn monster_pickup_item(
+        &self,
+        player_id: &PlayerId,
+        monster_id: &str,
+        instance_id: u64,
+    ) {
+        let Some((monster_pos, monster_floor)) = ({
+            let monsters = self.monsters.read().await;
+            monsters
+                .get(monster_id)
+                .filter(|m| m.is_controllable_by(player_id))
+                .map(|m| (m.position, m.floor_level))
+        }) else {
+            return;
+        };
+
+        // Read the cap before the ground lock: a full monster stops here.
+        if self
+            .monster_loot
+            .read()
+            .await
+            .get(monster_id)
+            .is_some_and(|held| held.len() >= MONSTER_LOOT_STACK_LIMIT)
+        {
+            return;
+        }
+
+        let taken = {
+            let mut ground_items = self.ground_items.write().await;
+            let Some(entry) = ground_items.get(&instance_id) else {
+                return;
+            };
+            let item = entry.item.clone();
+            // Coin piles are currency, not objects — a monster has no wallet.
+            if item.item_def_id == super::COIN_PILE_ITEM_ID || item.floor_level != monster_floor {
+                return;
+            }
+            let dx = onlinerpg_shared::shortest_world_delta_x(item.position.x, monster_pos.x);
+            let dz = monster_pos.z - item.position.z;
+            if dx * dx + dz * dz > MAX_PICKUP_DISTANCE * MAX_PICKUP_DISTANCE {
+                return;
+            }
+            // A monster takes the whole pile or nothing: it carries stacks,
+            // not weight, so there is no partial case to split.
+            ground_items.remove(&instance_id);
+            item
+        };
+
+        self.monster_loot
+            .write()
+            .await
+            .entry(monster_id.to_string())
+            .or_default()
+            .push(ItemInstance {
+                instance_id: taken.instance_id,
+                item_def_id: taken.item_def_id,
+                quantity: taken.quantity,
+                enchant: taken.enchant,
+            });
+
+        self.send_direct_message_to_players_within_position(
+            &taken.position,
+            monster_floor,
+            super::EVENT_DELIVERY_RADIUS,
+            ServerMessage::GroundItemRemoved {
+                instance_id,
+                picked_up_by: None,
+            },
+            None,
+        )
+        .await;
+    }
+
+    /// Everything `monster_id` was carrying, removed from the map. Called on
+    /// death (to put it back on the ground) and on despawn (to drop it), so
+    /// the map never outlives the monster.
+    pub(super) async fn take_monster_loot(&self, monster_id: &str) -> Vec<ItemInstance> {
+        self.monster_loot
+            .write()
+            .await
+            .remove(monster_id)
+            .unwrap_or_default()
     }
 
     pub async fn pickup_item(&self, player_id: &PlayerId, instance_id: u64) {

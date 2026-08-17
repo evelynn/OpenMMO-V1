@@ -123,6 +123,7 @@ impl super::GameState {
     pub(super) fn spawn_kill_loot_after_impact(
         &self,
         weapon_drop: Option<GroundItem>,
+        carried_drops: Vec<GroundItem>,
         origin: Position,
         floor_level: i8,
     ) {
@@ -130,6 +131,9 @@ impl super::GameState {
         tokio::spawn(async move {
             tokio::time::sleep(*PLAYER_ATTACK_IMPACT_DELAY).await;
             if let Some(item) = weapon_drop {
+                game_state.spawn_ground_item(item).await;
+            }
+            for item in carried_drops {
                 game_state.spawn_ground_item(item).await;
             }
             game_state.spawn_world_drops(origin, floor_level).await;
@@ -494,10 +498,33 @@ impl super::GameState {
                 } else {
                     None
                 };
+                // Anything the monster looted comes back where it fell — the
+                // point of the carry cap is that this is a handful, not a
+                // hoard (IMP-1.4).
+                let mut carried_drops = Vec::new();
+                for item in self.take_monster_loot(&monster_id).await {
+                    carried_drops.push(GroundItem {
+                        position: self
+                            .loot_drop_position(
+                                monster_position,
+                                monster_floor_level,
+                                dropped_weapon_position(monster_position),
+                            )
+                            .await,
+                        floor_level: monster_floor_level,
+                        instance_id: item.instance_id,
+                        item_def_id: item.item_def_id,
+                        quantity: item.quantity,
+                        enchant: item.enchant,
+                        dropped_by: None,
+                    });
+                }
+
                 // Weapon drop and rare bonus world drops alike wait for the
                 // blow to land.
                 self.spawn_kill_loot_after_impact(
                     weapon_drop,
+                    carried_drops,
                     monster_position,
                     monster_floor_level,
                 );

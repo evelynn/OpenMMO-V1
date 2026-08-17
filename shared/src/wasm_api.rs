@@ -18,7 +18,7 @@ use wasm_bindgen::prelude::*;
 use crate::furniture;
 use crate::housing;
 use crate::messages::{deserialize_server_msg, serialize_client_msg, ClientMessage};
-use crate::monster_ai::{self, BehaviorTree, MonsterBrain, NearbyPlayer};
+use crate::monster_ai::{self, BehaviorTree, MonsterBrain, NearbyGroundItem, NearbyPlayer};
 use crate::pathfinding::{self, PassabilityCache};
 use crate::world::Position;
 
@@ -718,9 +718,17 @@ pub fn ai_tick_brain(
     monster_id: &str,
     delta_ms: f32,
     nearby_players: JsValue,
+    ground_items: JsValue,
 ) -> Result<JsValue, JsError> {
     let players: Vec<NearbyPlayer> = serde_wasm_bindgen::from_value(nearby_players)
         .map_err(|e| JsError::new(&format!("Invalid nearby_players: {e}")))?;
+    // Undefined stands for "no looter here" so non-looter callers stay cheap.
+    let items: Vec<NearbyGroundItem> = if ground_items.is_undefined() || ground_items.is_null() {
+        Vec::new()
+    } else {
+        serde_wasm_bindgen::from_value(ground_items)
+            .map_err(|e| JsError::new(&format!("Invalid ground_items: {e}")))?
+    };
 
     let result = MONSTER_BRAINS.with(|brains| {
         let mut brains = brains.borrow_mut();
@@ -733,7 +741,14 @@ pub fn ai_tick_brain(
         AI_BEHAVIOR_TREES.with(|trees| {
             let trees = trees.borrow();
             monster_ai::behavior_tree_for(&trees, &brain.behavior).map(|tree| {
-                brain.tick_with_behavior_tree(delta_ms, &players, tree, &WasmPathProvider, &mut rng)
+                brain.tick_with_loot(
+                    delta_ms,
+                    &players,
+                    &items,
+                    tree,
+                    &WasmPathProvider,
+                    &mut rng,
+                )
             })
         })
     });

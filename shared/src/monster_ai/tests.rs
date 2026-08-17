@@ -1133,3 +1133,159 @@ fn leash_measures_periodic_distance_to_spawn() {
         "a monster inside its leash must not report a return"
     );
 }
+
+// ---- Looter behavior (IMP-1.4) ---------------------------------------------
+
+fn loot_tree() -> BehaviorTree {
+    BehaviorTree {
+        description: None,
+        root: BehaviorNode::Selector {
+            children: vec![
+                BehaviorNode::Sequence {
+                    children: vec![
+                        BehaviorNode::Condition {
+                            name: "ground_item_in_range".into(),
+                            params: HashMap::from([("range".into(), 15.0)]),
+                        },
+                        BehaviorNode::Action {
+                            name: "move_to_ground_item".into(),
+                            params: HashMap::new(),
+                        },
+                        BehaviorNode::Action {
+                            name: "pick_up_ground_item".into(),
+                            params: HashMap::new(),
+                        },
+                    ],
+                },
+                BehaviorNode::Action {
+                    name: "idle".into(),
+                    params: HashMap::new(),
+                },
+            ],
+        },
+    }
+}
+
+fn item_at(instance_id: u64, x: f32, z: f32) -> NearbyGroundItem {
+    NearbyGroundItem {
+        instance_id,
+        position: Position { x, y: 0.0, z },
+    }
+}
+
+fn pickups(result: &TickResult) -> Vec<u64> {
+    result
+        .commands
+        .iter()
+        .filter_map(|c| match c {
+            AiCommand::PickUpItem { instance_id, .. } => Some(*instance_id),
+            _ => None,
+        })
+        .collect()
+}
+
+/// Standing on the item is the whole sequence in one tick: in range, no walk
+/// needed, request out.
+#[test]
+fn a_looter_asks_for_the_item_it_is_standing_on() {
+    let mut brain = make_brain();
+    let mut rng = SmallRng::seed_from_u64(1);
+    let result = brain.tick_with_loot(
+        16.0,
+        &[],
+        &[item_at(42, 10.2, 10.0)],
+        &loot_tree(),
+        &DirectPath,
+        &mut rng,
+    );
+    assert_eq!(pickups(&result), vec![42]);
+}
+
+#[test]
+fn a_looter_walks_to_an_item_before_asking_for_it() {
+    let mut brain = make_brain();
+    let mut rng = SmallRng::seed_from_u64(2);
+    let items = [item_at(7, 18.0, 10.0)];
+    let first = brain.tick_with_loot(16.0, &[], &items, &loot_tree(), &DirectPath, &mut rng);
+    assert!(pickups(&first).is_empty(), "8m away: it walks first");
+    assert_eq!(first.state, MonsterState::Run);
+
+    // Long enough to cross 8m at run speed, short of the pickup cooldown —
+    // the test never removes the item, so a second ask would just be the
+    // cooldown expiring.
+    let mut asked = Vec::new();
+    for _ in 0..100 {
+        let r = brain.tick_with_loot(16.0, &[], &items, &loot_tree(), &DirectPath, &mut rng);
+        asked.extend(pickups(&r));
+    }
+    assert_eq!(asked, vec![7], "it arrives, and asks exactly once");
+}
+
+/// The cooldown is what keeps a refused request from repeating every frame —
+/// the brain is never told whether the server took the item.
+#[test]
+fn a_refused_pickup_is_not_retried_immediately() {
+    let mut brain = make_brain();
+    let mut rng = SmallRng::seed_from_u64(3);
+    let items = [item_at(9, 10.1, 10.0)];
+    let mut asked = Vec::new();
+    for _ in 0..30 {
+        let r = brain.tick_with_loot(16.0, &[], &items, &loot_tree(), &DirectPath, &mut rng);
+        asked.extend(pickups(&r));
+    }
+    assert_eq!(
+        asked,
+        vec![9],
+        "the item stays in sight, the asking does not"
+    );
+}
+
+#[test]
+fn a_full_looter_stops_asking() {
+    let mut brain = make_brain();
+    let mut rng = SmallRng::seed_from_u64(4);
+    let items: Vec<NearbyGroundItem> = (0..MONSTER_LOOT_STACK_LIMIT as u64 + 3)
+        .map(|i| item_at(100 + i, 10.1, 10.0))
+        .collect();
+    let mut asked = Vec::new();
+    // Well past the cap's worth of cooldowns.
+    for _ in 0..2000 {
+        let r = brain.tick_with_loot(16.0, &[], &items, &loot_tree(), &DirectPath, &mut rng);
+        asked.extend(pickups(&r));
+    }
+    assert_eq!(
+        asked.len(),
+        MONSTER_LOOT_STACK_LIMIT,
+        "it asks for exactly a full carry and no more"
+    );
+}
+
+/// The item vanishing (a player got there first) must release the branch
+/// rather than leave the monster walking at a gap in the ground forever.
+#[test]
+fn a_looter_gives_up_on_an_item_that_disappears() {
+    let mut brain = make_brain();
+    let mut rng = SmallRng::seed_from_u64(5);
+    let items = [item_at(3, 20.0, 10.0)];
+    brain.tick_with_loot(16.0, &[], &items, &loot_tree(), &DirectPath, &mut rng);
+    assert_eq!(brain.state(), AiState::Chase);
+
+    let result = brain.tick_with_loot(16.0, &[], &[], &loot_tree(), &DirectPath, &mut rng);
+    assert_eq!(
+        brain.state(),
+        AiState::Idle,
+        "the branch fell through to idle"
+    );
+    assert!(pickups(&result).is_empty());
+}
+
+/// Every other tree passes no items, so the plain entry point must behave
+/// exactly as it did before looters existed.
+#[test]
+fn the_plain_tick_never_loots() {
+    let mut brain = make_brain();
+    let mut rng = SmallRng::seed_from_u64(6);
+    let result = brain.tick_with_behavior_tree(16.0, &[], &loot_tree(), &DirectPath, &mut rng);
+    assert!(pickups(&result).is_empty());
+    assert_eq!(brain.state(), AiState::Idle);
+}

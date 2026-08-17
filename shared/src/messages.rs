@@ -373,6 +373,14 @@ pub enum ClientMessage {
         monster_id: String,
         target_player_id: PlayerId,
     },
+    /// A looter the sender owns wants the ground item it reached. Validated
+    /// exactly like a player's `PickupItem` — ownership, floor, distance and
+    /// the carry cap — since the AI runs on the owner's client
+    /// (doc/ragnarok/13_IMPLEMENTATION_DIRECTION.md IMP-1.4).
+    MonsterPickupItem {
+        monster_id: String,
+        instance_id: u64,
+    },
     RequestRespawn,
     /// Open the treasure chest on a dungeon's final floor. The server
     /// validates proximity, boss state and the per-player cooldown.

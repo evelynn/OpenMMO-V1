@@ -402,6 +402,15 @@ class NetworkManager {
     })
   }
 
+  sendMonsterPickupItem(monsterId: string, instanceId: number) {
+    this.sendMessage({
+      MonsterPickupItem: {
+        monster_id: monsterId,
+        instance_id: instanceId,
+      },
+    })
+  }
+
   requestRespawn() {
     if (this.sendAndSerialize('RequestRespawn')) {
       this.respawnRequested.emit()

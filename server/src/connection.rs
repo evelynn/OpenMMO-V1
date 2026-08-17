@@ -1365,6 +1365,19 @@ async fn handle_client_message(
             }
         }
 
+        ClientMessage::MonsterPickupItem {
+            monster_id,
+            instance_id,
+        } => {
+            if let Some(id) = &state.player_id {
+                game_state
+                    .monster_pickup_item(id, &monster_id, instance_id)
+                    .await;
+            } else {
+                warn!("Received monster pickup from client that is not in game");
+            }
+        }
+
         ClientMessage::RequestRespawn => {
             if let Some(id) = &state.player_id {
                 game_state.respawn_player(id).await;

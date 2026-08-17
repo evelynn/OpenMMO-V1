@@ -561,10 +561,23 @@ async fn run_npc_session(
                 let world = wc.read().unwrap();
                 let SharedState {
                     ref nearby_players,
+                    ref ground_items,
+                    self_floor_level,
                     ref mut monster_ai,
                     ..
                 } = *s;
-                let cmds = monster_ai.tick_all(delta_ms, nearby_players, world.passability_cache());
+                // Own floor only: the brain has none to compare against, and
+                // the server refuses a cross-floor pickup anyway.
+                let loot: Vec<onlinerpg_shared::monster_ai::NearbyGroundItem> = ground_items
+                    .values()
+                    .filter(|item| item.floor_level == self_floor_level)
+                    .map(|item| onlinerpg_shared::monster_ai::NearbyGroundItem {
+                        instance_id: item.instance_id,
+                        position: item.position,
+                    })
+                    .collect();
+                let cmds =
+                    monster_ai.tick_all(delta_ms, nearby_players, &loot, world.passability_cache());
                 drop(world);
                 let pending = s.drain_pending_commands();
                 (cmds, pending)

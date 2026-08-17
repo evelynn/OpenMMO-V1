@@ -195,7 +195,7 @@
       }
     },
     "aggressive": {
-      "description": "Proactive (선공형): acquires the nearest target within sight range and attacks on sight, holds ground, and does not flee at low health.",
+      "description": "Proactive (\uc120\uacf5\ud615): acquires the nearest target within sight range and attacks on sight, holds ground, and does not flee at low health.",
       "root": {
         "type": "selector",
         "children": [
@@ -245,6 +245,117 @@
               {
                 "type": "action",
                 "name": "chase_target"
+              }
+            ]
+          },
+          {
+            "type": "sequence",
+            "children": [
+              {
+                "type": "condition",
+                "name": "chance",
+                "params": {
+                  "probability": 0.3
+                }
+              },
+              {
+                "type": "action",
+                "name": "wander"
+              }
+            ]
+          },
+          {
+            "type": "action",
+            "name": "idle"
+          }
+        ]
+      }
+    },
+    "looter": {
+      "description": "Fights like a brave monster, but picks up ground items it finds while it has nothing to fight. The pickup itself is a request the server validates.",
+      "root": {
+        "type": "selector",
+        "children": [
+          {
+            "type": "sequence",
+            "children": [
+              {
+                "type": "condition",
+                "name": "is_beyond_leash",
+                "params": {
+                  "range": 50.0
+                }
+              },
+              {
+                "type": "condition",
+                "name": "chance",
+                "params": {
+                  "probability": 0.7
+                }
+              },
+              {
+                "type": "action",
+                "name": "return_to_spawn"
+              }
+            ]
+          },
+          {
+            "type": "sequence",
+            "children": [
+              {
+                "type": "condition",
+                "name": "has_target"
+              },
+              {
+                "type": "condition",
+                "name": "target_in_range"
+              },
+              {
+                "type": "action",
+                "name": "attack_target"
+              }
+            ]
+          },
+          {
+            "type": "sequence",
+            "children": [
+              {
+                "type": "condition",
+                "name": "has_target"
+              },
+              {
+                "type": "condition",
+                "name": "target_in_range"
+              },
+              {
+                "type": "action",
+                "name": "chase_target"
+              }
+            ]
+          },
+          {
+            "type": "sequence",
+            "children": [
+              {
+                "type": "condition",
+                "name": "ground_item_in_range",
+                "params": {
+                  "range": 15.0
+                }
+              },
+              {
+                "type": "action",
+                "name": "move_to_ground_item",
+                "params": {
+                  "range": 1.5
+                }
+              },
+              {
+                "type": "action",
+                "name": "pick_up_ground_item",
+                "params": {
+                  "range": 1.5
+                }
               }
             ]
           },

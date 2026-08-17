@@ -2,7 +2,7 @@
 
 use onlinerpg_shared::dungeon::passability_floor_for_level;
 use onlinerpg_shared::monster_ai::{
-    self, AiCommand, BehaviorTree, CachePathProvider, MonsterBrain, NearbyPlayer,
+    self, AiCommand, BehaviorTree, CachePathProvider, MonsterBrain, NearbyGroundItem, NearbyPlayer,
     AGGRESSIVE_BEHAVIOR, DEFAULT_ATTACK_COOLDOWN_MS, DEFAULT_ATTACK_RANGE, DEFAULT_BEHAVIOR,
     DEFAULT_CHASE_RANGE, DEFAULT_RUN_SPEED, DEFAULT_WALK_SPEED,
 };
@@ -213,6 +213,7 @@ impl MonsterAiManager {
         &mut self,
         delta_ms: f32,
         nearby_players: &HashMap<PlayerId, Player>,
+        ground_items: &[NearbyGroundItem],
         passability_cache: &PassabilityCache,
     ) -> Vec<ClientMessage> {
         let players: Vec<NearbyPlayer> = nearby_players
@@ -237,9 +238,10 @@ impl MonsterAiManager {
             else {
                 continue;
             };
-            let result = brain.tick_with_behavior_tree(
+            let result = brain.tick_with_loot(
                 delta_ms,
                 &players,
+                ground_items,
                 behavior_tree,
                 &path_provider,
                 &mut rng,
@@ -269,6 +271,13 @@ fn command_to_client_msg(cmd: AiCommand) -> ClientMessage {
             rotation,
             state,
             target_position,
+        },
+        AiCommand::PickUpItem {
+            monster_id,
+            instance_id,
+        } => ClientMessage::MonsterPickupItem {
+            monster_id,
+            instance_id,
         },
         AiCommand::Attack {
             monster_id,

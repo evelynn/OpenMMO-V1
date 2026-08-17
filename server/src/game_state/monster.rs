@@ -1065,7 +1065,30 @@ impl super::GameState {
         };
         for monster in removed {
             debug!("Despawned monster {}", monster.id);
+            self.return_carried_loot(&monster).await;
             self.announce_monster_removed(&monster).await;
+        }
+    }
+
+    /// Put a looter's carry back on the ground where it stood. Despawning is
+    /// not a kill — the owner logging out or walking away must not delete
+    /// items that were on the ground a minute ago (IMP-1.4). Also the only
+    /// thing that clears `monster_loot`, so no entry outlives its monster.
+    async fn return_carried_loot(&self, monster: &crate::types::Monster) {
+        for item in self.take_monster_loot(&monster.id).await {
+            let position = self
+                .loot_drop_position(monster.position, monster.floor_level, monster.position)
+                .await;
+            self.spawn_ground_item(onlinerpg_shared::inventory::GroundItem {
+                instance_id: item.instance_id,
+                item_def_id: item.item_def_id,
+                position,
+                floor_level: monster.floor_level,
+                quantity: item.quantity,
+                enchant: item.enchant,
+                dropped_by: None,
+            })
+            .await;
         }
     }
 

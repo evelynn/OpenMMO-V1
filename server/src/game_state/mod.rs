@@ -4,7 +4,7 @@ use crate::monster_defs::MonsterDefs;
 use crate::types::{CharacterAttributes, Player, PlayerId, ServerMessage};
 use bytes::Bytes;
 use onlinerpg_shared::housing::{HouseData, RoomData, WallDirection};
-use onlinerpg_shared::inventory::PlayerInventory;
+use onlinerpg_shared::inventory::{ItemInstance, PlayerInventory};
 use onlinerpg_shared::messages::BuybackEntry;
 use onlinerpg_shared::schedule::{parse_conditions, resolve_active_schedule, ScheduleEntry};
 
@@ -410,6 +410,12 @@ pub struct GameState {
     inventories: Arc<RwLock<HashMap<PlayerId, PlayerInventory>>>,
     /// Items dropped on the ground, keyed by instance_id.
     ground_items: Arc<RwLock<HashMap<u64, ServerGroundItem>>>,
+    /// What each looter monster is carrying, keyed by monster id. Memory
+    /// only: it goes back on the ground when the monster dies, and the entry
+    /// is dropped when it despawns (doc/ragnarok/13_IMPLEMENTATION_DIRECTION.md
+    /// IMP-1.4). Deliberately not the inventory system — a monster has no
+    /// weight budget and no equipment slots.
+    monster_loot: Arc<RwLock<HashMap<String, Vec<ItemInstance>>>>,
     /// Monotonically increasing counter for item instance IDs.
     next_item_instance_id: Arc<RwLock<u64>>,
     /// Live haggled price modifiers granted by LLM NPCs (economy phase 2).
@@ -642,6 +648,7 @@ impl GameState {
             no_spawn_zones,
             inventories: Arc::new(RwLock::new(HashMap::new())),
             ground_items: Arc::new(RwLock::new(HashMap::new())),
+            monster_loot: Arc::new(RwLock::new(HashMap::new())),
             next_item_instance_id: Arc::new(RwLock::new(1)),
             deals: Arc::new(RwLock::new(HashMap::new())),
             deal_ledgers: Arc::new(RwLock::new(deals::DealLedgers::default())),

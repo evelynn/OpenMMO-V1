@@ -213,7 +213,7 @@ pub struct SharedState {
     pub nearby_monsters: HashMap<String, Monster>,
     /// Items lying on the ground, keyed by instance id (from the join
     /// snapshot plus GroundItemSpawned/Appeared/Removed).
-    ground_items: HashMap<u64, GroundItem>,
+    pub(crate) ground_items: HashMap<u64, GroundItem>,
     /// Whether this agent busks, from `NpcConfig::plays_music` — the same
     /// gate that put the songbook and tip rules into its prompt, so it is
     /// never instructed about tips it will not receive.

@@ -112,6 +112,7 @@ async fn monster_loot_is_withheld_until_the_killing_blow_lands() {
             enchant: 0,
             dropped_by: None,
         }),
+        vec![],
         drop_position,
         0,
     );
@@ -353,5 +354,176 @@ async fn a_pile_that_does_not_fit_at_all_stays_whole() {
     assert_eq!(
         game_state.inventories.read().await[&pid("picker")].bag[0].quantity,
         500
+    );
+}
+
+// ---- Looter monsters (IMP-1.4) ---------------------------------------------
+
+use onlinerpg_shared::monster_ai::MONSTER_LOOT_STACK_LIMIT;
+
+async fn put_on_ground(game_state: &GameState, instance_id: u64, x: f32, floor_level: i8) {
+    game_state.ground_items.write().await.insert(
+        instance_id,
+        ServerGroundItem {
+            item: GroundItem {
+                instance_id,
+                item_def_id: "test_item".to_string(),
+                position: Position { x, y: 0.0, z: 0.0 },
+                floor_level,
+                quantity: 1,
+                enchant: 0,
+                dropped_by: None,
+            },
+            dropped_at_ms: 0,
+        },
+    );
+}
+
+/// A looter owned by `owner`, standing at the origin.
+async fn spawn_looter(game_state: &GameState, owner: PlayerId) -> String {
+    game_state
+        .spawn_monster(
+            "gnoll".to_string(),
+            Position {
+                x: 0.0,
+                y: 0.0,
+                z: 0.0,
+            },
+            0.0,
+            Some(owner),
+            0,
+            MonsterLifecycle::Ambient,
+            None,
+            false,
+        )
+        .await
+        .expect("the test cap fits one monster")
+        .id
+}
+
+async fn carried(game_state: &GameState, monster_id: &str) -> usize {
+    game_state
+        .monster_loot
+        .read()
+        .await
+        .get(monster_id)
+        .map_or(0, Vec::len)
+}
+
+#[tokio::test]
+async fn a_looter_takes_an_item_off_the_ground() {
+    let game_state = make_test_game_state("looter_pickup");
+    let owner = pid("owner");
+    game_state.add_player(make_player("owner", 0.0, 0.0)).await;
+    let monster_id = spawn_looter(&game_state, owner).await;
+    put_on_ground(&game_state, 42, 0.5, 0).await;
+
+    game_state
+        .monster_pickup_item(&owner, &monster_id, 42)
+        .await;
+
+    assert!(
+        !game_state.ground_items.read().await.contains_key(&42),
+        "it left the ground"
+    );
+    assert_eq!(carried(&game_state, &monster_id).await, 1);
+}
+
+/// The AI runs on the owner's client, so the request carries no authority:
+/// somebody else's client asking is the same as an invented request.
+#[tokio::test]
+async fn only_the_owner_can_make_its_monster_loot() {
+    let game_state = make_test_game_state("looter_owner");
+    let owner = pid("owner");
+    let stranger = pid("stranger");
+    game_state.add_player(make_player("owner", 0.0, 0.0)).await;
+    game_state
+        .add_player(make_player("stranger", 1.0, 0.0))
+        .await;
+    let monster_id = spawn_looter(&game_state, owner).await;
+    put_on_ground(&game_state, 42, 0.5, 0).await;
+
+    game_state
+        .monster_pickup_item(&stranger, &monster_id, 42)
+        .await;
+
+    assert!(game_state.ground_items.read().await.contains_key(&42));
+    assert_eq!(carried(&game_state, &monster_id).await, 0);
+}
+
+#[tokio::test]
+async fn a_looter_cannot_reach_across_floors_or_across_the_map() {
+    let game_state = make_test_game_state("looter_gates");
+    let owner = pid("owner");
+    game_state.add_player(make_player("owner", 0.0, 0.0)).await;
+    let monster_id = spawn_looter(&game_state, owner).await;
+    put_on_ground(&game_state, 1, 0.5, -3).await;
+    put_on_ground(&game_state, 2, 500.0, 0).await;
+
+    game_state.monster_pickup_item(&owner, &monster_id, 1).await;
+    game_state.monster_pickup_item(&owner, &monster_id, 2).await;
+
+    let ground = game_state.ground_items.read().await;
+    assert!(ground.contains_key(&1), "another floor is out of reach");
+    assert!(ground.contains_key(&2), "so is the far side of the map");
+    drop(ground);
+    assert_eq!(carried(&game_state, &monster_id).await, 0);
+}
+
+#[tokio::test]
+async fn a_looter_stops_at_the_carry_cap() {
+    let game_state = make_test_game_state("looter_cap");
+    let owner = pid("owner");
+    game_state.add_player(make_player("owner", 0.0, 0.0)).await;
+    let monster_id = spawn_looter(&game_state, owner).await;
+    let over_cap = MONSTER_LOOT_STACK_LIMIT as u64 + 2;
+    for i in 0..over_cap {
+        put_on_ground(&game_state, 100 + i, 0.5, 0).await;
+    }
+
+    for i in 0..over_cap {
+        game_state
+            .monster_pickup_item(&owner, &monster_id, 100 + i)
+            .await;
+    }
+
+    assert_eq!(
+        carried(&game_state, &monster_id).await,
+        MONSTER_LOOT_STACK_LIMIT
+    );
+    assert_eq!(
+        game_state.ground_items.read().await.len(),
+        over_cap as usize - MONSTER_LOOT_STACK_LIMIT,
+        "the refused ones stayed where they were"
+    );
+}
+
+/// Despawning is not a kill. The owner logging out must not delete items that
+/// were lying on the ground a minute ago.
+#[tokio::test]
+async fn despawning_puts_the_carry_back_on_the_ground() {
+    let game_state = make_test_game_state("looter_despawn");
+    let owner = pid("owner");
+    game_state.add_player(make_player("owner", 0.0, 0.0)).await;
+    let monster_id = spawn_looter(&game_state, owner).await;
+    put_on_ground(&game_state, 42, 0.5, 0).await;
+    game_state
+        .monster_pickup_item(&owner, &monster_id, 42)
+        .await;
+    assert!(game_state.ground_items.read().await.is_empty());
+
+    game_state.despawn_monsters(vec![monster_id.clone()]).await;
+
+    let ground = game_state.ground_items.read().await;
+    assert_eq!(ground.len(), 1, "the item came back");
+    assert_eq!(ground[&42].item.item_def_id, "test_item");
+    drop(ground);
+    assert!(
+        !game_state
+            .monster_loot
+            .read()
+            .await
+            .contains_key(&monster_id),
+        "and the map does not outlive the monster"
     );
 }
