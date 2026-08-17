@@ -8,6 +8,10 @@ fn one() -> f32 {
     1.0
 }
 
+fn default_resist_k() -> u32 {
+    8
+}
+
 #[derive(Debug, Clone, Deserialize)]
 pub struct DebuffDef {
     pub id: String,
@@ -29,6 +33,13 @@ pub struct DebuffDef {
     pub drain_mult: f32,
     #[serde(rename = "blocksRegen", default)]
     pub blocks_regen: bool,
+    /// Defender attribute that shortens the odds (`str`/`dex`/`con`/`int`/
+    /// `wis`/`cha`). Empty leaves `chance` flat.
+    #[serde(rename = "resistStat", default)]
+    pub resist_stat: Option<String>,
+    /// Percentage points of `chance` removed per point of ability modifier.
+    #[serde(rename = "resistK", default = "default_resist_k")]
+    pub resist_k: u32,
 }
 
 static DEFS: LazyLock<HashMap<String, DebuffDef>> = LazyLock::new(|| {
@@ -51,6 +62,28 @@ pub fn assert_debuff_exists(id: &str, referrer: &str) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// A row that leaves both resist columns blank must still parse: the
+    /// converter drops empty cells, so serde sees no key at all.
+    #[test]
+    fn a_row_without_resist_columns_falls_back() {
+        let def: DebuffDef = serde_json::from_str(
+            r#"{"id":"weakness","name":"Weakness","chance":50,"durationSecs":10}"#,
+        )
+        .expect("parses without the resist columns");
+        assert_eq!(def.resist_stat, None);
+        assert_eq!(def.resist_k, 8);
+    }
+
+    #[test]
+    fn the_shipped_debuffs_carry_a_resist_stat() {
+        for id in ["food_poisoning", "bleed"] {
+            let def = debuff_def(id).unwrap();
+            assert_eq!(def.resist_stat.as_deref(), Some("con"), "{id}");
+        }
+        assert_eq!(debuff_def("food_poisoning").unwrap().resist_k, 8);
+        assert_eq!(debuff_def("bleed").unwrap().resist_k, 5);
+    }
 
     #[test]
     fn the_shipped_debuffs_parse_with_defaults() {

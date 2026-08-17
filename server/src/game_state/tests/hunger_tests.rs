@@ -778,3 +778,95 @@ fn satiation_survives_a_save_and_reload() {
     let reloaded = auth.get_character_for_account(&account, record.id).unwrap();
     assert_eq!(reloaded.satiation, 123);
 }
+
+// ---- Debuff resistance (doc/DEBUFF.md) -------------------------------------
+
+fn attrs_with_con(con: u8) -> CharacterAttributes {
+    CharacterAttributes {
+        con,
+        ..attrs_with_cha(10)
+    }
+}
+
+/// CON moves the odds by `resistK` points per ability modifier: at 10 the
+/// modifier is 0, so the csv chance stands untouched.
+#[test]
+fn con_shortens_the_odds_around_an_unchanged_middle() {
+    let bleed = crate::debuff_defs::debuff_def("bleed").unwrap();
+    let chance =
+        |con| crate::game_state::debuff::resisted_chance(bleed, Some(&attrs_with_con(con)));
+
+    assert_eq!(chance(10), bleed.chance, "modifier 0 changes nothing");
+    assert_eq!(chance(11), bleed.chance, "an odd point is not a modifier");
+    // 18 -> +4 -> 35 * (100 - 20) / 100; 3 -> -4 -> 35 * 120 / 100.
+    assert_eq!(chance(18), 28);
+    assert_eq!(chance(3), 42);
+    assert!(
+        chance(18) < chance(10) && chance(10) < chance(3),
+        "monotone"
+    );
+}
+
+#[test]
+fn resistance_never_leaves_the_percent_range() {
+    let brutal = crate::debuff_defs::DebuffDef {
+        resist_k: 40,
+        ..crate::debuff_defs::debuff_def("food_poisoning")
+            .unwrap()
+            .clone()
+    };
+    assert_eq!(
+        crate::game_state::debuff::resisted_chance(&brutal, Some(&attrs_with_con(18))),
+        0,
+        "a big enough modifier floors at zero, never underflows"
+    );
+    assert_eq!(
+        crate::game_state::debuff::resisted_chance(&brutal, Some(&attrs_with_con(3))),
+        100,
+        "and caps at 100 on the way up"
+    );
+}
+
+/// No `resistStat` (and no character record at all) is the opt-out: the flat
+/// csv chance stands.
+#[test]
+fn a_debuff_without_a_resist_stat_ignores_attributes() {
+    let flat = crate::debuff_defs::DebuffDef {
+        resist_stat: None,
+        ..crate::debuff_defs::debuff_def("bleed").unwrap().clone()
+    };
+    assert_eq!(
+        crate::game_state::debuff::resisted_chance(&flat, Some(&attrs_with_con(18))),
+        flat.chance
+    );
+    let bleed = crate::debuff_defs::debuff_def("bleed").unwrap();
+    assert_eq!(
+        crate::game_state::debuff::resisted_chance(bleed, None),
+        bleed.chance,
+        "a player with no character record resists nothing"
+    );
+}
+
+/// The forced path is what the rest of the suite pins its debuffs with, so
+/// it has to stay blind to CON.
+#[tokio::test(start_paused = true)]
+async fn forcing_a_debuff_bypasses_resistance() {
+    let game_state = make_test_game_state("debuff_resist_force");
+    let id = pid("stoic");
+    game_state
+        .add_player(make_player("stoic", 100.0, 50.0))
+        .await;
+    game_state
+        .register_player_character(&id, 1, 0, attrs_with_con(18), 0, Some(500))
+        .await;
+    let _rx = game_state.register_direct_channel(&id).await;
+
+    assert!(
+        game_state.inflict_debuff(&id, "bleed", Some(true)).await,
+        "CON 18 does not stop a forced roll"
+    );
+    assert!(
+        !game_state.inflict_debuff(&id, "bleed", Some(false)).await,
+        "and a forced miss stays a miss"
+    );
+}

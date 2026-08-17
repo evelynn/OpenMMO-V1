@@ -6,8 +6,9 @@
 //! change only.
 
 use crate::debuff_defs::{debuff_def, DebuffDef};
+use crate::game::combat::ability_modifier;
 use onlinerpg_shared::debuff::ActiveDebuffState;
-use onlinerpg_shared::{PlayerId, ServerMessage};
+use onlinerpg_shared::{CharacterAttributes, PlayerId, ServerMessage};
 use rand::Rng;
 use std::time::Duration;
 use tokio::time::Instant;
@@ -66,9 +67,31 @@ impl HungerData {
     }
 }
 
+/// `chance` after the defender's resistance attribute, capped to 0..=100.
+/// A missing `resistStat` leaves the flat chance, which is how a debuff opts
+/// out of the whole mechanic (doc/DEBUFF.md).
+pub(crate) fn resisted_chance(def: &DebuffDef, attrs: Option<&CharacterAttributes>) -> u32 {
+    let Some((stat, attrs)) = def.resist_stat.as_deref().zip(attrs) else {
+        return def.chance.min(100);
+    };
+    let score = match stat {
+        "str" => attrs.r#str,
+        "dex" => attrs.dex,
+        "con" => attrs.con,
+        "int" => attrs.int,
+        "wis" => attrs.wis,
+        "cha" => attrs.cha,
+        _ => return def.chance.min(100),
+    };
+    let scale = 100 - ability_modifier(score) * def.resist_k as i32;
+    let chance = i64::from(def.chance) * i64::from(scale) / 100;
+    chance.clamp(0, 100) as u32
+}
+
 impl super::GameState {
     /// Roll `def_id`'s chance and apply (or refresh) it. `force` pins the
-    /// roll for tests. False when it didn't land or the player is exempt.
+    /// roll for tests, resistance included. False when it didn't land or the
+    /// player is exempt.
     pub(crate) async fn inflict_debuff(
         &self,
         player_id: &PlayerId,
@@ -78,8 +101,16 @@ impl super::GameState {
         let Some(def) = debuff_def(def_id) else {
             return false;
         };
-        // thread_rng is !Send — roll before any await.
-        if !force.unwrap_or_else(|| rand::thread_rng().gen_range(0..100) < def.chance) {
+        // Resistance is read first: thread_rng is !Send, so the roll cannot
+        // sit on the far side of an await.
+        let chance = match force {
+            Some(_) => 0,
+            None => {
+                let chars = self.player_characters.read().await;
+                resisted_chance(def, chars.get(player_id).map(|(_, _, attrs)| attrs))
+            }
+        };
+        if !force.unwrap_or_else(|| rand::thread_rng().gen_range(0..100) < chance) {
             return false;
         }
         let now = Instant::now();
