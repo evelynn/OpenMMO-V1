@@ -185,9 +185,10 @@ impl SharedState {
                 }
             }
             lines.push(format!(
-                "Monster: {} [{}] HP {}/{} state={} at ({:.1}, {:.1}, {:.1})",
+                "Monster: {} [{}] size={} HP {}/{} state={} at ({:.1}, {:.1}, {:.1})",
                 m.monster_type,
                 m.id,
+                monster_size(&m.monster_type),
                 m.health,
                 m.max_health,
                 m.state,
@@ -255,4 +256,27 @@ impl SharedState {
             lines.join("\n")
         }
     }
+}
+
+/// Size class per monster type, from the same generated table the server
+/// reads. Without it an agent picks weapons blind where a player reads the
+/// size off the monster — the equivalence constraint, not a nicety
+/// (doc/REMOTE_AGENT_CLIENT.md).
+fn monster_size(monster_type: &str) -> &'static str {
+    use std::collections::HashMap;
+    use std::sync::LazyLock;
+
+    #[derive(serde::Deserialize)]
+    struct RawSize {
+        #[serde(default)]
+        size: Option<String>,
+    }
+    static SIZES: LazyLock<HashMap<String, String>> = LazyLock::new(|| {
+        let raw: HashMap<String, RawSize> =
+            serde_json::from_str(include_str!("../../../data/monsters.json")).unwrap_or_default();
+        raw.into_iter()
+            .filter_map(|(id, r)| r.size.map(|s| (id, s)))
+            .collect()
+    });
+    SIZES.get(monster_type).map_or("medium", String::as_str)
 }

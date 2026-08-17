@@ -57,6 +57,12 @@
   const initialModel = initialDef?.model ?? 'monsters/scp939.glb'
   const initialScale = initialDef?.scale ?? 1
   const isBoss = initialDef?.boss === true
+  // Bosses are the only monsters with a nameplate, so this is where the size
+  // axis (doc/COMBAT.md) is readable before a swing.
+  const sizeLabel =
+    initialDef?.size && initialDef.size !== 'medium'
+      ? ` (${initialDef.size})`
+      : ''
   const gltf = useLoader(GLTFLoader).load(`/models/${initialModel}`)
 
   // Monsters rigged on the character skeleton borrow the player's animation
@@ -465,7 +471,7 @@
 <T.Group bind:ref={nametagGroup}>
   {#if isBoss && monsterState !== 'dead'}
     <TextLabel
-      text={initialDef?.name ?? type}
+      text={`${initialDef?.name ?? type}${sizeLabel}`}
       fontSize={0.3}
       color="#ffd166"
       outlineColor="#422d00"

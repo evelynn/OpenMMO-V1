@@ -9,6 +9,29 @@ fn default_weapon_drop_chance() -> f32 {
     1.0
 }
 
+/// The size axis (doc/COMBAT.md): a weapon's `sizeMult` picks its column.
+/// Adopted in reduced form — players have no size, so this is only ever the
+/// target's (doc/ragnarok/13_IMPLEMENTATION_DIRECTION.md IMP-1.5).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum MonsterSize {
+    Small,
+    #[default]
+    Medium,
+    Large,
+}
+
+impl MonsterSize {
+    /// Index into an item's `sizeMult` triple.
+    pub fn index(self) -> usize {
+        match self {
+            Self::Small => 0,
+            Self::Medium => 1,
+            Self::Large => 2,
+        }
+    }
+}
+
 #[derive(Debug, Clone, Deserialize)]
 #[allow(dead_code)]
 pub struct MonsterDefinition {
@@ -70,6 +93,9 @@ pub struct MonsterDefinition {
     /// movement. Read through `MonsterDefs::boss_immune`, never directly.
     #[serde(default)]
     pub boss: bool,
+    /// Which column of a weapon's `sizeMult` this monster is hit on.
+    #[serde(default)]
+    pub size: MonsterSize,
 }
 
 impl MonsterDefinition {

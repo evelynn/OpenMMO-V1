@@ -376,6 +376,14 @@ AI 탐색은 이미 소유자 클라이언트의 AOI 안에서만 일어나므�
 - `client/src/lib/data/monsterDefs.ts` — `size?: string`, 이름표에 표시.
 - `agent-client/src/state/world_state.rs:15` `format_world_state` — 몬스터 줄에 크기 표기.
 
+> **개정 (IMP-1.5 착수 시)** — "이름표에 표시"는 **보스에만 걸린다.** 클라이언트에
+> 이름표가 있는 것은 보스뿐이고(`client/src/lib/components/Monster.svelte`의 `isBoss`
+> 분기), 일반 몬스터에 이름표를 새로 다는 것은 이 항목이 사려던 것보다 훨씬 큰 시각적
+> 변경이다. 그래서 지금 사람이 크기를 읽을 수 있는 곳은 보스 이름표뿐이고, 에이전트는
+> `format_world_state`에서 전부 본다 — **제약 (c)의 동등성이 아직 완전하지 않다.**
+> 남은 절반은 일반 몬스터용 호버/타겟 UI가 생길 때 같이 붙인다. 그 UI는 이 항목의
+> 범위가 아니므로 여기에 과제로만 남긴다.
+
 **구현 방향**
 곱은 **주사위 굴림 뒤**에 적용한다. `roll_attack`(`server/src/game/combat.rs:89`)은
 순수 함수로 남기고, 호출부인 `broadcast_player_attack`에서 `scale_damage`를 한 번

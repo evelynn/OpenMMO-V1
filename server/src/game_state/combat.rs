@@ -359,18 +359,25 @@ impl super::GameState {
 
         // Unarmed falls back to D&D 5e improvised 1d2. An enchanted
         // weapon (+N) adds its enchant to attack and damage rolls.
-        let (weapon_dice, weapon_enchant): (String, i32) = {
+        let target_size = self
+            .monster_defs
+            .get(&monster_type)
+            .map(|def| def.size)
+            .unwrap_or_default();
+        let (weapon_dice, weapon_enchant, size_mult): (String, i32, f32) = {
             let inventories = self.inventories.read().await;
             inventories
                 .get(player_id)
                 .and_then(|inv| inv.equipped.get(&EquipSlot::MainHand))
                 .and_then(|item| {
-                    self.item_defs
-                        .get(&item.item_def_id)
-                        .and_then(|def| def.damage_dice())
-                        .map(|dice| (dice.to_string(), item.enchant))
+                    self.item_defs.get(&item.item_def_id).and_then(|def| {
+                        def.damage_dice().map(|dice| {
+                            (dice.to_string(), item.enchant, def.size_mult(target_size))
+                        })
+                    })
                 })
-                .unwrap_or_else(|| ("1d2".to_string(), 0))
+                // Bare hands have no reach advantage to trade on either size.
+                .unwrap_or_else(|| ("1d2".to_string(), 0, 1.0))
         };
 
         let str_mod = {
@@ -391,7 +398,12 @@ impl super::GameState {
                 &weapon_dice,
                 str_mod + weapon_enchant,
             );
-            (result.hit, result.roll, result.damage)
+            // After the roll, not inside it: the dice stay a pure function.
+            (
+                result.hit,
+                result.roll,
+                combat::scale_damage(result.damage, size_mult),
+            )
         };
 
         debug!(

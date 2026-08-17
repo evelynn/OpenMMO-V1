@@ -86,6 +86,18 @@ fn resolves_as_hit(roll_total: i32, attack_bonus: i32, target_guard: i32) -> boo
     roll_total + attack_bonus > target_guard
 }
 
+/// Apply a weapon's size multiplier to a landed blow. Floors at 1: a bad
+/// matchup makes a weapon a poor choice, never a harmless one
+/// (doc/ragnarok/13_IMPLEMENTATION_DIRECTION.md IMP-1.5). Kept out of
+/// `roll_attack` so that stays a pure roll — the monster-to-player path has
+/// no size axis to pass it.
+pub fn scale_damage(damage: u32, mult: f32) -> u32 {
+    if damage == 0 {
+        return 0;
+    }
+    ((damage as f32 * mult).round() as i64).clamp(1, u32::MAX as i64) as u32
+}
+
 pub fn roll_attack(
     attack_bonus: i32,
     target_guard: i32,
@@ -125,6 +137,24 @@ pub fn roll_attack_with_extra_damage_roll(
 
 #[cfg(test)]
 mod tests {
+    use super::scale_damage;
+
+    /// A bad matchup makes a weapon a poor choice, never a harmless one.
+    #[test]
+    fn a_size_penalty_never_reduces_a_hit_below_one() {
+        assert_eq!(scale_damage(1, 0.5), 1);
+        assert_eq!(scale_damage(2, 0.1), 1);
+        assert_eq!(scale_damage(0, 2.0), 0, "a miss stays a miss");
+    }
+
+    #[test]
+    fn size_multipliers_round_to_the_nearest_point() {
+        assert_eq!(scale_damage(8, 1.0), 8, "the neutral column is identity");
+        assert_eq!(scale_damage(4, 1.25), 5);
+        assert_eq!(scale_damage(6, 0.75), 5); // 4.5 rounds up
+        assert_eq!(scale_damage(5, 0.75), 4); // 3.75 rounds up to 4
+    }
+
     use super::*;
 
     #[test]

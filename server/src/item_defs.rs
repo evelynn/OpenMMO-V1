@@ -110,6 +110,34 @@ pub struct ItemDefinition {
     /// Debuff id rolled when eaten (raw fish → food poisoning, doc/DEBUFF.md).
     #[serde(rename = "useDebuff", default)]
     pub use_debuff: Option<String>,
+    /// Weapons only — damage multipliers against small|medium|large targets,
+    /// pipe-separated (doc/COMBAT.md). One column rather than three keeps a
+    /// csv that is already wide from getting wider.
+    #[serde(rename = "sizeMult", default)]
+    size_mult_raw: Option<String>,
+    /// `size_mult_raw` parsed at load; a malformed value fails the boot.
+    #[serde(skip, default = "neutral_size_mult")]
+    size_mult: [f32; 3],
+}
+
+/// No size preference: the default for every item that leaves the column blank.
+fn neutral_size_mult() -> [f32; 3] {
+    [1.0; 3]
+}
+
+/// Parse `"1.25|1.0|0.75"`. `None` on anything that is not three positive
+/// finite numbers — the caller turns that into a boot failure.
+fn parse_size_mult(raw: &str) -> Option<[f32; 3]> {
+    let mut out = [1.0f32; 3];
+    let mut parts = raw.split('|');
+    for slot in &mut out {
+        let value: f32 = parts.next()?.trim().parse().ok()?;
+        if !value.is_finite() || value <= 0.0 {
+            return None;
+        }
+        *slot = value;
+    }
+    parts.next().is_none().then_some(out)
 }
 
 /// The effect produced by consuming a usable item via `use_item`, decided by
@@ -205,6 +233,12 @@ impl ItemDefinition {
     }
 
     /// Damage dice if this item is a weapon, else `None`.
+    /// This weapon's multiplier against `size`. Neutral for anything that
+    /// left the column blank, so an unfilled table changes no damage.
+    pub fn size_mult(&self, size: crate::monster_defs::MonsterSize) -> f32 {
+        self.size_mult[size.index()]
+    }
+
     pub fn damage_dice(&self) -> Option<&str> {
         if self.is_weapon() {
             self.dice.as_deref()
@@ -265,6 +299,11 @@ impl ItemDefs {
         // A typo in `effects` would silently strip an item's whole point, so
         // resolve the tokens up front and fail the boot on an unknown one.
         for def in defs.values_mut() {
+            def.size_mult = match &def.size_mult_raw {
+                Some(raw) => parse_size_mult(raw)
+                    .unwrap_or_else(|| panic!("item '{}': malformed sizeMult '{raw}'", def.id)),
+                None => neutral_size_mult(),
+            };
             let effects: Vec<_> = def
                 .effect_tokens
                 .iter()
@@ -412,6 +451,47 @@ impl ItemDefs {
 
 #[cfg(test)]
 mod tests {
+    use super::{parse_size_mult, ItemDefs};
+    use crate::monster_defs::MonsterSize;
+
+    #[test]
+    fn size_multipliers_parse_as_three_positive_numbers() {
+        assert_eq!(parse_size_mult("1.25|1.0|0.75"), Some([1.25, 1.0, 0.75]));
+        assert_eq!(parse_size_mult(" 2 | 1 | 0.5 "), Some([2.0, 1.0, 0.5]));
+        for bad in [
+            "1.0|1.0",
+            "1.0|1.0|1.0|1.0",
+            "1.0|x|1.0",
+            "1.0|0|1.0",
+            "-1|1|1",
+            "",
+        ] {
+            assert_eq!(parse_size_mult(bad), None, "{bad} must fail the boot");
+        }
+    }
+
+    /// The blank column is the neutral one, so an unfilled table changes no
+    /// damage anywhere.
+    #[test]
+    fn a_weapon_without_the_column_is_neutral_against_every_size() {
+        let defs = ItemDefs::load();
+        let sword = defs.get("iron_sword").expect("iron_sword def");
+        for size in [MonsterSize::Small, MonsterSize::Medium, MonsterSize::Large] {
+            assert_eq!(sword.size_mult(size), 1.0);
+        }
+    }
+
+    #[test]
+    fn the_dagger_and_the_spear_prefer_opposite_ends() {
+        let defs = ItemDefs::load();
+        let dagger = defs.get("dagger").expect("dagger def");
+        let spear = defs.get("spear").expect("spear def");
+        assert!(dagger.size_mult(MonsterSize::Small) > dagger.size_mult(MonsterSize::Large));
+        assert!(spear.size_mult(MonsterSize::Large) > spear.size_mult(MonsterSize::Small));
+        assert_eq!(dagger.size_mult(MonsterSize::Medium), 1.0);
+        assert_eq!(spear.size_mult(MonsterSize::Medium), 1.0);
+    }
+
     use super::*;
     use onlinerpg_shared::skills::SKILL_LEVEL_CAP;
 
