@@ -26,6 +26,17 @@ STR / AGI / VIT / INT / DEX / LUK. 스탯 포인트로 올리며, **높을수록
 
 ## 2. 공격력
 
+ATK와 MATK는 **단일 숫자가 아니라 출처별로 쪼개진 합**이다. 이 분할이 카드·버프·장비가
+서로 어디에 더해지는지를 결정한다.
+
+| 구분 | 구성 요소 |
+|------|-----------|
+| **ATK** (5분할) | StatusATK + WeaponATK + ExtraATK + MasteryATK + BuffATK |
+| **MATK** (4분할) | StatusMATK + WeaponMATK + ExtraMATK + BuffMATK |
+
+ATK/MATK는 "스킬과 공격 판정을 적용하기 **전**의 총 출력"이다. 즉 스킬 배율은
+이 합에 곱해진다.
+
 ```
 StatusATK (근접)   = (BaseLevel ÷ 4) + STR + (DEX ÷ 5) + (LUK ÷ 3)
 StatusATK (원거리) = (BaseLevel ÷ 4) + (STR ÷ 5) + DEX + (LUK ÷ 3)
@@ -35,6 +46,10 @@ StatusMATK         = floor[ floor[BaseLv ÷ 4] + INT + floor[INT ÷ 2]
 
 무기 종류(활/총/악기/채찍)가 STR·DEX의 역할을 뒤집는다. **BaseLevel이 공격력에 직접
 들어간다**는 점이 Renewal의 특징 — 레벨업 자체가 전투력이다.
+
+`WeaponATK`는 무기 기본 ATK + 제련 보너스 + **변량(variance)**으로 구성되며, 변량 폭은
+무기 레벨이 정한다 ([04_ITEMS](04_ITEMS.md) §2). `MasteryATK`는 숙련 스킬처럼
+**방어를 무시하는 가산**으로 취급되는 항이라 나머지와 성격이 다르다.
 
 ## 3. 명중과 회피
 
@@ -102,17 +117,28 @@ FCT(초) = (BaseFCT − Sum_FCT) × (1 − 최대FCT감소%/100)
 - Cast Delay와 Cooldown은 **동시에 시작**한다.
 - SP 등 자원 요구는 시전 시작이 아니라 **실행 단계에서 다시 검사**한다.
 
-## 8. 데미지 파이프라인 요약
+## 8. 데미지 파이프라인
+
+[Attacks](https://irowiki.org/wiki/Attacks) 기준의 적용 순서. **각 단계마다 내림(floor)이
+들어간다** — 순서를 바꾸면 결과가 달라지므로 구현 시 순서 자체가 스펙이다.
 
 ```
-StatusATK/MATK + 무기ATK(+제련·변량)
+ATK (5분할 합)
+  → MeleeMultiplier / RangedMultiplier      (근접·원거리 계열 보정)
   → 스킬 배율
-  → 크기 배율 × 종족 배율 × 속성 상성        (03 문서)
-  → 카드/장비 % 보정
-  → Hard DEF(비율) → Soft DEF(감산)
+  → DamageMultiplier                        (크기 × 종족 × 속성 × 카드/장비 %)   [03 문서]
+  → HardDEFReduction                        (비율 감소)
+  → SoftDEF                                 (절대 감산)
+  → FinalDamageMultiplier                   (최종 배율)
+  → FinalDamageReduction                    (최종 감소)
   → 치명타 / 다단히트 분할
   → 최종 데미지 (최소 1 보장)
 ```
+
+핵심은 **비율 계열이 감산 계열보다 앞에 있고, 그 뒤에 다시 "최종" 배율/감소 계층이
+따로 있다**는 점이다. 최종 계층을 별도로 둔 이유는 "무엇을 하든 마지막에 N% 깎는"
+효과(보스 감쇠, PvP 보정 등)를 앞 단계와 뒤섞지 않기 위해서다. 신규 보정을 추가할 때
+어느 층에 넣을지가 곧 밸런싱 결정이 된다.
 
 ## OpenMMO 적용
 

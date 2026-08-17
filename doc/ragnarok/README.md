@@ -22,7 +22,12 @@ Ragnarok Online의 시스템을 주제별로 재구성하고, 각 문서 끝에 
 `irowiki.org` 직접 접속을 차단(CONNECT 403)하기 때문에 페이지 단위 크롤링을 하지
 못했다. 그래서:
 
-- **시스템 구조·공식·규칙 = 커버됨.** 아래 10개 문서가 다루는 범위.
+- 위키의 [Systems Overview](https://irowiki.org/wiki/Systems_Overview) 페이지는
+  **위키 스스로 "in progress rough outline"이라고 표기한 미완성 스텁**이다. 그래서
+  그 페이지를 옮기는 대신, 위키의 실제 분류 체계(Category:General Information 127개
+  문서, Mechanics, Cash Shop, Instances, Guild 등)를 기준으로 시스템 전면을 나열하고
+  문서별 커버리지와 미수집 항목을 표시했다 — [11_SYSTEMS_INDEX](11_SYSTEMS_INDEX.md).
+- **시스템 구조·공식·규칙 = 커버됨.** 아래 12개 문서가 다루는 범위.
 - **대량 데이터베이스 = 미커버.** 개별 아이템/몬스터/스킬/맵 수천 건의 수치는
   `db.irowiki.org`(iW Database)에 있고, 이 환경에서는 받아올 수 없다. 실제로 필요할
   때는 egress 허용 목록에 `irowiki.org`, `db.irowiki.org`를 추가한 환경에서
@@ -45,6 +50,8 @@ Ragnarok Online의 시스템을 주제별로 재구성하고, 각 문서 끝에 
 | 08 | [콘텐츠 루프](08_CONTENT_LOOPS.md) | 퀘스트/일일/턴인, 제작(단조·조제·요리), 펫·호문쿨루스·용병 |
 | 09 | [OpenMMO 갭 분석](09_OPENMMO_GAP_ANALYSIS.md) | 현재 구현 대조표, 채택/변형/기각 결정과 근거 |
 | 10 | [구현 로드맵](10_IMPLEMENTATION_ROADMAP.md) | 단계별 계획, 데이터 스키마 변경안, 프로토콜 영향, 5,000 동접 제약, 데이터 수집 절차 |
+| 11 | [전체 시스템 색인](11_SYSTEMS_INDEX.md) | 위키 분류 기준 시스템 전면 나열 + **커버리지/미수집 표시** |
+| 12 | [조작·UI·계정 서비스](12_UX_SERVICES.md) | 조작 모델, 채팅 접두사, 매크로, 우편(RODEX), 업적·칭호, 캐시샵/VIP |
 
 ## 읽는 순서
 
