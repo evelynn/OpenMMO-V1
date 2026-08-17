@@ -18,9 +18,10 @@ pub struct DungeonDefs;
 
 impl DungeonDefs {
     /// Validate against the item and monster tables: every `chestDrops` entry
-    /// must name a real item and `boss` a real monster; a typo'd entry panics
-    /// at startup rather than silently handing out a broken item or spawning
-    /// nothing (mirrors the world-drop table).
+    /// must name a real item, and `boss` a real monster that is itself
+    /// flagged `boss=true`; a typo'd entry panics at startup rather than
+    /// silently handing out a broken item or spawning nothing (mirrors the
+    /// world-drop table).
     pub fn load(
         item_defs: &crate::item_defs::ItemDefs,
         monster_defs: &crate::monster_defs::MonsterDefs,
@@ -49,6 +50,13 @@ impl DungeonDefs {
             assert!(
                 monster_defs.get(&def.boss).is_some(),
                 "dungeon '{}' boss '{}' has no matching monster definition",
+                def.id,
+                def.boss
+            );
+            assert!(
+                monster_defs.boss_immune(&def.boss),
+                "dungeon '{}' boss '{}' is not flagged boss=true in monsters.csv — \
+                 it would take status effects and forced movement like a trash mob",
                 def.id,
                 def.boss
             );

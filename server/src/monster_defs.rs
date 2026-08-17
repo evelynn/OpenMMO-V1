@@ -66,6 +66,10 @@ pub struct MonsterDefinition {
     pub anim_dead: String,
     #[serde(default)]
     pub material: Option<String>,
+    /// Dungeon boss (doc/DEBUFF.md): exempt from status effects and forced
+    /// movement. Read through `MonsterDefs::boss_immune`, never directly.
+    #[serde(default)]
+    pub boss: bool,
 }
 
 impl MonsterDefinition {
@@ -84,6 +88,10 @@ impl MonsterDefinition {
     pub fn attack_bonus_at(&self, level: u8) -> i32 {
         self.attack_bonus() + combat::monster_attack_bonus(level)
             - combat::monster_attack_bonus(self.level)
+    }
+
+    pub fn is_boss(&self) -> bool {
+        self.boss
     }
 
     pub fn damage_roll(&self) -> String {
@@ -126,6 +134,15 @@ impl MonsterDefs {
         self.defs.get(monster_type)
     }
 
+    /// The one place that decides a monster shrugs off a status effect or
+    /// forced movement. Every future monster-targeting path goes through
+    /// here rather than reading `boss` itself, so the exception list stays
+    /// one function wide. Unknown types are not bosses.
+    pub fn boss_immune(&self, monster_type: &str) -> bool {
+        self.get(monster_type)
+            .is_some_and(MonsterDefinition::is_boss)
+    }
+
     pub fn ids(&self) -> Vec<&str> {
         let mut ids: Vec<&str> = self.defs.keys().map(String::as_str).collect();
         ids.sort_unstable();
@@ -143,6 +160,29 @@ mod tests {
         let gnoll = defs.get("gnoll").expect("gnoll def");
         assert_eq!(gnoll.hit_debuff.as_deref(), Some("bleed"));
         assert_eq!(gnoll.damage_roll(), "2d6");
+    }
+
+    #[test]
+    fn only_the_flagged_monsters_are_bosses() {
+        let defs = MonsterDefs::load();
+        assert!(defs.get("orc_boss").expect("orc_boss def").is_boss());
+        assert!(!defs.get("orc").expect("orc def").is_boss());
+        assert!(defs.boss_immune("orc_boss"));
+        assert!(!defs.boss_immune("orc"));
+        assert!(!defs.boss_immune("no_such_monster"));
+    }
+
+    #[test]
+    fn every_dungeon_boss_is_flagged() {
+        let defs = MonsterDefs::load();
+        for entrance in onlinerpg_shared::dungeon::entrances() {
+            assert!(
+                defs.boss_immune(&entrance.boss),
+                "dungeon '{}' boss '{}' must be flagged boss=true",
+                entrance.id,
+                entrance.boss
+            );
+        }
     }
 
     #[test]

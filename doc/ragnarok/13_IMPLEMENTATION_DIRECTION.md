@@ -183,10 +183,21 @@
 **손댈 파일**
 - `server/src/monster_defs.rs:14` `MonsterDefinition` — **`boss` 필드가 아예 없다.**
   `#[serde(default)] pub boss: bool` 추가 + `pub fn is_boss(&self) -> bool`.
-- `server/src/game_state/debuff.rs:72` `inflict_debuff` — 면역 단일 진입점 호출 추가.
+- `server/src/monster_defs.rs` `MonsterDefs` — `pub fn boss_immune(&self, monster_type: &str) -> bool`.
 - `server/src/dungeon_defs.rs` — `dungeons.csv`의 `boss` 몬스터가 존재하는지는 이미
-  검사한다(:50). 여기에 **그 몬스터의 `boss` 컬럼이 `true`인지**도 assert 추가.
+  검사한다(:50). 여기에 **그 몬스터의 `boss` 컬럼이 `true`인지**도 `boss_immune`으로 assert 추가.
 - `doc/DEBUFF.md` — 예외 규칙 한 줄.
+
+> **개정 (IMP-1.2 착수 시)** — 두 가지를 고쳤다.
+> 1. 진입점을 자유 함수 `boss_immune(monster_type)`가 아니라 **`MonsterDefs`의 메서드**로 둔다.
+>    `MonsterDefs`는 `GameState`가 들고 있는 인스턴스이고(`MonsterDefs::load()`), `shared`의
+>    던전 레지스트리와 달리 프로세스 전역이 아니다. 자유 함수로 두려면 전역을 새로 만들어야
+>    하는데, 그것은 이 항목이 사려는 것(진입점 하나)보다 비싼 변경이다.
+> 2. **`debuff.rs`에는 호출부를 추가하지 않는다.** `inflict_debuff`는 `PlayerId`를 받고,
+>    이 절이 스스로 적었듯 몬스터를 대상으로 하는 상태 부여·강제 이동 경로는 아직 없다 —
+>    넣을 호출부 자체가 존재하지 않는다. 대신 진입점의 **첫날 호출부는 부팅 검증**이다
+>    (`dungeon_defs.rs`). 호출부 없는 `pub fn`은 `-D warnings`에서 죽은 코드로 잡히므로,
+>    "나중에 붙일 자리"를 호출 없이 남겨 두는 선택지는 없다.
 
 **구현 방향**
 현 코드의 실상을 먼저 적는다. (1) `data-src/monsters.csv`에 `boss` 컬럼이 있고
@@ -196,7 +207,7 @@
 붙는다 — **몬스터는 디버프를 받을 수 없다.** (3) 넉백은 코드베이스에 존재하지 않는다
 (`grep -rn "knockback" --include=*.rs --include=*.ts` → 0건).
 따라서 이 항목이 지금 실제로 만드는 것은 **면역 규칙 자체가 아니라 그 규칙이 붙을
-단일 진입점**이다: `pub fn boss_immune(monster_type: &str) -> bool`을
+단일 진입점**이다: `MonsterDefs::boss_immune(&self, monster_type: &str) -> bool`을
 `server/src/monster_defs.rs`에 두고, 앞으로 몬스터를 대상으로 하는 상태 부여·강제 이동
 경로는 예외 없이 여기를 지나게 한다. 09 문서가 "코드 변경 최소"라고 본 것은 맞지만
 그것은 **지금 심어야 나중에 싸다**는 뜻이지 오늘 눈에 보이는 효과가 있다는 뜻이 아니다.

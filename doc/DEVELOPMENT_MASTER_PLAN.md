@@ -8,8 +8,8 @@
 
 ## 0. 현재 진행 상황 (이어서 작업할 때 먼저 읽는다)
 
-**브랜치**: `claude/project-analysis-dev-setup-9amcvt` · **마지막 커밋**: `d519d9c`
-**진행**: 30개 항목 중 **5개 완료**, 1개 미착수로 남김.
+**브랜치**: `claude/project-analysis-dev-setup-9amcvt`
+**진행**: 30개 항목 중 **6개 완료**, 1개 미착수로 남김.
 
 | 항목 | 상태 | 커밋 |
 |------|------|------|
@@ -18,12 +18,13 @@
 | IMP-2.1 우편함 | ✅ 완료 (v31, `/mail` 운영 명령 포함) | `85c42b7` |
 | IMP-2.5 헌팅 보드 | ✅ 완료 (v32) | `d519d9c` |
 | IMP-2.6 일일 한도 | ✅ 완료 (2.5와 같은 커밋) | `d519d9c` |
+| IMP-1.2 보스 프로토콜 | ✅ 완료 (`MonsterDefs::boss_immune` + 부팅 검증, 13 개정 2건) | `ebdf662` |
 | IMP-0.2 EffectiveStats | ⏸ 미착수 — **게이트가 아니다.** 먼저 하면 뒤 항목의 시트 표시가 공짜가 된다 | — |
 
-**다음에 집을 것**: §1의 예외 네 항목이 모두 끝났으므로 **§5 표를 위에서부터 읽는
-평상 규칙으로 돌아온다.** 체크되지 않은 첫 행은 **IMP-1.2 보스 프로토콜**이고,
-M1의 잔여 항목(IMP-1.2 · 1.3 · 1.4 · 1.5 · 1.6 · 1.7)은 서로 독립이라 순서를 바꿔도
-되고 병렬로 진행해도 된다 (§6 참조 — 단 1.2 ↔ 1.3은 같은 디버프 경로라 충돌한다).
+**다음에 집을 것**: §5 표에서 체크되지 않은 첫 행은 **IMP-1.3 디버프 저항 스탯**이고,
+그다음 M1 잔여 항목은 IMP-1.4 · 1.5 · 1.6 · 1.7이다. 이 넷은 서로 독립이라 순서를 바꿔도
+되고 병렬로 진행해도 된다 (§6 참조). IMP-1.2 ↔ IMP-1.3 충돌은 **해소됐다** — 1.2가
+`debuff.rs`를 건드리지 않고 끝났다(13 IMP-1.2 개정 참조).
 
 **이어받을 때의 준비**
 1. `bash tools/dev-setup.sh --check` — 컨테이너는 매번 새로 뜨므로 wasm32 타깃·
@@ -291,7 +292,7 @@ Phase 번호와 1:1이다(M1 = Phase 1 …). **작업 ID는 13의 ID가 정본�
 | 순번 | 작업 ID | 작업 | 선행 | 크기 | 영역 | 산출물 |
 |------|---------|------|------|------|------|--------|
 | [x] 4 | IMP-1.1 | 레벨 차 EXP 페널티 | — | S | shared/server/client | `shared/src/xp.rs`에 `level_diff_mult_bp` 신규 + 상수 3개, **`monster_xp` 시그니처 불변**, `grant_monster_kill_xp`(`server/src/game_state/combat.rs:541`)에 `monster_level` 전달, `XpGained`에 `xp_mult_pct` append(감쇠와 보너스를 한 필드로 싣는다) + `PROTOCOL_VERSION` 29 → 30 |
-| 5 | IMP-1.2 | 보스 프로토콜 (디버프·넉백 면역) | — | S | data/server | `MonsterDefinition`에 `boss` 필드 추가(`server/src/monster_defs.rs`는 현재 이 컬럼을 읽지 않는다), `game_state/debuff.rs`에서 스킵, [DEBUFF.md](DEBUFF.md) 예외 규칙 |
+| [x] 5 | IMP-1.2 | 보스 프로토콜 (디버프·넉백 면역) | — | S | data/server | `MonsterDefinition`에 `boss` 필드 추가(`server/src/monster_defs.rs`는 현재 이 컬럼을 읽지 않는다), 면역 판정은 `MonsterDefs::boss_immune` 한 곳, 부팅 시 던전 보스 검증, [DEBUFF.md](DEBUFF.md) 예외 규칙 |
 | 6 | IMP-1.3 | 디버프 저항 스탯 | — | S | data/server | `data-src/debuffs.csv`에 `resistStat` 컬럼, `server/src/debuff_defs.rs` 필드, `debuff.rs`의 확률 보정, [DEBUFF.md](DEBUFF.md) 표 |
 | 7 | IMP-1.4 | 루터 몬스터 | — | M | data/client/server | `monsters.csv`의 `behavior=looter`, `client/src/lib/managers/monsterManager.ts` 브레인, 줍기·드랍은 **서버 검증**(바닥 아이템 경로 재사용), 층 규칙 준수 |
 | 8 | IMP-1.5 | 크기 축 (small/medium/large) | — | M | data/server/client | `monsters.csv`의 `size`, `items.csv`의 크기 배율, `server/src/game/combat.rs` 데미지 곱. **프로토콜 변경 없음** — 크기는 클라이언트도 CSV에서 직접 읽는다 |
