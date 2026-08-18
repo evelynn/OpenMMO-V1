@@ -276,15 +276,14 @@ impl super::GameState {
         self.refresh_hunger_gear_drain(player_id, &inventory).await;
         self.send_direct_message(player_id, ServerMessage::InventoryUpdated { inventory })
             .await;
-        self.send_guard_update(player_id).await;
+        self.send_effective_stats(player_id).await;
     }
 
-    /// Recompute and push the player's effective guard to their client, so the
-    /// displayed value stays equal to the one combat resolves against.
-    async fn send_guard_update(&self, player_id: &PlayerId) {
-        let guard = self.effective_guard(player_id).await;
-        self.send_direct_message(player_id, ServerMessage::GuardUpdated { guard })
-            .await;
+    /// Recompute and push the player's effective stats, so every displayed
+    /// number stays equal to the one the server resolves against (IMP-0.2).
+    pub(super) async fn send_effective_stats(&self, player_id: &PlayerId) {
+        let msg = self.effective_stats(player_id).await;
+        self.send_direct_message(player_id, msg).await;
     }
 
     /// Load a player's inventory from the database into memory.

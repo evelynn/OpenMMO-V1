@@ -1,5 +1,9 @@
 <script lang="ts">
-  import { inventoryStore, playerGold } from '../stores/inventoryStore'
+  import {
+    inventoryStore,
+    playerGold,
+    maxCarryWeight,
+  } from '../stores/inventoryStore'
   import type { ItemInstance } from '../stores/inventoryStore'
   import {
     getItemDef,
@@ -32,7 +36,12 @@
 
   let { visible, attributes, onClose }: Props = $props()
 
-  const maxWeight = $derived(attributes ? attributes.str * 15 : 150)
+  // Server-computed: `str * 15` alone ignores the hunger and debuff carry
+  // multipliers the server actually enforces, so a Weak player was shown 150
+  // while being refused past 90.
+  const maxWeight = $derived(
+    $maxCarryWeight ?? (attributes ? attributes.str * 15 : 150)
+  )
 
   function itemWeight(item: ItemInstance): number {
     const def = getItemDef(item.item_def_id)

@@ -135,6 +135,8 @@ impl super::GameState {
         for msg in msgs {
             self.send_direct_message(player_id, msg).await;
         }
+        // A new debuff can move the carry multiplier (IMP-0.2).
+        self.send_effective_stats(player_id).await;
         true
     }
 
@@ -153,6 +155,7 @@ impl super::GameState {
         for msg in msgs {
             self.send_direct_message(player_id, msg).await;
         }
+        self.send_effective_stats(player_id).await;
     }
 
     /// 1s sweep: deal each active debuff's dps, then drop the expired ones.
@@ -194,6 +197,7 @@ impl super::GameState {
             for msg in msgs {
                 self.send_direct_message(&pid, msg).await;
             }
+            self.send_effective_stats(&pid).await;
         }
         if !damage.is_empty() {
             self.apply_debuff_damage(damage).await;

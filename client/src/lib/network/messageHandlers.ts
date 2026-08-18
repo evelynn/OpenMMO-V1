@@ -24,7 +24,13 @@ import { bridgeManager } from '../managers/bridgeManager'
 import { objectManager } from '../managers/objectManager'
 import { groundItemManager } from '../managers/groundItemManager'
 import { dungeonManager } from '../managers/dungeonManager'
-import { setInventory, playerGold, playerGuard } from '../stores/inventoryStore'
+import {
+  setInventory,
+  playerGold,
+  playerGuard,
+  effectiveAttributes,
+  maxCarryWeight,
+} from '../stores/inventoryStore'
 import { hungerState, grilling, type HungerBand } from '../stores/hungerStore'
 import { activeDebuffs, type ActiveDebuff } from '../stores/debuffStore'
 import { debuffPresentation } from '../data/debuffPresentation'
@@ -1251,8 +1257,10 @@ export function handleServerMessage(
       playerGold.set(Number(data.gold))
       break
 
-    case 'GuardUpdated':
+    case 'EffectiveStats':
       playerGuard.set(Number(data.guard))
+      effectiveAttributes.set(data.attributes as CharacterAttributes)
+      maxCarryWeight.set(Number(data.max_carry_weight))
       break
 
     case 'GoldGained': {

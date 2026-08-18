@@ -1,5 +1,9 @@
 <script lang="ts">
-  import { inventoryStore, playerGuard } from '../stores/inventoryStore'
+  import {
+    inventoryStore,
+    playerGuard,
+    effectiveAttributes,
+  } from '../stores/inventoryStore'
   import type { EquipSlot } from '../stores/inventoryStore'
   import { getItemDef } from '../data/itemDefs'
   import { networkManager } from '../network/socket'
@@ -67,12 +71,20 @@
   )
 
   // Effective guard is computed server-side (base attribute + equipped-gear
-  // bonuses) — the exact value combat uses — and pushed via GuardUpdated. We
+  // bonuses) — the exact value combat uses — and pushed via EffectiveStats. We
   // display that rather than recomputing it here so the number can never drift
   // from the server's formula. Falls back to the base attribute until the
   // first update arrives. The bonus is derived only for the "(+N)" hint.
   const effectiveGuard = $derived($playerGuard ?? attributes.guard)
   const equipGuardBonus = $derived(effectiveGuard - attributes.guard)
+
+  // Same rule for the ability scores: show what the server resolves against.
+  // Only CHA has a gear source today (gold_ring's cha+1), but reading the
+  // pushed value rather than the base is what keeps the sheet honest as more
+  // are added.
+  const shownAttributes = $derived($effectiveAttributes ?? attributes)
+  const attributeBonus = (key: keyof typeof attributes) =>
+    shownAttributes[key] - attributes[key]
 
   const CLASS_LABELS: Record<CharacterClass, string> = {
     knight: 'Knight',
@@ -242,27 +254,51 @@
             </div>
             <div class="stat-row">
               <span class="stat-label">Str</span>
-              <span class="stat-value">{attributes.str}</span>
+              <span class="stat-value"
+                >{shownAttributes.str}{attributeBonus('str') > 0
+                  ? ` (+${attributeBonus('str')})`
+                  : ''}</span
+              >
             </div>
             <div class="stat-row">
               <span class="stat-label">Dex</span>
-              <span class="stat-value">{attributes.dex}</span>
+              <span class="stat-value"
+                >{shownAttributes.dex}{attributeBonus('dex') > 0
+                  ? ` (+${attributeBonus('dex')})`
+                  : ''}</span
+              >
             </div>
             <div class="stat-row">
               <span class="stat-label">Con</span>
-              <span class="stat-value">{attributes.con}</span>
+              <span class="stat-value"
+                >{shownAttributes.con}{attributeBonus('con') > 0
+                  ? ` (+${attributeBonus('con')})`
+                  : ''}</span
+              >
             </div>
             <div class="stat-row">
               <span class="stat-label">Int</span>
-              <span class="stat-value">{attributes.int}</span>
+              <span class="stat-value"
+                >{shownAttributes.int}{attributeBonus('int') > 0
+                  ? ` (+${attributeBonus('int')})`
+                  : ''}</span
+              >
             </div>
             <div class="stat-row">
               <span class="stat-label">Wis</span>
-              <span class="stat-value">{attributes.wis}</span>
+              <span class="stat-value"
+                >{shownAttributes.wis}{attributeBonus('wis') > 0
+                  ? ` (+${attributeBonus('wis')})`
+                  : ''}</span
+              >
             </div>
             <div class="stat-row">
               <span class="stat-label">Cha</span>
-              <span class="stat-value">{attributes.cha}</span>
+              <span class="stat-value"
+                >{shownAttributes.cha}{attributeBonus('cha') > 0
+                  ? ` (+${attributeBonus('cha')})`
+                  : ''}</span
+              >
             </div>
           </div>
           <div class="exp-block">

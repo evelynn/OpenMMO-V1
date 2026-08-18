@@ -1,5 +1,6 @@
 import { derived, writable } from 'svelte/store'
 import type {
+  CharacterAttributes,
   EquipSlot,
   ItemInstance,
   PlayerInventory,
@@ -19,8 +20,18 @@ export const playerGold = writable(0)
 
 /** The local player's effective guard (base attribute + equipped-gear bonuses),
  *  computed server-side and pushed on join and after each equipment change.
- *  `null` until the first GuardUpdated arrives. */
+ *  `null` until the first EffectiveStats arrives. */
 export const playerGuard = writable<number | null>(null)
+
+/** The local player's attributes with equipped bonuses folded in — what the
+ *  server actually resolves against, not the base sheet. `null` until the
+ *  first EffectiveStats arrives. */
+export const effectiveAttributes = writable<CharacterAttributes | null>(null)
+
+/** Carry cap in kg, already scaled by the hunger band. Never recomputed
+ *  client-side: `str * 15` alone ignores the hunger and debuff multipliers
+ *  the server enforces. `null` until the first EffectiveStats arrives. */
+export const maxCarryWeight = writable<number | null>(null)
 
 /** Item defs that act as a carried light source (mirrors shared TORCH_ITEM_IDS). */
 const TORCH_ITEM_IDS = ['torch', 'worn_torch']
@@ -43,4 +54,6 @@ export function resetInventoryStore() {
   inventoryStore.set({ bag: [], equipped: {} })
   playerGold.set(0)
   playerGuard.set(null)
+  effectiveAttributes.set(null)
+  maxCarryWeight.set(null)
 }

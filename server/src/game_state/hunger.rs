@@ -256,6 +256,8 @@ impl super::GameState {
         }
         for (pid, msg) in updates {
             self.send_direct_message(&pid, msg).await;
+            // The band moved, so the carry cap moved with it (IMP-0.2).
+            self.send_effective_stats(&pid).await;
         }
     }
 

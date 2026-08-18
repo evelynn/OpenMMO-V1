@@ -84,7 +84,9 @@ pub const NPC_TOKEN_FILENAME: &str = "npc_token";
 ///      QuestBoard/QuestAccepted/QuestProgress/QuestCompleted) — IMP-2.5.
 /// v33: looter monsters (ClientMessage::MonsterPickupItem) — the owner's
 ///      client asks, the server decides — IMP-1.4.
-pub const PROTOCOL_VERSION: u32 = 33;
+/// v34: GuardUpdated widens into EffectiveStats (guard + gear-adjusted
+///      attributes + hunger-scaled max carry weight) — IMP-0.2.
+pub const PROTOCOL_VERSION: u32 = 34;
 
 /// WebSocket close code sent when the handshake is refused (wrong protocol
 /// version, or traffic before `ClientInfo`). Lives outside the serialized

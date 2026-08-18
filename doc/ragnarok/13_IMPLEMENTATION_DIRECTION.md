@@ -80,12 +80,45 @@
 | 저장 스키마 변경 | 없음 (파생값만 전송) |
 
 **손댈 파일**
-- `shared/src/messages.rs:1060` — `GuardUpdated { guard }`를 `EffectiveStats { guard, attributes, .. }`로.
+- `shared/src/messages.rs:1245` — `GuardUpdated { guard }`를 `EffectiveStats`로.
   기존 variant를 남기지 않는다(하위호환이 없으므로 유지 비용만 남는다).
-- `server/src/game_state/inventory.rs:281` · `server/src/connection.rs:1151` — 두 송신 지점.
-- `server/src/game_state/combat.rs:193` `effective_guard` — 능력치 보정까지 함께 계산하도록 확장.
-- `client/src/lib/stores/inventoryStore.ts:22` · `client/src/lib/network/messageHandlers.ts:1233` — 수신·저장.
+- `server/src/game_state/inventory.rs:286` · `server/src/connection.rs:1153` — 두 송신 지점.
+- `server/src/game_state/combat.rs:211` `effective_guard` — 옆에 `effective_stats`를 둔다.
+- `server/src/game_state/deals.rs:143` `effective_cha` — **`combat.rs`로 옮긴다**(아래 개정 5).
+- `client/src/lib/stores/inventoryStore.ts:23` · `client/src/lib/network/messageHandlers.ts:1254` — 수신·저장.
 - `client/src/lib/components/CharacterPanel.svelte` — 시트에 **보정된** 능력치 표시.
+- `client/src/lib/components/InventoryPanel.svelte:35` — 하중 상한을 **서버 값으로 교체**(아래 개정 3).
+
+> **개정 (IMP-0.2 착수 시)** — 다섯 가지를 확정하거나 고쳤다.
+>
+> 1. **페이로드의 `..`를 확정한다.** 원문은 `EffectiveStats { guard, attributes, .. }`라고만
+>    쓰고 `..`를 끝내 풀지 않았다. 확정값은
+>    `EffectiveStats { guard: i32, attributes: CharacterAttributes, max_carry_weight: f32 }`다.
+>    셋 다 **서버만 알고 클라이언트가 재계산하면 반드시 어긋나는 값**이라는 기준으로 골랐다.
+> 2. **"디버프로 낮아진 저항치를 시트에 표시"는 삭제한다.** 구현 불가능한 문장이다.
+>    (a) 디버프는 능력치를 낮추지 않는다 — `HungerData::debuff_mults`
+>    (`server/src/game_state/debuff.rs:30`)가 접는 것은 `move`/`attack`/`carry` 배수뿐이고,
+>    IMP-1.3(완료)도 능력치를 건드리지 않았다. (b) "저항치"라는 플레이어 단위 값 자체가
+>    없다 — `resisted_chance`(`debuff.rs:72`)는 **디버프 정의별로** 부여 시점에 계산된다.
+>    시트에 올리려면 표현형(디버프별 목록? CON 모디파이어 하나?)을 새로 정의해야 하는데
+>    이 문서 어디에도 그 정의가 없다. 표시할 것이 생기면 그때 항목으로 세운다.
+> 3. **`max_carry_weight`를 넣으면 송신 빈도가 바뀐다.** 아래 성능 항목의 "빈도는 그대로"는
+>    페이로드가 배고픔에 의존하지 않을 때만 참이다. `max_carry_weight`
+>    (`server/src/game_state/inventory.rs:238`)는 `STR × 15 × hunger_carry_mult`이므로
+>    **배고픔 단계·디버프 전이에서도 다시 밀어야** 시트가 상하지 않는다. 그럼에도 넣는
+>    이유는 이것이 이 항목이 고치려는 드리프트의 **가장 실제적인 사례**이기 때문이다 —
+>    `InventoryPanel.svelte:35`가 `attributes.str * 15`를 클라이언트에서 다시 계산하며
+>    하중 배수를 통째로 무시하고 있어서, 쇠약 상태의 플레이어에게 서버가 90으로 막는
+>    무게를 150이라고 보여준다.
+> 4. **와이어 타입은 `CharacterAttributes`(`u8`)를 그대로 쓴다.** 음수나 255 초과를 실을 수
+>    없지만, 오늘 존재하는 능력치 보정은 `ItemEffect::Cha(n)` 하나뿐이고
+>    (`gold_ring`의 `cha+1`) 감소 효과는 없다. 새 구조체를 만드는 비용보다 포화 연산이
+>    싸다. **음수 보정이 처음 생기는 항목이 이 결정을 되돌린다** — 그때 `i32` 구조체로
+>    바꾸고 프로토콜을 한 번 더 올린다.
+> 5. **`effective_cha`를 `deals.rs`에서 `combat.rs`로 옮긴다.** 원문은 `effective_guard`만
+>    넓히라고 하는데, CHA 계산이 거래 모듈 안의 비공개 함수로 앉아 있어
+>    (`deals.rs:143`) 그대로 두면 메시지가 같은 공식을 복사하게 된다 — 이 항목이 없애려는
+>    바로 그 드리프트다. `effective_guard` 옆으로 옮겨 한 곳에서만 계산한다.
 
 **구현 방향**
 지금 서버는 장비·디버프가 반영된 능력치를 **자기만 알고** 있다. `gold_ring`의 CHA +1은
@@ -93,14 +126,17 @@
 확인할 방법이 없다. `guard` 하나만 내려주던 메시지를 "서버가 계산한 최종 능력치" 묶음으로
 넓히면 이 구멍이 닫히고, 이후 항목들이 같은 경로를 재사용한다.
 **주의: 이 항목은 게이트가 아니다.** IMP-1.3(디버프 저항)과 IMP-1.5(크기 축)는 서버에서만
-판정하므로 이 메시지 없이도 완결된다. 다만 두 항목이 들어간 뒤 이 메시지를 넓히면
-"디버프로 낮아진 저항치"를 시트에 표시할 수 있으므로, 먼저 하면 표시 작업이 공짜가 된다.
+판정하므로 이 메시지 없이도 완결됐다(둘 다 완료).
 
 **데이터 스키마** — 없음.
 **마이그레이션** — 없음. 클라이언트는 첫 메시지 도착 전까지 `null`을 그대로 유지한다.
 **검증** — 반지 착·탈 시 시트의 CHA가 즉시 바뀌고, 흥정 결과와 일치하는지 인게임 확인.
-`doc/TODO.md:150` 항목 체크.
-**성능** — 메시지 크기가 몇 바이트 늘 뿐이고 빈도는 그대로다(장비 변경 시 1회, 브로드캐스트 아님).
+`doc/TODO.md`의 "캐릭터 시트에 장비 보정 CHA 표시" 항목 체크(150행이 아니라 **151행**이다).
+서버 테스트로는 `gold_ring` 착용 시 `effective_stats`의 CHA가 base+1인지, 쇠약 상태에서
+`max_carry_weight`가 배수만큼 줄어드는지를 고정한다.
+**성능** — 메시지 크기가 몇 바이트 늘 뿐이고 브로드캐스트가 아니다(수신자 1명).
+빈도는 장비 변경 1회에 **배고픔 단계·디버프 전이 1회**가 더해진다(위 개정 3).
+5,000명 기준으로도 전이는 개인 이벤트라 전체 순회가 생기지 않는다.
 
 ---
 

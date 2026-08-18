@@ -226,6 +226,61 @@ impl super::GameState {
         base + bonus
     }
 
+    /// A player's effective CHA: base attribute plus equipped `cha+N` effect
+    /// items. Lives beside `effective_guard` rather than in the trading module
+    /// that consumes it, so the haggle band and the character sheet cannot
+    /// drift apart.
+    pub(super) async fn effective_cha(&self, player_id: &PlayerId) -> i32 {
+        let base = {
+            let chars = self.player_characters.read().await;
+            chars
+                .get(player_id)
+                .map(|(_, _, attrs)| i32::from(attrs.cha))
+                .unwrap_or(10)
+        };
+        let bonus = {
+            let inventories = self.inventories.read().await;
+            inventories
+                .get(player_id)
+                .map(|inv| self.equipped_bonus(inv, |def| def.cha_bonus()))
+                .unwrap_or(0)
+        };
+        base + bonus
+    }
+
+    /// Everything `EffectiveStats` carries: the numbers the server resolves
+    /// this player against, which the client would otherwise recompute and get
+    /// wrong (IMP-0.2). Attributes stay `u8` on the wire — no effect lowers one
+    /// today, so the saturation below is a guard, not a rounding.
+    pub async fn effective_stats(&self, player_id: &PlayerId) -> ServerMessage {
+        let guard = self.effective_guard(player_id).await;
+        let cha = self.effective_cha(player_id).await;
+        let max_carry_weight = self.max_carry_weight(player_id).await;
+        let mut attributes = {
+            let chars = self.player_characters.read().await;
+            chars
+                .get(player_id)
+                .map(|(_, _, attrs)| attrs.clone())
+                // Matches `effective_guard`'s own no-record fallback.
+                .unwrap_or(onlinerpg_shared::CharacterAttributes {
+                    r#str: 10,
+                    dex: 10,
+                    con: 10,
+                    int: 10,
+                    wis: 10,
+                    cha: 10,
+                    guard: 10,
+                })
+        };
+        attributes.cha = cha.clamp(0, i32::from(u8::MAX)) as u8;
+        attributes.guard = guard.clamp(0, i32::from(u8::MAX)) as u8;
+        ServerMessage::EffectiveStats {
+            guard,
+            attributes,
+            max_carry_weight,
+        }
+    }
+
     /// Runs every gate on a `PlayerAttack` request. `Err` is the coarse reason
     /// acked back to the attacker at the single call site, so a new gate can
     /// never silently drop a request. Side effect: an out-of-range swing

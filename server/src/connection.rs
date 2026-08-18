@@ -1150,9 +1150,7 @@ async fn handle_client_message(
                 responses.push(ServerMessage::InventoryState { inventory: inv });
             }
 
-            responses.push(ServerMessage::GuardUpdated {
-                guard: game_state.effective_guard(&id).await,
-            });
+            responses.push(game_state.effective_stats(&id).await);
 
             responses.push(ServerMessage::GoldUpdate {
                 gold: selected_character.gold,

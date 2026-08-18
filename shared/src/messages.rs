@@ -1238,12 +1238,16 @@ pub enum ServerMessage {
     GoldUpdate {
         gold: i64,
     },
-    /// Direct message: the receiving player's effective guard — base attribute
-    /// plus every equipped item's guard bonus, i.e. the exact number combat
-    /// uses to resolve hits. Sent on join and after any equipment change so the
-    /// client can display it without duplicating the server formula.
-    GuardUpdated {
+    /// Direct message: what the server actually resolves this player against,
+    /// once gear and hunger are folded in. Every field here is one the client
+    /// would otherwise recompute and get wrong — guard drives hit resolution,
+    /// `attributes` carries equipped bonuses like `gold_ring`'s CHA, and
+    /// `max_carry_weight` is scaled by the hunger band. Sent on join, after any
+    /// equipment change, and on a hunger or debuff transition.
+    EffectiveStats {
         guard: i32,
+        attributes: CharacterAttributes,
+        max_carry_weight: f32,
     },
     /// Direct message: the receiving player gained loose currency from a
     /// pickup. `amount` is in the smallest unit (copper).
