@@ -14,6 +14,7 @@ use tokio::sync::mpsc::error::TryRecvError as MpscTryRecvError;
 
 mod chat_tests;
 mod collision_tests;
+mod combat_scale_tests;
 mod combat_tests;
 mod dungeon_tests;
 mod enchant_tests;
