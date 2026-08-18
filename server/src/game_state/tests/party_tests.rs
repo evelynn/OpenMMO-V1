@@ -1784,7 +1784,7 @@ async fn kill_monster(game_state: &GameState, killer: &str, monster_id: &str) {
             GameState::now_ms().saturating_sub(*super::combat::PLAYER_ATTACK_INTERVAL_MS),
         );
         game_state
-            .broadcast_player_attack(&pid(killer), monster_id.to_string())
+            .player_attack(&pid(killer), monster_id.to_string())
             .await;
         let dead = game_state
             .monsters

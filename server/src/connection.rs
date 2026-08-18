@@ -1323,7 +1323,9 @@ async fn handle_client_message(
 
         ClientMessage::PlayerAttack { monster_id } => {
             if let Some(id) = &state.player_id {
-                game_state.broadcast_player_attack(id, monster_id).await;
+                game_state
+                    .broadcast_player_attack(auth_service, id, monster_id)
+                    .await;
             } else {
                 warn!("Received attack from client that is not in game");
             }

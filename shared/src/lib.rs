@@ -93,7 +93,9 @@ pub const NPC_TOKEN_FILENAME: &str = "npc_token";
 ///      IMP-2.3.
 /// v37: paid travel (RequestTravel -> TravelDestinations/TravelDenied);
 ///      fixed nodes only, fares burned, dungeons excluded — IMP-2.4.
-pub const PROTOCOL_VERSION: u32 = 37;
+/// v38: MVP contribution bonus (MvpBonus) — the biggest contributor to a
+///      boss kill, which need not be the one who landed it — IMP-2.8.
+pub const PROTOCOL_VERSION: u32 = 38;
 
 /// WebSocket close code sent when the handshake is refused (wrong protocol
 /// version, or traffic before `ClientInfo`). Lives outside the serialized

@@ -59,6 +59,7 @@ import {
   removeBobber,
 } from '../stores/fishingStore'
 import { getItemDef } from '../data/itemDefs'
+import { getMonsterDef } from '../data/monsterDefs'
 import {
   shopSession,
   applyDealUpdate,
@@ -1385,6 +1386,20 @@ export function handleServerMessage(
           sender: 'local',
         })
       }
+      break
+    }
+
+    case 'MvpBonus': {
+      // Deliberately not "you got the kill": the biggest contributor and the
+      // one who landed the last blow can be different people (IMP-2.8).
+      const boss = getMonsterDef(data.monster_type)?.name ?? data.monster_type
+      const item = data.item_def_id
+        ? ` ${getItemDef(data.item_def_id)?.name ?? data.item_def_id} is in your mailbox.`
+        : ''
+      addCombatMessage({
+        text: `MVP of ${boss} — +${data.xp} XP.${item}`,
+        sender: 'local',
+      })
       break
     }
 

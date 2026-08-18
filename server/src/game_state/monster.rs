@@ -366,6 +366,12 @@ impl super::GameState {
             move_budget: 0.0,
         };
 
+        // Bosses carry a contribution ledger; the allocation happens here so
+        // a hit never allocates under the damage lock (IMP-2.8).
+        if def.is_some_and(|d| d.is_boss()) {
+            self.open_boss_damage(&id).await;
+        }
+
         let mut monsters = self.monsters.write().await;
         monsters.insert(id.clone(), monster.clone());
         let total = monsters.len();
@@ -1215,6 +1221,10 @@ impl super::GameState {
         for monster in removed {
             debug!("Despawned monster {}", monster.id);
             self.return_carried_loot(&monster).await;
+            // Every removal — corpse sweep, owner logout, unattended orphan —
+            // reaches here, so this is the only place the ledger has to be
+            // dropped (doc 13 IMP-2.8 revision).
+            self.close_boss_damage(&monster.id).await;
             self.announce_monster_removed(&monster).await;
         }
     }

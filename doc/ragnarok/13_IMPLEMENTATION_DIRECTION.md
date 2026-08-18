@@ -1228,6 +1228,29 @@ crypt_ogre,ogre_boss,-1390.0,1.2,4705.0,1800,600
 별도 롤이다. "막타가 아니라 기여"라는 09 #10의 요지는 여기서 나온다 — 최종 타격자와
 최대 기여자가 다를 수 있고, 그것이 정상 동작이다.
 
+> **개정 (IMP-2.8 착수 시)** — 네 가지.
+>
+> 1. **아이템 보너스는 우편으로 준다.** 원문은 "별도 롤"이라고만 하고 지급 경로를
+>    정하지 않았지만, 마스터플랜 20행("보상은 우편")과 §4 충돌 E("IMP-2.8과
+>    IMP-3.7 둘 다 우편을 **호출만** 함")가 이미 우편으로 못박아 뒀다. 실질적인
+>    이유도 있다 — 최대 기여자의 가방이 꽉 차 있을 수 있는데, 그때 바닥에 떨구면
+>    보스를 가장 많이 때린 사람의 보상이 옆 사람에게 굴러간다. XP는 원문대로 직접
+>    지급하고 아이템만 우편이다.
+> 2. **그래서 `broadcast_player_attack`이 `auth_service`를 받는다.** 우편은
+>    `deliver_mail(auth_service, ..)`이고 `GameState`는 `AuthService`를 들고 있지
+>    않다. 호출자는 `connection.rs`의 `handle_client_message` 하나뿐이며 거기엔
+>    이미 `auth_service`가 있다. 원문 "손댈 파일"에 `server/src/connection.rs`를
+>    더한다.
+> 3. **아이템 롤은 전역 월드 드롭 표를 한 번 더 굴린다**(`world_drop_defs.roll`).
+>    "chestDrops와 무관한 별도 롤"이라는 조건을 만족하면서 새 데이터 파일을 만들지
+>    않는다. 여러 개가 나오면 첫 하나만 준다 — 보너스지 두 번째 전리품이 아니다.
+> 4. **기록 제거 경로는 `despawn_monsters` 하나로 모은다.** 원문은 사망·despawn·
+>    `remove_monsters_by_owner` 셋을 들었는데, 뒤의 둘은 **모두**
+>    `despawn_monsters`를 통과한다(`remove_monsters_by_owner` →
+>    `despawn_monsters`, 시체 30초 청소 →`despawn_monsters`). 세 곳에 같은 정리
+>    코드를 흩는 대신 그 한 곳에서 지우고, 사망 시점에는 최대 기여자를 **읽기만**
+>    한다. 지급과 제거가 갈라지지 않는다.
+
 **데이터 스키마** — 없음. 보너스 배율은 `server/src/game_state/combat.rs`의
 `pub const MVP_XP_BONUS_PCT: u32 = 50`.
 

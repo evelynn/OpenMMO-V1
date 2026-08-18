@@ -446,6 +446,11 @@ pub struct GameState {
     dungeons: Arc<RwLock<HashMap<String, dungeon::DungeonRuntime>>>,
     /// monster_id → dungeon spawn slot, for respawn bookkeeping on death.
     dungeon_monsters: Arc<RwLock<HashMap<String, dungeon::DungeonMonsterRef>>>,
+    /// monster_id → who has hurt it and how much, bosses only (IMP-2.8).
+    /// Capped at `MVP_MAX_CONTRIBUTORS` per monster: only the top entry is
+    /// ever read, so an exact tail is worth less than a bounded map. Cleared
+    /// in `despawn_monsters`, the one path every removal goes through.
+    boss_damage: Arc<RwLock<HashMap<String, combat::DamageLedger>>>,
     /// World-boss spawn point id → its live state (IMP-2.7). Memory only:
     /// a restart re-arms every point, which is cheaper than persisting a
     /// timer nobody can observe across a downtime.
@@ -680,6 +685,7 @@ impl GameState {
             dungeons: Arc::new(RwLock::new(HashMap::new())),
             dungeon_monsters: Arc::new(RwLock::new(HashMap::new())),
             world_bosses: Arc::new(RwLock::new(HashMap::new())),
+            boss_damage: Arc::new(RwLock::new(HashMap::new())),
             open_shops: Arc::new(RwLock::new(HashMap::new())),
             parties: Arc::new(RwLock::new(party::Parties::default())),
             buybacks: Arc::new(RwLock::new(HashMap::new())),

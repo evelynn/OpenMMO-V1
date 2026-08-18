@@ -24,6 +24,7 @@ mod hunger_tests;
 mod inventory_tests;
 mod mail_tests;
 mod movement_tests;
+mod mvp_tests;
 mod party_tests;
 mod persistence_tests;
 mod pickup_tests;
@@ -300,6 +301,19 @@ fn make_game_state_with_zones(
 
 pub(crate) fn make_test_game_state(test_name: &str) -> GameState {
     make_game_state_with(test_name, SplitWorldTiles, SeaOnlyWater)
+}
+
+/// Shared throwaway auth service for the one thing an ordinary kill needs a
+/// DB for: mailing an MVP bonus item (IMP-2.8). No test here reads it back.
+static SCRATCH_AUTH: std::sync::LazyLock<Arc<crate::auth::AuthService>> =
+    std::sync::LazyLock::new(|| make_test_auth("scratch"));
+
+impl GameState {
+    /// `broadcast_player_attack` for tests that do not care about the mail.
+    async fn player_attack(&self, player_id: &PlayerId, monster_id: String) {
+        self.broadcast_player_attack(&SCRATCH_AUTH, player_id, monster_id)
+            .await;
+    }
 }
 
 /// Temp-file AuthService for tests whose paths touch the auth DB.

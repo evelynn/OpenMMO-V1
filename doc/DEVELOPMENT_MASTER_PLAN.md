@@ -9,7 +9,7 @@
 ## 0. 현재 진행 상황 (이어서 작업할 때 먼저 읽는다)
 
 **브랜치**: `claude/project-analysis-dev-setup-9amcvt`
-**진행**: 30개 항목 중 **18개 완료**. **M0·M1이 전부 끝났고**, 세 스파이크(SPK-1·2·3)가 모두 **go**다. M2는 8/10.
+**진행**: 30개 항목 중 **20개 완료**. **M0·M1·M2가 전부 끝났고**, 세 스파이크(SPK-1·2·3)가 모두 **go**다. 다음은 M3.
 
 | 항목 | 상태 | 커밋 |
 |------|------|------|
@@ -32,9 +32,10 @@
 | IMP-2.4 유료 이동 | ✅ 완료 (프로토콜 v37, 노드 2개, **13 개정 2건 — 시작 마을이 크립트 위에 있다**) | `6a7bec9` |
 | IMP-0.2 EffectiveStats | ✅ 완료 (프로토콜 v34, 13 개정 5건) | `51a15b7` |
 | IMP-2.7 미니보스 | ✅ 완료 (프로토콜 변경 없음, 스폰 지점 1개, 13 개정 4건) | `411cfc0` |
+| IMP-2.8 MVP 기여도 | ✅ 완료 (프로토콜 v38, 기여자 상한 16, 13 개정 4건) | `(이 커밋)` |
 
-**다음에 집을 것**: 남은 것은 **IMP-2.8(MVP 기여도)** 하나뿐이고, 그러면 M2가 끝난다.
-선행(IMP-1.2, IMP-2.7)은 이미 끝나 있다.
+**다음에 집을 것**: **M2가 끝났다**(20/30). 다음은 M3 — IMP-3.1(시간 4분할)이
+IMP-3.2(전투 스킬)의 선결 조건이므로 거기서 시작한다.
 
 **세 스파이크가 모두 go로 끝나면서 게이트가 전부 열렸다** — IMP-2.4(SPK-3),
 IMP-2.3(SPK-2, 완료), IMP-2.8과 IMP-4.3(SPK-1). 남은 제약은 SPK-1이 만든
@@ -362,7 +363,7 @@ Phase 번호와 1:1이다(M1 = Phase 1 …). **작업 ID는 13의 ID가 정본�
 | [x] 17 | IMP-2.5 | 헌팅 보드 반복 퀘스트 | IMP-2.1, IMP-1.1 | L | data/shared/server/client | `data-src/hunting_quests.csv` (`id,boardId,name,monsterId,count,minLevel,maxLevel,rewardXp,rewardZeny,rewardItem,dailyLimit`), `character_quests` 테이블(`day_key`/`day_count` 포함), 런타임은 quest id를 u16 인턴한 `Vec<(u16,u16)>`(수락 상한 5), 처치 훅은 `combat.rs:499~:511`의 XP 수령자 목록 재사용, **보상은 우편 지급** |
 | [x] 18 | IMP-2.6 | 일일 한도 + 고효율 | IMP-2.5, IMP-0.1 | M | data/server/client | 보드당 일일 한도(캐릭터 단위), 리셋 기준 시각 고정, 한도 소진 UI 표시. **IMP-2.5와 같은 릴리스에 나간다** |
 | [x] 19 | IMP-2.7 | 미니보스 (장주기 + 변량 리스폰) | IMP-1.2 | M | data/server/client | `data-src/world_bosses.csv`(신규) + `server/src/world_boss_defs.rs`(신규), `tick_world_bosses` 30초 틱(`server/src/main.rs:84` `run_ticks`), 부팅 시 `monsterId`의 `boss=true` assert, 좌표 복사 버튼은 `MapEditorPanel.svelte`에(13 개정 4건) |
-| 20 | IMP-2.8 | MVP 기여도 보너스 | IMP-1.2, IMP-2.7 | M | shared/server/client | 보스 한정 누적 피해 기록(**메모리 상한 필수**), 파티 분배와 별개 경로, 보상은 우편. SPK-1이 no-go면 참여자 상한을 둔 축소형으로 |
+| [x] 20 | IMP-2.8 | MVP 기여도 보너스 | IMP-1.2, IMP-2.7 | M | shared/server/client | 보스 한정 누적 피해 기록(기여자 16명 상한), 파티 분배와 별개 경로, 아이템 보상은 우편·XP는 직접. SPK-1이 go라 원안대로(13 개정 4건) |
 
 ### M3 — 성장 · 경제 축 (= 13 Phase 3)
 

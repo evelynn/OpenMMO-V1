@@ -529,6 +529,17 @@ pub(crate) fn format_event(state: &SharedState, msg: &ServerMessage) -> Option<S
                 "[Mail] #{mail_id} not claimed — your bag cannot hold all of it. Make room and retry."
             ),
         }),
+        ServerMessage::MvpBonus {
+            monster_type,
+            xp,
+            item_def_id,
+        } => Some(format!(
+            "[Mvp] You dealt the most damage to {monster_type}: +{xp} xp{}",
+            match item_def_id {
+                Some(item) => format!(", and {item} is in your mailbox"),
+                None => String::new(),
+            }
+        )),
         ServerMessage::XpGained {
             xp_amount,
             total_xp,

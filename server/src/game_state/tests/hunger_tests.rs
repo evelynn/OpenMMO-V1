@@ -465,7 +465,7 @@ async fn weak_hunger_slows_the_authoritative_attack_interval() {
         .insert("training_target".into(), monster);
 
     game_state
-        .broadcast_player_attack(&id, "training_target".into())
+        .player_attack(&id, "training_target".into())
         .await;
     drain(&mut rx);
 
@@ -474,7 +474,7 @@ async fn weak_hunger_slows_the_authoritative_attack_interval() {
         GameState::now_ms().saturating_sub(*super::super::combat::PLAYER_ATTACK_INTERVAL_MS),
     );
     game_state
-        .broadcast_player_attack(&id, "training_target".into())
+        .player_attack(&id, "training_target".into())
         .await;
     assert!(!drain(&mut rx)
         .iter()
@@ -489,7 +489,7 @@ async fn weak_hunger_slows_the_authoritative_attack_interval() {
         .await
         .insert(id, GameState::now_ms().saturating_sub(weak_interval));
     game_state
-        .broadcast_player_attack(&id, "training_target".into())
+        .player_attack(&id, "training_target".into())
         .await;
     assert!(drain(&mut rx)
         .iter()

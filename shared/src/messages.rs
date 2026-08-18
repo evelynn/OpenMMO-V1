@@ -1051,6 +1051,15 @@ pub enum ServerMessage {
         health: u32,
         max_health: u32,
     },
+    /// Owner-only: this player did the most damage to a boss and gets a
+    /// second, separate award on top of any party share — the last blow is
+    /// not what decides it (IMP-2.8). The XP is already banked when this
+    /// arrives; the item, if any, is in the mailbox.
+    MvpBonus {
+        monster_type: String,
+        xp: u32,
+        item_def_id: Option<String>,
+    },
     XpGained {
         player_id: PlayerId,
         xp_amount: u32,

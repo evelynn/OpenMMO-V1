@@ -429,6 +429,7 @@ pub fn msg_name(msg: &onlinerpg_shared::ServerMessage) -> &'static str {
         ServerMessage::PlayerDead { .. } => "PlayerDead",
         ServerMessage::PlayerRespawned { .. } => "PlayerRespawned",
         ServerMessage::PlayerHealthUpdate { .. } => "PlayerHealthUpdate",
+        ServerMessage::MvpBonus { .. } => "MvpBonus",
         ServerMessage::XpGained { .. } => "XpGained",
         ServerMessage::QuestBoard { .. } => "QuestBoard",
         ServerMessage::QuestAccepted { .. } => "QuestAccepted",

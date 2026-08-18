@@ -1,9 +1,12 @@
+use crate::auth::AuthService;
 use crate::game::{character_hp, combat};
 use crate::types::{AttackRejectReason, MonsterState, PlayerId, Position, ServerMessage};
 use onlinerpg_shared::inventory::{EquipSlot, GroundItem, ItemInstance, PlayerInventory};
+use onlinerpg_shared::messages::MailAttachment;
 use onlinerpg_shared::xp;
 use rand::Rng;
 use std::f32::consts::TAU;
+use std::sync::Arc;
 use std::sync::LazyLock;
 use std::time::Duration;
 use tracing::{debug, info, warn};
@@ -21,6 +24,17 @@ struct XpNotice {
     current_hp: u32,
     xp_mult_pct: u8,
 }
+
+/// What the biggest contributor to a boss kill gets on top of whatever the
+/// party split already paid, as a percentage of the monster's base XP.
+pub const MVP_XP_BONUS_PCT: u32 = 50;
+/// Contributors tracked per boss. Only the top entry is ever read, so the
+/// bound matters and the tail does not; sized so the ledger is allocated
+/// once, when the boss spawns, and never grows under the damage lock.
+pub(super) const MVP_MAX_CONTRIBUTORS: usize = 16;
+
+/// One boss's contributors and their running damage totals.
+pub(super) type DamageLedger = Vec<(PlayerId, u32)>;
 
 const WEAPON_DROP_OFFSET_METERS: f32 = 2.0;
 // Mirrors the web and agent clients' 2m melee reach. This server-side check is
@@ -386,7 +400,15 @@ impl super::GameState {
         })
     }
 
-    pub async fn broadcast_player_attack(&self, player_id: &PlayerId, monster_id: String) {
+    /// `auth_service` is here for one reason: a boss kill mails the MVP its
+    /// bonus item, and mail is the only part of a kill that touches the DB
+    /// (doc 13 IMP-2.8 revision).
+    pub async fn broadcast_player_attack(
+        &self,
+        auth_service: &Arc<AuthService>,
+        player_id: &PlayerId,
+        monster_id: String,
+    ) {
         let PlayerAttackContext {
             monster_type,
             monster_position,
@@ -517,6 +539,11 @@ impl super::GameState {
                 }
                 died
             };
+            // Separate lock, outside the registry guard: the ledger exists
+            // only for bosses and its vector was sized at spawn, so this
+            // neither allocates nor nests locks (IMP-2.8).
+            self.record_boss_damage(&monster_id, player_id, result_damage)
+                .await;
             if is_dead {
                 let dropped_weapon_item_def_id = self
                     .monster_defs
@@ -627,6 +654,16 @@ impl super::GameState {
                     self.credit_quest_kill(&recipients, &monster_type).await;
                 }
 
+                // The last blow is not what decides this: the ledger is read,
+                // not the killer (IMP-2.8).
+                self.award_mvp_bonus(
+                    auth_service,
+                    &monster_id,
+                    &monster_type,
+                    monster_level_override,
+                )
+                .await;
+
                 // Schedule removal after 30 seconds. Through despawn_monsters
                 // so the removal reaches the corpse's owner directly even when
                 // it has wandered out of range — the radius fanout alone left
@@ -648,6 +685,132 @@ impl super::GameState {
                 });
             }
         }
+    }
+
+    /// Open a boss's contribution ledger. Called from `spawn_monster` so the
+    /// vector is allocated here rather than on a hit, under the lock.
+    pub(super) async fn open_boss_damage(&self, monster_id: &str) {
+        self.boss_damage.write().await.insert(
+            monster_id.to_string(),
+            DamageLedger::with_capacity(MVP_MAX_CONTRIBUTORS),
+        );
+    }
+
+    /// Add to a contributor's running total. Anything without a ledger — that
+    /// is, anything that is not a boss — falls straight back out, which is
+    /// what keeps a hundred thousand ordinary monsters off this path.
+    pub(super) async fn record_boss_damage(
+        &self,
+        monster_id: &str,
+        player_id: &PlayerId,
+        damage: u32,
+    ) {
+        if damage == 0 {
+            return;
+        }
+        let mut ledgers = self.boss_damage.write().await;
+        let Some(ledger) = ledgers.get_mut(monster_id) else {
+            return;
+        };
+        if let Some(entry) = ledger.iter_mut().find(|(id, _)| id == player_id) {
+            entry.1 = entry.1.saturating_add(damage);
+            return;
+        }
+        if ledger.len() < MVP_MAX_CONTRIBUTORS {
+            ledger.push((*player_id, damage));
+            return;
+        }
+        // Full: the smallest contributor is the only one that can be dropped
+        // without changing who wins, and only for a newcomer who already beats
+        // it — otherwise the swap would lose more than it records.
+        if let Some(weakest) = ledger.iter_mut().min_by_key(|(_, total)| *total) {
+            if weakest.1 < damage {
+                *weakest = (*player_id, damage);
+            }
+        }
+    }
+
+    /// Whoever hurt this boss the most. Read-only: the ledger is dropped with
+    /// the monster in `despawn_monsters`, so the award and the cleanup cannot
+    /// disagree about when it goes.
+    async fn top_boss_contributor(&self, monster_id: &str) -> Option<PlayerId> {
+        self.boss_damage
+            .read()
+            .await
+            .get(monster_id)
+            .and_then(|ledger| ledger.iter().max_by_key(|(_, total)| *total))
+            .map(|(id, _)| *id)
+    }
+
+    pub(super) async fn close_boss_damage(&self, monster_id: &str) {
+        self.boss_damage.write().await.remove(monster_id);
+    }
+
+    /// A second award, entirely separate from the party split: the biggest
+    /// contributor to a boss kill gets bonus XP directly and a bonus item by
+    /// mail. Nothing here looks at who landed the killing blow (IMP-2.8).
+    async fn award_mvp_bonus(
+        &self,
+        auth_service: &Arc<AuthService>,
+        monster_id: &str,
+        monster_type: &str,
+        level_override: Option<u8>,
+    ) {
+        let Some(def) = self.monster_defs.get(monster_type) else {
+            return;
+        };
+        if !def.is_boss() {
+            return;
+        }
+        let Some(winner) = self.top_boss_contributor(monster_id).await else {
+            return;
+        };
+        let effective_level = level_override.unwrap_or(def.level);
+        let bonus_xp =
+            xp::monster_xp(effective_level, def.guard).saturating_mul(MVP_XP_BONUS_PCT) / 100;
+        // A separate roll of the same global bonus table, and at most one
+        // item: this is a bonus, not a second set of loot. Scoped so the
+        // non-Send rng never crosses an await.
+        let item_def_id = {
+            let mut rng = rand::thread_rng();
+            self.world_drop_defs.roll(&mut rng).into_iter().next()
+        };
+
+        self.grant_monster_kill_xp(&[winner], bonus_xp, effective_level)
+            .await;
+        if let Some(item) = &item_def_id {
+            // Mail, not the ground: the top contributor's bag may be full,
+            // and a bonus that rolls to the person standing next to them is
+            // not a bonus.
+            if let Some(character_id) = self.character_id_of(&winner).await {
+                self.deliver_mail(
+                    auth_service,
+                    character_id,
+                    super::mail::Letter {
+                        sender: "Field Report".to_string(),
+                        subject: format!("{} — greatest contribution", def.name),
+                        body: format!("You dealt the most damage to {}.", def.name),
+                        gold: 0,
+                        items: vec![MailAttachment {
+                            item_def_id: item.clone(),
+                            quantity: 1,
+                            enchant: 0,
+                        }],
+                    },
+                )
+                .await;
+            }
+        }
+        info!("MVP of {monster_type} kill: player {winner} (+{bonus_xp} xp)");
+        self.send_direct_message(
+            &winner,
+            ServerMessage::MvpBonus {
+                monster_type: monster_type.to_string(),
+                xp: bonus_xp,
+                item_def_id,
+            },
+        )
+        .await;
     }
 
     /// Credit every sharer of a monster kill: cumulative XP, any level-ups

@@ -541,7 +541,7 @@ async fn dungeon_door_blocks_attacks_until_opened() {
     }
 
     game_state
-        .broadcast_player_attack(&player_id, "shut_door_monster".to_string())
+        .player_attack(&player_id, "shut_door_monster".to_string())
         .await;
     assert_eq!(
         game_state.monsters.read().await["shut_door_monster"].health,
@@ -590,7 +590,7 @@ async fn dungeon_door_blocks_attacks_until_opened() {
         .expect("the delver is on the floor")
         .last_combat_at = 0;
     game_state
-        .broadcast_player_attack(&player_id, "open_door_monster".to_string())
+        .player_attack(&player_id, "open_door_monster".to_string())
         .await;
     assert_ne!(
         game_state.players.read().await[&player_id].last_combat_at,

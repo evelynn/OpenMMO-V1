@@ -1021,7 +1021,7 @@ async fn cross_floor_player_attack_is_rejected() {
     }
 
     game_state
-        .broadcast_player_attack(&pid("guard"), "dungeon_monster".to_string())
+        .player_attack(&pid("guard"), "dungeon_monster".to_string())
         .await;
 
     // The attack is dropped server-side: the monster keeps full HP and the
@@ -1061,7 +1061,7 @@ async fn out_of_range_player_attack_only_provokes_monster() {
     }
 
     game_state
-        .broadcast_player_attack(&player_id, "distant_monster".to_string())
+        .player_attack(&player_id, "distant_monster".to_string())
         .await;
 
     let monsters = game_state.monsters.read().await;
@@ -1119,7 +1119,7 @@ async fn player_attack_beyond_provoke_range_is_fully_rejected() {
     }
 
     game_state
-        .broadcast_player_attack(&player_id, "remote_monster".to_string())
+        .player_attack(&player_id, "remote_monster".to_string())
         .await;
 
     assert_eq!(
@@ -1160,7 +1160,7 @@ async fn player_attack_at_melee_range_is_allowed() {
     }
 
     game_state
-        .broadcast_player_attack(&player_id, "nearby_monster".to_string())
+        .player_attack(&player_id, "nearby_monster".to_string())
         .await;
 
     match attacker_rx.try_recv() {
@@ -1196,10 +1196,10 @@ async fn player_attack_interval_is_server_enforced() {
     );
 
     game_state
-        .broadcast_player_attack(&player_id, "nearby_monster".to_string())
+        .player_attack(&player_id, "nearby_monster".to_string())
         .await;
     game_state
-        .broadcast_player_attack(&player_id, "nearby_monster".to_string())
+        .player_attack(&player_id, "nearby_monster".to_string())
         .await;
 
     let attack_count = drain(&mut attacker_rx)
@@ -1216,7 +1216,7 @@ async fn player_attack_interval_is_server_enforced() {
         GameState::now_ms().saturating_sub(*super::combat::PLAYER_ATTACK_INTERVAL_MS),
     );
     game_state
-        .broadcast_player_attack(&player_id, "nearby_monster".to_string())
+        .player_attack(&player_id, "nearby_monster".to_string())
         .await;
 
     assert!(drain(&mut attacker_rx)
@@ -1239,7 +1239,7 @@ async fn rejected_player_attack_does_not_consume_interval() {
     );
 
     game_state
-        .broadcast_player_attack(&player_id, "missing_monster".to_string())
+        .player_attack(&player_id, "missing_monster".to_string())
         .await;
     expect_attack_rejected(
         &mut attacker_rx,
@@ -1247,7 +1247,7 @@ async fn rejected_player_attack_does_not_consume_interval() {
         AttackRejectReason::InvalidTarget,
     );
     game_state
-        .broadcast_player_attack(&player_id, "nearby_monster".to_string())
+        .player_attack(&player_id, "nearby_monster".to_string())
         .await;
 
     assert!(drain(&mut attacker_rx)
@@ -1282,7 +1282,7 @@ async fn dead_player_cannot_attack() {
     }
 
     game_state
-        .broadcast_player_attack(&player_id, "nearby_monster".to_string())
+        .player_attack(&player_id, "nearby_monster".to_string())
         .await;
 
     expect_attack_rejected(
@@ -1318,7 +1318,7 @@ async fn stale_monster_attack_is_rejected_as_invalid_target() {
 
     for target in ["dead_monster", "unknown_monster"] {
         game_state
-            .broadcast_player_attack(&player_id, target.to_string())
+            .player_attack(&player_id, target.to_string())
             .await;
         expect_attack_rejected(&mut attacker_rx, target, AttackRejectReason::InvalidTarget);
     }
