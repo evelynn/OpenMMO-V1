@@ -31,6 +31,24 @@ function teleportTo(x: number, y: number, z: number) {
   })
 }
 
+/** Nearest official NPC, or null. Live positions come from the manager and
+ *  the NPC flag from the roster. The server re-checks range, floor and
+ *  dungeon footprint — this only picks who to ask. */
+function nearestTownsperson(): number | null {
+  const state = get(gameStore)
+  const me = state.currentPlayer
+  if (!me) return null
+  let nearest: { id: number; distSq: number } | null = null
+  for (const [id, remote] of remotePlayerManager.players) {
+    if (!state.otherPlayers.get(id)?.isOfficialNpc) continue
+    const dx = remote.position.x - me.position.x
+    const dz = remote.position.z - me.position.z
+    const distSq = dx * dx + dz * dz
+    if (!nearest || distSq < nearest.distSq) nearest = { id, distSq }
+  }
+  return nearest?.id ?? null
+}
+
 /** Every command lives here once: its `/help` line, whether it is admin-only,
  *  and who executes it. */
 type Command = {
@@ -109,23 +127,29 @@ const COMMANDS: Record<string, Command> = {
       if (!me) return
       // Nearest official NPC. The server re-checks range, floor and dungeon
       // footprint — this only picks who to ask.
-      // Live positions live on the manager; the roster carries the NPC flag.
-      let nearest: { id: number; distSq: number } | null = null
-      for (const [id, remote] of remotePlayerManager.players) {
-        if (!state.otherPlayers.get(id)?.isOfficialNpc) continue
-        const dx = remote.position.x - me.position.x
-        const dz = remote.position.z - me.position.z
-        const distSq = dx * dx + dz * dz
-        if (!nearest || distSq < nearest.distSq) nearest = { id, distSq }
-      }
-      if (!nearest) {
+      const npc = nearestTownsperson()
+      if (npc === null) {
         addChatMessage({
           text: 'There is no townsperson nearby to ask.',
           sender: 'system',
         })
         return
       }
-      networkManager.sendSetSavePoint(nearest.id)
+      networkManager.sendSetSavePoint(npc)
+    },
+  },
+  '/storage': {
+    desc: 'Open the storage the nearest townsperson keeps for you: /storage',
+    run: () => {
+      const npc = nearestTownsperson()
+      if (npc === null) {
+        addChatMessage({
+          text: 'There is no townsperson nearby to ask.',
+          sender: 'system',
+        })
+        return
+      }
+      networkManager.sendOpenStorage(npc)
     },
   },
   // No client-side handler: the server is the one resolver of song titles

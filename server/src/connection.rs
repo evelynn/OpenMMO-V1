@@ -1379,6 +1379,38 @@ async fn handle_client_message(
             }
         }
 
+        ClientMessage::OpenStorage { npc_player_id } => {
+            if let Some(id) = &state.player_id {
+                game_state
+                    .open_storage(auth_service, id, &npc_player_id)
+                    .await;
+            }
+        }
+
+        ClientMessage::StorageDeposit {
+            instance_id,
+            quantity,
+        } => {
+            if let Some(id) = &state.player_id {
+                game_state.storage_deposit(id, instance_id, quantity).await;
+            }
+        }
+
+        ClientMessage::StorageWithdraw {
+            slot_index,
+            quantity,
+        } => {
+            if let Some(id) = &state.player_id {
+                game_state.storage_withdraw(id, slot_index, quantity).await;
+            }
+        }
+
+        ClientMessage::CloseStorage => {
+            if let Some(id) = &state.player_id {
+                game_state.close_storage(id).await;
+            }
+        }
+
         ClientMessage::SetSavePoint { npc_player_id } => {
             if let Some(id) = &state.player_id {
                 game_state.set_save_point(id, &npc_player_id).await;

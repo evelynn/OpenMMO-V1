@@ -736,6 +736,10 @@ CREATE TABLE IF NOT EXISTS mail_items (
 >    **창고(IMP-2.3)와 같은 릴리스로 미루고**, 그때까지는 **공식 NPC 누구나** 세이브
 >    포인트를 잡아 준다. 공식 NPC는 도시에 서 있고 층·던전 footprint 검사도 그대로
 >    걸리므로 우회 논거는 유지된다.
+>
+>    **추기 (IMP-2.3 착수 시)** — 창고에서도 세우지 못했다. 이유는 IMP-2.3 개정 4에
+>    적었다(검증된 월드 좌표가 필요한데 지형이 없다). 두 기능 모두 공식 NPC 누구나로
+>    동작하며, NPC 배치는 별도 과제로 남았다.
 
 **구현 방향**
 좌표를 클라이언트가 보내게 두지 않는다. `SetSavePoint`는 **NPC id만** 싣고 서버가
@@ -777,7 +781,7 @@ NPC를 찾아갈 이유가 반감된다.
 | 결정 | 채택 (09 #6, #4-b) |
 | 난이도 | 대 |
 | 선행 조건 | IMP-2.2(같은 NPC에 묶음), SPK-2(델타 측정), IMP-0.1(슬롯 상한 확정) |
-| 프로토콜 변경 | 있음 — `OpenStorage` / `StorageDeposit` / `StorageWithdraw` / `CloseStorage`, `StorageOpened` / `StorageSlotChanged` |
+| 프로토콜 변경 | 있음 — `OpenStorage` / `StorageDeposit` / `StorageWithdraw` / `CloseStorage`, `StorageOpened` / `StorageSlotChanged`, `PROTOCOL_VERSION` 35 → **36** |
 | 저장 스키마 변경 | 있음 — `character_storage` 테이블 |
 
 **손댈 파일**
@@ -793,6 +797,26 @@ NPC를 찾아갈 이유가 반감된다.
 - `client/src/lib/stores/storageStore.ts`, `StoragePanel.svelte`, `overlayStack.ts`(layer 1),
   `messageHandlers.ts`.
 - `agent-client/src/driver/action.rs` — `deposit` / `withdraw` 액션 + `ACTION_SPECS`.
+- `shared/src/inventory.rs` — `STORAGE_SLOTS = 120`(양쪽이 같은 수를 봐야 한다).
+
+> **개정 (IMP-2.3 착수 시)** — 네 가지를 확정하거나 고쳤다.
+>
+> 1. **프로토콜 번호는 v36이다.** 원문은 번호를 적지 않았다. v34는 IMP-0.2가,
+>    v35는 IMP-2.2가 가져갔다.
+> 2. **주소 지정 방식을 확정한다.** 입금은 **가방의 `instance_id`**, 출금은
+>    **`slot_index`**다. 저장된 아이템에는 영속 instance id가 없다 —
+>    `character_storage` 테이블에 그런 컬럼이 없고 id는 로드할 때마다 새로 발급되므로
+>    세션을 넘겨 가리킬 수 있는 것은 슬롯 번호뿐이다.
+> 3. **`open_storage`는 `AuthService`를 인자로 받는다.** `GameState`는 이것을 들고
+>    있지 않다 — `open_mailbox`(`mail.rs:92`)와 같은 모양이다.
+> 4. **전용 도시 서비스 NPC는 또 미뤘다.** IMP-2.2 개정 4에서 "창고와 같은 릴리스에서
+>    만든다"고 적었으나, NPC 하나를 세우려면 `schedule.json`에 **검증된 월드 좌표**가
+>    필요하다(리카는 `[-1473.3, 1.1, 4732.8]`처럼 집 안 특정 지점에 서 있다). 지형이
+>    구워지지 않은 환경에서는 그 좌표가 벽 안인지 허공인지 확인할 방법이 없고,
+>    확인하지 않은 배치는 나중에 NPC가 지형에 박히는 형태로 드러난다. 그래서 창고도
+>    **공식 NPC 누구나** 열어 주는 형태로 넣었다 — 기능은 완결되어 있고 게이트
+>    (공식 NPC · 거리 · 층)도 전부 걸린다. **남은 것은 배치뿐이며, 지형이 있는 환경에서
+>    처리할 별도 과제로 남긴다** (마스터 플랜 §0의 빚 목록 참조).
 
 **구현 방향**
 `STORAGE_SLOTS = 120`으로 시작한다. RO의 600은 5,000명 × 600행 = 300만 행이고,

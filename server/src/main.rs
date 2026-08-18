@@ -111,6 +111,9 @@ async fn time_sync_tick(game_state: &GameState, auth_service: &Arc<AuthService>,
     // after a customer opened its window, even if still open.
     game_state.tick_shop_holds().await;
 
+    // Close any storage whose owner walked away from the NPC (IMP-2.3).
+    game_state.tick_storage_sessions().await;
+
     // Pay NPC trader salaries on game-day rollover (economy phase 3)
     game_state.tick_npc_salaries().await;
 

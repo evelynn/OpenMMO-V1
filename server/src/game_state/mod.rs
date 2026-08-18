@@ -252,6 +252,7 @@ mod salary;
 mod skills;
 pub(crate) use skills::skills_from_rows;
 mod stall;
+mod storage;
 mod time;
 mod tip_hat;
 mod trading;
@@ -408,6 +409,14 @@ pub struct GameState {
     no_spawn_zones: Vec<NoSpawnZone>,
     /// Player inventories (bag + equipment), keyed by player_id.
     inventories: Arc<RwLock<HashMap<PlayerId, PlayerInventory>>>,
+    /// Open storage containers, keyed by player. Resident only while the
+    /// container is open (IMP-2.3 guardrail ②), so the map's size is the
+    /// number of people at a storage NPC, not the population.
+    storages: Arc<RwLock<HashMap<PlayerId, Vec<Option<ItemInstance>>>>>,
+    /// Storages whose contents changed since the last flush.
+    dirty_storages: Arc<RwLock<HashSet<PlayerId>>>,
+    /// Who each open storage is anchored to, so walking away closes it.
+    open_storages: Arc<RwLock<HashMap<PlayerId, PlayerId>>>,
     /// Chosen respawn points, keyed by player. Absent means the world spawn,
     /// which is every character that has not set one (IMP-2.2). Loaded on
     /// entry and written back through the existing batch save.
@@ -651,6 +660,9 @@ impl GameState {
             )),
             no_spawn_zones,
             inventories: Arc::new(RwLock::new(HashMap::new())),
+            storages: Arc::new(RwLock::new(HashMap::new())),
+            dirty_storages: Arc::new(RwLock::new(HashSet::new())),
+            open_storages: Arc::new(RwLock::new(HashMap::new())),
             save_points: Arc::new(RwLock::new(HashMap::new())),
             ground_items: Arc::new(RwLock::new(HashMap::new())),
             monster_loot: Arc::new(RwLock::new(HashMap::new())),

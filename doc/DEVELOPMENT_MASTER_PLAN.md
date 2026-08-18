@@ -9,7 +9,7 @@
 ## 0. 현재 진행 상황 (이어서 작업할 때 먼저 읽는다)
 
 **브랜치**: `claude/project-analysis-dev-setup-9amcvt`
-**진행**: 30개 항목 중 **15개 완료**. **M0·M1이 전부 끝났고**(SPK-1은 go), M2가 5/10이다.
+**진행**: 30개 항목 중 **16개 완료**. **M0·M1이 전부 끝났고**(SPK-1은 go), M2가 6/10이다.
 
 | 항목 | 상태 | 커밋 |
 |------|------|------|
@@ -27,16 +27,12 @@
 | SPK-1 밀집 전투 부하 | ✅ **go** (200명 기준 예산의 7.6%, 13 개정 1건 — 판정 채널 정정) | `fc2ec1a` |
 | IMP-2.2 세이브 포인트 | ✅ 완료 (프로토콜 v35, DB 4컬럼, 13 개정 4건) | `1487f75` |
 | SPK-2 창고 델타 전송 | ✅ **go** — `STORAGE_SLOTS = 120` 확정 (§7 판정 규칙 1건 개정) | `32d5fb2` |
+| IMP-2.3 창고 | ✅ 완료 (프로토콜 v36, `character_storage` 테이블, 13 개정 4건) | 아래 참조 |
 | IMP-0.2 EffectiveStats | ✅ 완료 (프로토콜 v34, 13 개정 5건) | `51a15b7` |
 
-**다음에 집을 것**: 체크되지 않은 첫 행은 **순번 14, IMP-2.3 창고**다 — 선행 셋
-(IMP-2.2 · SPK-2 · IMP-0.1)이 모두 끝났고 슬롯 상한 120도 측정으로 확정됐다.
-그다음은 SPK-3 → IMP-2.4(유료 이동) → IMP-2.7(미니보스) → IMP-2.8(MVP 기여도) 순으로
-M2가 끝난다.
-
-**IMP-2.3 착수 시 같이 할 일**: 도시 서비스 NPC를 `npcs.csv` + 에이전트 프롬프트로
-신설한다. IMP-2.2는 그때까지 **공식 NPC 누구나** 세이브 포인트를 잡아 주는 형태로
-넣었다(13 IMP-2.2 개정 4). 창고가 전용 NPC를 요구하므로 그 릴리스에서 함께 정리한다.
+**다음에 집을 것**: 체크되지 않은 첫 행은 **순번 15, SPK-3(유료 이동 로딩 폭풍 측정)**
+이고, 그것이 IMP-2.4의 게이트다. 그다음은 IMP-2.4(유료 이동) → IMP-2.7(미니보스) →
+IMP-2.8(MVP 기여도) 순으로 M2가 끝난다.
 
 **SPK-1이 go로 끝나면서 두 항목의 게이트가 열렸다** — IMP-2.8(MVP 기여도)은 축소형이
 아니라 원안대로 가도 되고, IMP-4.3(거점 점유)은 **밀집 상한 600~700을 전제로** 설계에
@@ -64,7 +60,12 @@ M1이 끝났으므로 밸런싱 기준선이 섰다: 레벨에 안 맞는 몬스
   레벨 차 XP 로그 표시 → `/mail`로 편지 보내고 수령 → 보드에서 계약 수락 →
   사냥 → 트래커 증가 → 반납 → 우편 도착 → 아이템을 바닥에 버리고 놀을 유인해
   줍는지 → 잡아서 되찾는지 → 로그아웃으로 디스폰시켜도 아이템이 남는지.
-- **프로토콜이 v29 → v35로 여섯 번 올랐다.** 서버와 클라이언트를 반드시 함께 배포한다.
+- **프로토콜이 v29 → v36으로 일곱 번 올랐다.** 서버와 클라이언트를 반드시 함께 배포한다.
+- **도시 서비스 NPC가 아직 없다.** IMP-2.2(세이브 포인트)와 IMP-2.3(창고) 둘 다
+  **공식 NPC 누구나**로 동작한다 — 기능은 완결이고 게이트도 전부 걸리지만, 전용 NPC를
+  세우려면 `schedule.json`에 **검증된 월드 좌표**가 필요해 지형 없는 환경에서는 배치를
+  확인할 수 없다. 지형이 있는 환경에서 `npcs.csv` 행 + 프롬프트 디렉터리로 세우고,
+  두 기능의 안내 문구를 그 NPC로 좁힌다 (13 IMP-2.3 개정 4).
 - **헌팅 보드 진입점이 임시다.** 도시 서비스 NPC(IMP-2.2)가 생기면 HUD 버튼을
   NPC 상호작용으로 대체한다.
 
@@ -335,7 +336,7 @@ Phase 번호와 1:1이다(M1 = Phase 1 …). **작업 ID는 13의 ID가 정본�
 | [x] 11 | IMP-2.1 | 우편함 (Mailbox) | — | L | shared/server/client | 우편 테이블(`server/src/auth.rs`의 `ensure_*` 마이그레이션), 수령·삭제 프로토콜, 첨부 아이템 원자성, 운영 지급 경로. **콘텐츠가 아니라 운영 안전장치로 먼저 넣는다** |
 | [x] 12 | IMP-2.2 | 세이브 포인트 + 리스폰 | — | M | shared/server/client | `ClientMessage::SetSavePoint`, 캐릭터 레코드에 `save_point`(`auth.rs`의 `CHARACTER_COLUMNS` + `CharacterSaveData` + `write_character_states`), **기본값은 현행 리스폰 유지** |
 | [x] 13 | SPK-2 | 창고 델타 전송 스파이크 — **go** | — | S | server(test) | 슬롯 상한 후보(60 / **120** / 240)별 바이트 측정 + §7 판정. 120은 13 IMP-2.3의 확정값이므로 **검증 대상**이다 |
-| 14 | IMP-2.3 | 창고 (Storage) | IMP-2.2, SPK-2, IMP-0.1 | L | shared/server/client | `STORAGE_SLOTS = 120`, 열기/입금/출금/닫기 프로토콜(**델타**), 거리(NPC 근처)·슬롯 상한·원자성 검증 — **창고 자체에는 무게 제한이 없다**(출금 시 인벤토리 `max_carry_weight`만 검사), 기존 배치 세이브 합류, UI + `overlayStack.ts` 등록 |
+| [x] 14 | IMP-2.3 | 창고 (Storage) | IMP-2.2, SPK-2, IMP-0.1 | L | shared/server/client | `STORAGE_SLOTS = 120`, 열기/입금/출금/닫기 프로토콜(**델타**), 거리(NPC 근처)·슬롯 상한·원자성 검증 — **창고 자체에는 무게 제한이 없다**(출금 시 인벤토리 `max_carry_weight`만 검사), 기존 배치 세이브 합류, UI + `overlayStack.ts` 등록 |
 | 15 | SPK-3 | 유료 이동 로딩 폭풍 스파이크 | — | S | server/client(test) | 도착 순간의 타일·하우징·오브젝트 요청 폭 측정 + §7 판정 ([LOADING_OPTIMIZATION.md](LOADING_OPTIMIZATION.md)) |
 | 16 | IMP-2.4 | 유료 이동 + "던전 워프 불가" | IMP-2.2, SPK-3 | L | shared/server/client | **도시 소수 고정 지점만**(임의 좌표 금지), 요금 제니 싱크, 던전 입구·내부 목적지 제외, 타일 캐시 예열(`terrain/src/tile_cache.rs`) |
 | [x] 17 | IMP-2.5 | 헌팅 보드 반복 퀘스트 | IMP-2.1, IMP-1.1 | L | data/shared/server/client | `data-src/hunting_quests.csv` (`id,boardId,name,monsterId,count,minLevel,maxLevel,rewardXp,rewardZeny,rewardItem,dailyLimit`), `character_quests` 테이블(`day_key`/`day_count` 포함), 런타임은 quest id를 u16 인턴한 `Vec<(u16,u16)>`(수락 상한 5), 처치 훅은 `combat.rs:499~:511`의 XP 수령자 목록 재사용, **보상은 우편 지급** |

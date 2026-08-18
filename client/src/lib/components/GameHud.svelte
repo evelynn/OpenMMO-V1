@@ -20,6 +20,7 @@
   import FriendRequestToast from './FriendRequestToast.svelte'
   import FriendPanel from './FriendPanel.svelte'
   import MailPanel from './MailPanel.svelte'
+  import StoragePanel from './StoragePanel.svelte'
   import QuestBoardPanel from './QuestBoardPanel.svelte'
   import QuestTracker from './QuestTracker.svelte'
   import NpcContextMenu from './NpcContextMenu.svelte'
@@ -128,6 +129,7 @@
          online notice whether or not the list is on screen. -->
     <FriendPanel />
     <MailPanel />
+    <StoragePanel />
     <QuestBoardPanel />
     <QuestTracker />
     <NpcContextMenu />

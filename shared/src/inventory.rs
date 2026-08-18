@@ -1,3 +1,7 @@
+/// Storage slots per character (IMP-0.1; SPK-2 confirmed the wire cost).
+/// A cap, not a suggestion: lowering it after release would confiscate items.
+pub const STORAGE_SLOTS: usize = 120;
+
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 

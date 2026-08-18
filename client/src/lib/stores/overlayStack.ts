@@ -4,6 +4,7 @@ import { friendPanelVisible } from './friendStore'
 import { mailPanelVisible } from './mailStore'
 import { questBoardVisible } from './questStore'
 import { shopSession } from './tradeStore'
+import { storagePanelVisible } from './storageStore'
 
 /** HUD overlays Escape interacts with. */
 export type OverlayId =
@@ -14,6 +15,7 @@ export type OverlayId =
   | 'questBoard'
   | 'inventory'
   | 'trade'
+  | 'storage'
   | 'settings'
   | 'loading'
   | 'respawn'
@@ -32,6 +34,7 @@ const OVERLAYS: Record<OverlayId, { layer: number; close?: () => void }> = {
   mail: { layer: 0, close: () => mailPanelVisible.set(false) },
   questBoard: { layer: 0, close: () => questBoardVisible.set(false) },
   trade: { layer: 1, close: () => shopSession.set(null) },
+  storage: { layer: 1, close: () => storagePanelVisible.set(false) },
   loading: { layer: 2 },
   respawn: { layer: 3 },
   tipHat: { layer: 3 },

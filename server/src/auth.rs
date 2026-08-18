@@ -468,6 +468,7 @@ impl AuthService {
         Self::ensure_dungeon_discovery_schema(&conn)?;
         Self::ensure_mail_schema(&conn)?;
         Self::ensure_quest_schema(&conn)?;
+        Self::ensure_storage_schema(&conn)?;
 
         Ok(Self { pool })
     }
@@ -702,6 +703,76 @@ impl AuthService {
     /// Mailbox: the delivery path for rewards that must survive a full bag or
     /// an offline recipient. `ON DELETE CASCADE` leans on the connection's
     /// `PRAGMA foreign_keys = ON` (set in `new`).
+    /// Per-character storage (IMP-2.3). `enchant` is here from the first
+    /// migration rather than retrofitted the way `character_items` had to be
+    /// (`ensure_character_item_columns`) — a stored +7 sword must not come
+    /// back plain.
+    fn ensure_storage_schema(conn: &Connection) -> Result<(), rusqlite::Error> {
+        conn.execute(
+            "CREATE TABLE IF NOT EXISTS character_storage (
+                character_id INTEGER NOT NULL
+                    REFERENCES characters(id) ON DELETE CASCADE,
+                slot_index INTEGER NOT NULL,
+                item_def_id TEXT NOT NULL,
+                quantity INTEGER NOT NULL,
+                enchant INTEGER NOT NULL DEFAULT 0,
+                PRIMARY KEY (character_id, slot_index)
+            )",
+            [],
+        )?;
+        Ok(())
+    }
+
+    /// One character's stored slots, sparse: `(slot_index, row)`.
+    pub fn load_storage(&self, character_id: i64) -> Result<Vec<(u16, ItemRow)>, AuthError> {
+        let conn = self.open_connection()?;
+        let mut stmt = conn.prepare(
+            "SELECT slot_index, item_def_id, quantity, enchant FROM character_storage \
+             WHERE character_id = ?1 ORDER BY slot_index",
+        )?;
+        let rows = stmt
+            .query_map(params![character_id], |row| {
+                Ok((
+                    row.get::<_, i64>(0)? as u16,
+                    ItemRow {
+                        item_def_id: row.get(1)?,
+                        quantity: row.get(2)?,
+                        equip_slot: None,
+                        enchant: row.get(3)?,
+                    },
+                ))
+            })?
+            .collect::<Result<Vec<_>, _>>()?;
+        Ok(rows)
+    }
+
+    /// Whole-container replacement, like `replace_inventories`: a storage is
+    /// small and bounded by `STORAGE_SLOTS`, and a diff would have to track
+    /// slot deletions to stay correct.
+    fn replace_storages<'a>(
+        conn: &Connection,
+        storages: impl IntoIterator<Item = (i64, &'a [(u16, ItemRow)])>,
+    ) -> Result<(), rusqlite::Error> {
+        let mut delete = conn.prepare("DELETE FROM character_storage WHERE character_id = ?1")?;
+        let mut insert = conn.prepare(
+            "INSERT INTO character_storage (character_id, slot_index, item_def_id, quantity, enchant) \
+             VALUES (?1, ?2, ?3, ?4, ?5)",
+        )?;
+        for (character_id, slots) in storages {
+            delete.execute(params![character_id])?;
+            for (slot_index, item) in slots {
+                insert.execute(params![
+                    character_id,
+                    i64::from(*slot_index),
+                    item.item_def_id,
+                    item.quantity,
+                    item.enchant
+                ])?;
+            }
+        }
+        Ok(())
+    }
+
     fn ensure_mail_schema(conn: &Connection) -> Result<(), rusqlite::Error> {
         conn.execute(
             "CREATE TABLE IF NOT EXISTS mail (
@@ -1635,16 +1706,19 @@ impl AuthService {
     /// The one write path for game state: the periodic flush, a single player's
     /// logout and the shutdown snapshot all land here. Everything goes in one
     /// transaction, so a save costs one commit no matter how much it covers.
+    #[allow(clippy::too_many_arguments)]
     pub fn save_batch(
         &self,
         characters: &[CharacterSaveData],
         inventories: &[(i64, Vec<ItemRow>)],
+        storages: &[(i64, Vec<(u16, ItemRow)>)],
         skills: &[(i64, Vec<SkillRow>)],
         discoveries: &[(i64, String)],
         world_time: Option<&GameDateTime>,
     ) -> Result<(), AuthError> {
         if characters.is_empty()
             && inventories.is_empty()
+            && storages.is_empty()
             && skills.is_empty()
             && discoveries.is_empty()
             && world_time.is_none()
@@ -1659,6 +1733,10 @@ impl AuthService {
             inventories
                 .iter()
                 .map(|(id, items)| (*id, items.as_slice())),
+        )?;
+        Self::replace_storages(
+            &tx,
+            storages.iter().map(|(id, slots)| (*id, slots.as_slice())),
         )?;
         Self::upsert_skills(&tx, skills.iter().map(|(id, rows)| (*id, rows.as_slice())))?;
         Self::insert_dungeon_discoveries(&tx, discoveries)?;
@@ -2069,6 +2147,126 @@ mod tests {
         assert_eq!(ban.reason.as_deref(), Some("re-banned"));
     }
 
+    #[test]
+    fn storage_round_trips_and_a_character_takes_it_with_them() {
+        let db_path = std::env::temp_dir().join(format!(
+            "onlinerpg_auth_storage_{}.db",
+            uuid::Uuid::new_v4()
+        ));
+        let auth = AuthService::new(db_path).unwrap();
+        let account = auth.login_npc("npc_storage").unwrap();
+        let record = auth
+            .create_character(
+                &account,
+                "Vaulter",
+                &CharacterAttributes {
+                    r#str: 12,
+                    dex: 12,
+                    con: 12,
+                    int: 12,
+                    wis: 12,
+                    cha: 12,
+                    guard: 10,
+                },
+                16,
+                CharacterClass::Knight,
+                Gender::Male,
+            )
+            .unwrap();
+        assert!(auth.load_storage(record.id).unwrap().is_empty());
+
+        let rows = vec![
+            (
+                0u16,
+                ItemRow {
+                    item_def_id: "healing_potion".to_string(),
+                    quantity: 12,
+                    equip_slot: None,
+                    enchant: 0,
+                },
+            ),
+            (
+                // A high slot index, to prove the key is the slot and not the
+                // row order.
+                119u16,
+                ItemRow {
+                    item_def_id: "iron_sword".to_string(),
+                    quantity: 1,
+                    equip_slot: None,
+                    enchant: 7,
+                },
+            ),
+        ];
+        auth.save_batch(&[], &[], &[(record.id, rows)], &[], &[], None)
+            .unwrap();
+
+        let loaded = auth.load_storage(record.id).unwrap();
+        assert_eq!(loaded.len(), 2);
+        assert_eq!((loaded[0].0, loaded[0].1.quantity), (0, 12));
+        // Enchant is in the table from the first migration, unlike
+        // character_items — a stored +7 must not come back plain.
+        assert_eq!((loaded[1].0, loaded[1].1.enchant), (119, 7));
+
+        // Replacing the container is a whole-container write.
+        auth.save_batch(&[], &[], &[(record.id, Vec::new())], &[], &[], None)
+            .unwrap();
+        assert!(auth.load_storage(record.id).unwrap().is_empty());
+    }
+
+    /// The cascade is what keeps deleted characters from stranding rows.
+    #[test]
+    fn deleting_a_character_cascades_its_storage() {
+        let db_path = std::env::temp_dir().join(format!(
+            "onlinerpg_auth_storage_cascade_{}.db",
+            uuid::Uuid::new_v4()
+        ));
+        let auth = AuthService::new(db_path).unwrap();
+        let account = auth.login_npc("npc_storage_cascade").unwrap();
+        let record = auth
+            .create_character(
+                &account,
+                "Departing",
+                &CharacterAttributes {
+                    r#str: 12,
+                    dex: 12,
+                    con: 12,
+                    int: 12,
+                    wis: 12,
+                    cha: 12,
+                    guard: 10,
+                },
+                16,
+                CharacterClass::Knight,
+                Gender::Male,
+            )
+            .unwrap();
+        auth.save_batch(
+            &[],
+            &[],
+            &[(
+                record.id,
+                vec![(
+                    3u16,
+                    ItemRow {
+                        item_def_id: "apple".to_string(),
+                        quantity: 2,
+                        equip_slot: None,
+                        enchant: 0,
+                    },
+                )],
+            )],
+            &[],
+            &[],
+            None,
+        )
+        .unwrap();
+        assert_eq!(auth.load_storage(record.id).unwrap().len(), 1);
+
+        auth.delete_character(&account, record.id).unwrap();
+
+        assert!(auth.load_storage(record.id).unwrap().is_empty());
+    }
+
     /// Decision #7: adding the columns must leave every existing character
     /// respawning exactly as before, which is what NULL has to mean.
     #[test]
@@ -2124,6 +2322,7 @@ mod tests {
                 satiation: 500,
                 save_point: Some(point),
             }],
+            &[],
             &[],
             &[],
             &[],
@@ -2301,6 +2500,7 @@ mod tests {
         auth.save_batch(
             &[],
             &[],
+            &[],
             &[(
                 record.id,
                 vec![SkillRow {
@@ -2315,6 +2515,7 @@ mod tests {
         .unwrap();
 
         auth.save_batch(
+            &[],
             &[],
             &[],
             &[(
@@ -2341,6 +2542,7 @@ mod tests {
 
         // Advancing a skill updates in place rather than duplicating the row.
         auth.save_batch(
+            &[],
             &[],
             &[],
             &[(

@@ -8,6 +8,11 @@
 use onlinerpg_shared::ClientMessage;
 use serde::Deserialize;
 
+/// Quantity default for storage actions: one unit unless asked.
+fn one_unit() -> u32 {
+    1
+}
+
 #[derive(Debug, Deserialize)]
 #[serde(tag = "type")]
 pub(super) enum AgentAction {
@@ -109,6 +114,22 @@ pub(super) enum AgentAction {
     OpenTrade {
         #[serde(alias = "target", alias = "player_name", alias = "target_player")]
         player: String,
+    },
+    /// Put a bag item into the storage a nearby townsperson keeps.
+    #[serde(rename = "deposit", alias = "store_item")]
+    Deposit {
+        #[serde(alias = "item", alias = "item_id")]
+        instance_id: u64,
+        #[serde(default = "one_unit", alias = "qty")]
+        quantity: u32,
+    },
+    /// Take an item back out of storage, by slot number.
+    #[serde(rename = "withdraw", alias = "take_item")]
+    Withdraw {
+        #[serde(alias = "slot")]
+        slot_index: u16,
+        #[serde(default = "one_unit", alias = "qty")]
+        quantity: u32,
     },
     /// Ask a nearby townsperson to mark your respawn point at their spot.
     #[serde(rename = "set_save_point", alias = "save_point", alias = "set_respawn")]
@@ -576,6 +597,21 @@ pub(super) const ACTION_SPECS: &[ActionSpec] = &[
   {"type": "offer_deal", "target": "darkcocoa", "item": "healing_potion", "kind": "buy", "modifier_pct": -10}"#,
     },
     ActionSpec {
+        names: &["deposit"],
+        aliases: &["store_item"],
+        doc: r#"- Put something in storage. Open it first by standing next to a
+  townsperson; storage holds 120 slots and has no weight limit, so it is
+  where heavy things live between trips:
+  {"type": "deposit", "instance_id": 42, "quantity": 5}"#,
+    },
+    ActionSpec {
+        names: &["withdraw"],
+        aliases: &["take_item"],
+        doc: r#"- Take something back out of storage by its slot number. You must be
+  able to carry it — storage has no weight limit but your bag does:
+  {"type": "withdraw", "slot_index": 3, "quantity": 1}"#,
+    },
+    ActionSpec {
         names: &["set_save_point"],
         aliases: &["save_point", "set_respawn"],
         doc: r#"- Ask a townsperson standing next to you to mark where you come back
@@ -726,6 +762,8 @@ impl AgentAction {
             | Self::Fish { .. }
             | Self::Respawn => true,
             Self::SetSavePoint { .. }
+            | Self::Deposit { .. }
+            | Self::Withdraw { .. }
             | Self::CheckMail
             | Self::ClaimMail { .. }
             | Self::QuestBoard { .. }
@@ -793,6 +831,8 @@ impl AgentAction {
             | Self::AcceptQuest { .. }
             | Self::TurnInQuest { .. } => true,
             Self::SetSavePoint { .. }
+            | Self::Deposit { .. }
+            | Self::Withdraw { .. }
             | Self::Move { .. }
             | Self::Attack { .. }
             | Self::Follow { .. }
@@ -845,6 +885,8 @@ impl AgentAction {
             Self::OfferDeal { .. } => "offer_deal",
             Self::OpenTrade { .. } => "open_trade",
             Self::SetSavePoint { .. } => "set_save_point",
+            Self::Deposit { .. } => "deposit",
+            Self::Withdraw { .. } => "withdraw",
             Self::PartyInvite { .. } => "party_invite",
             Self::PartyAccept { .. } => "party_accept",
             Self::PartyDecline { .. } => "party_decline",
@@ -1250,6 +1292,20 @@ pub(super) fn action_to_command(
         AgentAction::Follow { .. } => None,
         // Needs the roster to turn a name into an id.
         AgentAction::SetSavePoint { .. } => None,
+        AgentAction::Deposit {
+            instance_id,
+            quantity,
+        } => Some(ClientMessage::StorageDeposit {
+            instance_id: *instance_id,
+            quantity: *quantity,
+        }),
+        AgentAction::Withdraw {
+            slot_index,
+            quantity,
+        } => Some(ClientMessage::StorageWithdraw {
+            slot_index: *slot_index,
+            quantity: *quantity,
+        }),
         AgentAction::Say { message } => Some(ClientMessage::ChatMessage {
             message: message.clone(),
         }),

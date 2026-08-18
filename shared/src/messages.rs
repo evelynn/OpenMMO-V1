@@ -422,6 +422,26 @@ pub enum ClientMessage {
         monster_id: String,
         target_player_id: PlayerId,
     },
+    /// Open the storage container held for the sender by this NPC. The
+    /// server answers with one `StorageOpened` snapshot; everything after is
+    /// a delta (IMP-2.3).
+    OpenStorage {
+        npc_player_id: PlayerId,
+    },
+    /// Move `quantity` units of a bag item into storage. Addressed by bag
+    /// instance id, like every other bag-side removal.
+    StorageDeposit {
+        instance_id: u64,
+        quantity: u32,
+    },
+    /// Take `quantity` units out of a storage slot. Addressed by slot index:
+    /// stored items have no persistent instance id, so ids are minted afresh
+    /// each time a container loads.
+    StorageWithdraw {
+        slot_index: u16,
+        quantity: u32,
+    },
+    CloseStorage,
     /// Set the sender's respawn point to the named NPC's spot. Coordinates
     /// are never sent: an arbitrary point would let a player save at a
     /// dungeon mouth and sidestep IMP-2.4's "dungeons are not warp
@@ -1245,6 +1265,18 @@ pub enum ServerMessage {
     /// Direct message: the receiving player's current gold (smallest unit).
     GoldUpdate {
         gold: i64,
+    },
+    /// Direct message: the whole container, once, when it opens. Every
+    /// change after this is a `StorageSlotChanged` — re-pushing the snapshot
+    /// would cost 120 slots per move (SPK-2).
+    StorageOpened {
+        slots: Vec<Option<inventory::ItemInstance>>,
+    },
+    /// Direct message: one slot's new contents, `None` when it emptied. Two
+    /// go out per move — the slot vacated and the slot filled.
+    StorageSlotChanged {
+        slot_index: u16,
+        item: Option<inventory::ItemInstance>,
     },
     /// Direct message: the sender's respawn point now stands here. Death and
     /// the return scroll both land on it.

@@ -411,6 +411,26 @@ class NetworkManager {
     })
   }
 
+  sendOpenStorage(npcPlayerId: number) {
+    this.sendMessage({ OpenStorage: { npc_player_id: npcPlayerId } })
+  }
+
+  sendStorageDeposit(instanceId: number, quantity: number) {
+    this.sendMessage({
+      StorageDeposit: { instance_id: instanceId, quantity },
+    })
+  }
+
+  sendStorageWithdraw(slotIndex: number, quantity: number) {
+    this.sendMessage({
+      StorageWithdraw: { slot_index: slotIndex, quantity },
+    })
+  }
+
+  sendCloseStorage() {
+    this.sendAndSerialize('CloseStorage')
+  }
+
   sendSetSavePoint(npcPlayerId: number) {
     this.sendMessage({ SetSavePoint: { npc_player_id: npcPlayerId } })
   }

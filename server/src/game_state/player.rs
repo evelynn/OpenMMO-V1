@@ -307,6 +307,7 @@ impl super::GameState {
             map.remove(player_id);
         }
         self.save_points.write().await.remove(player_id);
+        self.forget_storage(player_id).await;
         {
             let mut gold_map = self.player_gold.write().await;
             gold_map.remove(player_id);
@@ -566,10 +567,13 @@ impl super::GameState {
         }
         let inventories = Vec::from_iter(self.take_player_inventory(player_id).await);
         let skills = Vec::from_iter(self.take_player_skills(player_id).await);
+        // Written before the container leaves memory, or a logout at the
+        // storage NPC would drop the last deposit.
+        let (_, storages) = self.take_dirty_storages().await;
 
         let auth = auth.clone();
         flush_save(
-            move || auth.save_batch(&characters, &inventories, &skills, &[], None),
+            move || auth.save_batch(&characters, &inventories, &storages, &skills, &[], None),
             "player state",
         )
         .await;
@@ -580,6 +584,7 @@ impl super::GameState {
     /// 5,000 logouts don't become 5,000 commits.
     pub async fn persist_shutdown_snapshot(&self, auth: &AuthService) {
         let (characters, inventories) = self.collect_shutdown_snapshot().await;
+        let storages = self.all_storage_rows().await;
         let skills = self.collect_all_skill_states().await;
         let discoveries = self.take_pending_discovery_saves().await;
         let character_count = characters.len();
@@ -591,6 +596,7 @@ impl super::GameState {
                 auth.save_batch(
                     &characters,
                     &inventories,
+                    &storages,
                     &skills,
                     &discoveries,
                     Some(&datetime),
@@ -652,11 +658,13 @@ impl super::GameState {
 
         let (dirty_player_ids, dirty_states) = self.collect_dirty_character_states().await;
         let (dirty_inventory_ids, dirty_inventories) = self.collect_dirty_inventory_states().await;
+        let (dirty_storage_ids, dirty_storages) = self.take_dirty_storages().await;
         let (dirty_skill_ids, dirty_skills) = self.collect_dirty_skill_states().await;
         let (dirty_quest_ids, dirty_quests) = self.collect_dirty_quest_states().await;
         let dirty_discoveries = self.take_pending_discovery_saves().await;
         if dirty_states.is_empty()
             && dirty_inventories.is_empty()
+            && dirty_storages.is_empty()
             && dirty_skills.is_empty()
             && dirty_quests.is_empty()
             && dirty_discoveries.is_empty()
@@ -673,6 +681,7 @@ impl super::GameState {
                 auth.save_batch(
                     &dirty_states,
                     &dirty_inventories,
+                    &dirty_storages,
                     &dirty_skills,
                     &discoveries,
                     None,
@@ -692,6 +701,7 @@ impl super::GameState {
         if !saved {
             self.restore_dirty_players(dirty_player_ids).await;
             self.restore_dirty_inventories(dirty_inventory_ids).await;
+            self.restore_dirty_storages(dirty_storage_ids).await;
             self.restore_dirty_skills(dirty_skill_ids).await;
             self.restore_dirty_quests(dirty_quest_ids).await;
             self.restore_pending_discovery_saves(dirty_discoveries)

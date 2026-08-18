@@ -88,7 +88,10 @@ pub const NPC_TOKEN_FILENAME: &str = "npc_token";
 ///      attributes + hunger-scaled max carry weight) — IMP-0.2.
 /// v35: save points (SetSavePoint -> SavePointSet); death and the return
 ///      scroll land there instead of the world spawn — IMP-2.2.
-pub const PROTOCOL_VERSION: u32 = 35;
+/// v36: storage (OpenStorage/StorageDeposit/StorageWithdraw/CloseStorage ->
+///      StorageOpened/StorageSlotChanged), 120 slots, delta transport —
+///      IMP-2.3.
+pub const PROTOCOL_VERSION: u32 = 36;
 
 /// WebSocket close code sent when the handshake is refused (wrong protocol
 /// version, or traffic before `ClientInfo`). Lives outside the serialized

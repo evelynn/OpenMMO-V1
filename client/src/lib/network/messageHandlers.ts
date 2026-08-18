@@ -24,6 +24,11 @@ import { bridgeManager } from '../managers/bridgeManager'
 import { objectManager } from '../managers/objectManager'
 import { groundItemManager } from '../managers/groundItemManager'
 import { dungeonManager } from '../managers/dungeonManager'
+import type { ItemInstance } from '../network/networkTypes'
+import {
+  openStorage as openStoragePanel,
+  applyStorageSlot,
+} from '../stores/storageStore'
 import {
   setInventory,
   playerGold,
@@ -542,6 +547,17 @@ export function handleServerMessage(
 
     case 'SystemMessage':
       addChatMessage({ text: data.message, sender: 'system' })
+      break
+
+    case 'StorageOpened':
+      openStoragePanel(data.slots as (ItemInstance | null)[])
+      break
+
+    case 'StorageSlotChanged':
+      applyStorageSlot(
+        Number(data.slot_index),
+        (data.item ?? null) as ItemInstance | null
+      )
       break
 
     case 'SavePointSet':

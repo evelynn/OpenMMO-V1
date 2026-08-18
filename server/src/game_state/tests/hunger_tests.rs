@@ -774,7 +774,7 @@ fn satiation_survives_a_save_and_reload() {
         satiation: 123,
         save_point: None,
     };
-    auth.save_batch(&[save], &[], &[], &[], None).unwrap();
+    auth.save_batch(&[save], &[], &[], &[], &[], None).unwrap();
 
     let reloaded = auth.get_character_for_account(&account, record.id).unwrap();
     assert_eq!(reloaded.satiation, 123);

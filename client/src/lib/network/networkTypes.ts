@@ -149,6 +149,10 @@ export type ClientMessage =
   | { MonsterAttack: { monster_id: string; target_player_id: number } }
   | { MonsterPickupItem: { monster_id: string; instance_id: number } }
   | { SetSavePoint: { npc_player_id: number } }
+  | { OpenStorage: { npc_player_id: number } }
+  | { StorageDeposit: { instance_id: number; quantity: number } }
+  | { StorageWithdraw: { slot_index: number; quantity: number } }
+  | 'CloseStorage'
   | 'RequestRespawn'
   | { FishingCast: { position: Position } }
   | { FishingRespond: { action: FishingAction } }
