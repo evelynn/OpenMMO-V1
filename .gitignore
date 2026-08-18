@@ -72,8 +72,10 @@ data/items.json
 data/map_labels.json
 data/merchants.json
 data/monsters.json
+data/hunting_quests.json
 data/npcs.json
 data/player_anim_timing.json
+data/travel_nodes.json
 data/world_drop.json
 data/terrain/
 data/housing/
