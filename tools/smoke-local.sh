@@ -63,22 +63,31 @@ while read -r verdict what; do
     [ "$verdict" = "ok" ] && ok "$what" || fail "$what"
 done < "$STATE/schema.txt"
 
-# A tile the bake wrote has varied heights; TerrainIO::read_heightmap answers
-# a missing file with a flat default, so byte count alone proves nothing.
-python3 - "http://127.0.0.1:$API/api/terrain/height/0/0" <<'TILE' > "$STATE/tile.txt"
+# TerrainIO::read_heightmap answers a missing file with a flat default of the
+# same size, so neither the status code nor the byte count says anything about
+# the bake. Compare the origin against a tile far outside any bake: identical
+# bytes mean the origin is that same fallback.
+python3 - "http://127.0.0.1:$API/api/terrain/height" <<'TILE' > "$STATE/tile.txt"
 import sys, urllib.request
+base = sys.argv[1]
+
+def tile(x, z):
+    return urllib.request.urlopen("%s/%d/%d" % (base, x, z), timeout=20).read()
+
 try:
-    data = urllib.request.urlopen(sys.argv[1], timeout=15).read()
+    baked = tile(0, 0)
+    fallback = tile(900000, 900000)
 except Exception as e:
     print("FAIL terrain API unreachable (%s)" % e)
     raise SystemExit
-distinct = len({data[i:i + 2] for i in range(0, len(data) - 1, 2)})
-if len(data) < 1000:
-    print("FAIL terrain tile is only %d bytes" % len(data))
-elif distinct <= 1:
-    print("FAIL terrain tile is the flat default — bake the world first")
+heights = len({baked[i:i + 2] for i in range(0, len(baked) - 1, 2)})
+if len(baked) < 1000:
+    print("FAIL terrain tile is only %d bytes" % len(baked))
+elif baked == fallback:
+    print("FAIL the origin tile is byte-identical to the unbaked fallback - bake the world first")
 else:
-    print("ok terrain serves baked terrain (%d bytes, %d distinct heights)" % (len(data), distinct))
+    print("ok terrain serves baked terrain (%d bytes, %d distinct heights, differs from the fallback)"
+          % (len(baked), heights))
 TILE
 read -r verdict what < "$STATE/tile.txt"
 [ "$verdict" = "ok" ] && ok "$what" || fail "$what"
