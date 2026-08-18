@@ -37,6 +37,7 @@ mod storage_scale_tests;
 mod storage_tests;
 mod tip_hat_tests;
 mod trading_tests;
+mod world_boss_tests;
 
 /// Stable numeric id derived from a fixture's name, so tests keep naming
 /// players ("owner", "buyer") instead of carrying opaque integers. Only needs

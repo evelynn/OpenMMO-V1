@@ -23,6 +23,7 @@ mod terrain;
 mod test_util;
 mod travel_defs;
 mod types;
+mod world_boss_defs;
 mod world_config;
 mod world_drop_defs;
 
@@ -300,6 +301,7 @@ async fn main() -> ExitCode {
     let item_defs = item_defs::item_defs().clone();
     let dungeon_defs = dungeon_defs::DungeonDefs::load(&item_defs, &monster_defs);
     travel_defs::assert_nodes_are_valid();
+    world_boss_defs::assert_spawns_are_valid(&monster_defs);
     let quest_defs = quest_defs::QuestDefs::load(&monster_defs, &item_defs);
     let world_drop_defs = world_drop_defs::WorldDropDefs::load(&item_defs);
     let paths = state_paths(&args.state_dir);
@@ -489,6 +491,19 @@ async fn main() -> ExitCode {
         move || {
             let game_state = Arc::clone(&game_state_for_abandoned);
             async move { game_state.tick_monster_ownership().await }
+        },
+    ));
+
+    // Fixed mini-boss points: long jittered respawns, held back until
+    // somebody is standing close enough to own the monster (IMP-2.7).
+    let game_state_for_world_bosses = Arc::clone(&game_state);
+    background.spawn(run_ticks(
+        "world bosses",
+        Duration::from_secs(30),
+        drain_shutdown.clone(),
+        move || {
+            let game_state = Arc::clone(&game_state_for_world_bosses);
+            async move { game_state.tick_world_bosses().await }
         },
     ));
 

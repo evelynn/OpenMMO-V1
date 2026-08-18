@@ -1,0 +1,2 @@
+id,monsterId,x,y,z,respawnBaseSecs,respawnVarianceSecs
+crypt_ogre,ogre_boss,-1390.0,1.2,4705.0,1800,600

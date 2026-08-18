@@ -46,6 +46,16 @@ enum Attendance {
     Bystander(PlayerId),
 }
 
+/// Live state of one world-boss spawn point (IMP-2.7).
+#[derive(Default)]
+pub(super) struct WorldBossSlot {
+    /// The monster standing for this point right now, if any.
+    alive: Option<String>,
+    /// Earliest respawn in `now_ms` terms; 0 until the point is first killed,
+    /// so a fresh boot spawns as soon as someone is there to own it.
+    respawn_at_ms: u64,
+}
+
 /// One reassignment for `hand_off_monsters` to apply. Picking the candidate is
 /// the caller's job; this is just the request.
 pub(super) struct Handoff {
@@ -935,6 +945,145 @@ impl super::GameState {
                 ServerMessage::SpawnMonsterRequest { monster_type },
             )
             .await;
+        }
+    }
+
+    /// World bosses (IMP-2.7): one fixed point each, a long jittered respawn,
+    /// and no zone quota. A point spawns when its timer has run out, nothing
+    /// stands for it, and somebody is close enough to own it — with nobody
+    /// there the spawn simply waits, which is what keeps the boss out of an
+    /// empty world without a new `MonsterLifecycle`.
+    pub async fn tick_world_bosses(&self) {
+        let spawns = crate::world_boss_defs::world_bosses();
+        if spawns.is_empty() {
+            return;
+        }
+        let now = Self::now_ms();
+        let due: Vec<&'static crate::world_boss_defs::WorldBossSpawn> = {
+            // `world_bosses` is only ever taken here and in `on_world_boss_dead`
+            // (which takes nothing else), so holding the registry under it has
+            // one order and no partner.
+            let mut slots = self.world_bosses.write().await;
+            let monsters = self.monsters.read().await;
+            spawns
+                .iter()
+                .filter(|spawn| {
+                    let slot = slots.entry(spawn.id.clone()).or_default();
+                    if let Some(id) = &slot.alive {
+                        if monsters.get(id).is_some() {
+                            return false;
+                        }
+                        // Gone without being killed: nobody was left to watch
+                        // it, so no timer was armed and it may return at once.
+                        slot.alive = None;
+                    }
+                    slot.respawn_at_ms <= now
+                })
+                .collect()
+        };
+
+        let max_per_player = crate::world_config::world_config().max_monsters_per_player as usize;
+        for spawn in due {
+            let mut position = Position {
+                x: onlinerpg_shared::wrap_world_x(spawn.x),
+                y: spawn.y,
+                z: spawn.z,
+            };
+            if let Ok(ground) = self
+                .height_sampler
+                .sample_height(position.x, position.z)
+                .await
+            {
+                position.y = ground;
+            }
+            let candidates = self
+                .players_within_position(&position, 0, super::EVENT_DELIVERY_RADIUS, None)
+                .await;
+            if candidates.is_empty() {
+                continue;
+            }
+            // A boss consumes its owner's cap like any other monster, so an
+            // owner already at 30 is passed over rather than pushed past it.
+            let owner = {
+                let monsters = self.monsters.read().await;
+                candidates
+                    .into_iter()
+                    .map(|(id, dist_sq)| (monsters.owned_by(&id), dist_sq, id))
+                    .filter(|(load, _, _)| *load < max_per_player)
+                    .min_by(|a, b| a.0.cmp(&b.0).then_with(|| a.1.total_cmp(&b.1)))
+                    .map(|(_, _, id)| id)
+            };
+            let Some(owner) = owner else {
+                continue;
+            };
+            let Some(monster) = self
+                .spawn_monster(
+                    spawn.monster_id.clone(),
+                    position,
+                    0.0,
+                    Some(owner),
+                    0,
+                    MonsterLifecycle::Ambient,
+                    None,
+                    true,
+                )
+                .await
+            else {
+                continue;
+            };
+            debug!("World boss {} spawned as {}", spawn.id, monster.id);
+            self.world_bosses
+                .write()
+                .await
+                .entry(spawn.id.clone())
+                .or_default()
+                .alive = Some(monster.id);
+        }
+    }
+
+    /// Arm the respawn timer for whichever point this monster stood for.
+    /// Only a kill gets here: a boss that despawned unattended is picked up
+    /// by the tick instead, with no wait (doc 13 IMP-2.7 revision).
+    pub(super) async fn on_world_boss_dead(&self, monster_id: &str) {
+        let spawns = crate::world_boss_defs::world_bosses();
+        if spawns.is_empty() {
+            return;
+        }
+        let now = Self::now_ms();
+        let mut slots = self.world_bosses.write().await;
+        for spawn in spawns {
+            let Some(slot) = slots.get_mut(&spawn.id) else {
+                continue;
+            };
+            if slot.alive.as_deref() != Some(monster_id) {
+                continue;
+            }
+            slot.alive = None;
+            slot.respawn_at_ms = now + spawn.respawn_delay_ms();
+            debug!(
+                "World boss {} killed; next spawn in {}s",
+                spawn.id,
+                (slot.respawn_at_ms - now) / 1000
+            );
+            return;
+        }
+    }
+
+    /// Test hook: pull a point's respawn deadline forward so a test can reach
+    /// "the wait has passed" without sleeping through half an hour.
+    #[cfg(test)]
+    pub(crate) async fn world_boss_respawn_at_ms(&self, spawn_id: &str) -> Option<u64> {
+        self.world_bosses
+            .read()
+            .await
+            .get(spawn_id)
+            .map(|slot| slot.respawn_at_ms)
+    }
+
+    #[cfg(test)]
+    pub(crate) async fn set_world_boss_respawn_at_ms(&self, spawn_id: &str, at_ms: u64) {
+        if let Some(slot) = self.world_bosses.write().await.get_mut(spawn_id) {
+            slot.respawn_at_ms = at_ms;
         }
     }
 

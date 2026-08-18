@@ -446,6 +446,10 @@ pub struct GameState {
     dungeons: Arc<RwLock<HashMap<String, dungeon::DungeonRuntime>>>,
     /// monster_id → dungeon spawn slot, for respawn bookkeeping on death.
     dungeon_monsters: Arc<RwLock<HashMap<String, dungeon::DungeonMonsterRef>>>,
+    /// World-boss spawn point id → its live state (IMP-2.7). Memory only:
+    /// a restart re-arms every point, which is cheaper than persisting a
+    /// timer nobody can observe across a downtime.
+    world_bosses: Arc<RwLock<HashMap<String, monster::WorldBossSlot>>>,
     /// merchant_player_id → (customer player_id → ticks of hold remaining). A
     /// trading NPC is held in place (its LLM movement is suppressed) while its
     /// entry is non-empty, so it doesn't wander off mid-trade. Each hold
@@ -675,6 +679,7 @@ impl GameState {
             quest_defs,
             dungeons: Arc::new(RwLock::new(HashMap::new())),
             dungeon_monsters: Arc::new(RwLock::new(HashMap::new())),
+            world_bosses: Arc::new(RwLock::new(HashMap::new())),
             open_shops: Arc::new(RwLock::new(HashMap::new())),
             parties: Arc::new(RwLock::new(party::Parties::default())),
             buybacks: Arc::new(RwLock::new(HashMap::new())),

@@ -599,6 +599,9 @@ impl super::GameState {
                 // Dungeon monsters: free their spawn slot for respawn.
                 self.on_dungeon_monster_dead(&monster_id).await;
 
+                // World bosses: arm the long jittered wait (IMP-2.7).
+                self.on_world_boss_dead(&monster_id).await;
+
                 self.drain_hunger_for_kill(player_id).await;
                 if let Some(def) = self.monster_defs.get(&monster_type) {
                     // Depth-scaled dungeon monsters yield XP for their

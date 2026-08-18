@@ -1,6 +1,7 @@
 <script lang="ts">
   import {
     hoveredCell,
+    cursorHeight,
     editorTool,
     currentEditorRegion,
   } from '../../stores/editorStore'
@@ -9,6 +10,26 @@
   import ZoneBrushPanel from './ZoneBrushPanel.svelte'
   import NpcBrushPanel from './NpcBrushPanel.svelte'
   import ObjectBrushPanel from './ObjectBrushPanel.svelte'
+
+  let copied = $state(false)
+
+  /** x,y,z under the cursor, in the column order data-src CSVs use. */
+  function cursorCsv(): string | null {
+    const cell = $hoveredCell
+    if (!cell) return null
+    const y = $cursorHeight ?? 0
+    return `${cell.worldX.toFixed(1)},${y.toFixed(1)},${cell.worldZ.toFixed(1)}`
+  }
+
+  // Authoring a fixed spawn (world_bosses.csv) is otherwise a matter of
+  // reading three numbers off the screen and retyping them.
+  async function copyCursorCoords() {
+    const csv = cursorCsv()
+    if (!csv) return
+    await navigator.clipboard.writeText(csv)
+    copied = true
+    setTimeout(() => (copied = false), 1200)
+  }
 </script>
 
 <div class="editor-mode-badge">
@@ -16,7 +37,11 @@
     <span class="cell-info">
       {#if $currentEditorRegion}R({$currentEditorRegion.rx}, {$currentEditorRegion.rz}){/if}
       T({$hoveredCell.tileX}, {$hoveredCell.tileZ}) C({$hoveredCell.cellX}, {$hoveredCell.cellZ})
+      W({cursorCsv()})
     </span>
+    <button class="copy-coords" onclick={copyCursorCoords} title="Copy x,y,z"
+      >{copied ? 'copied' : 'copy'}</button
+    >
   {/if}
 </div>
 <div class="editor-panel-container">
@@ -84,6 +109,23 @@
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.5);
     pointer-events: none;
     letter-spacing: 1px;
+  }
+
+  .copy-coords {
+    margin-left: 8px;
+    pointer-events: auto;
+    padding: 2px 8px;
+    border: 1px solid rgba(226, 185, 59, 0.4);
+    border-radius: 4px;
+    background: rgba(226, 185, 59, 0.15);
+    color: #e2b93b;
+    cursor: pointer;
+    font-family: inherit;
+    font-size: 11px;
+  }
+
+  .copy-coords:hover {
+    background: rgba(226, 185, 59, 0.3);
   }
 
   .cell-info {
