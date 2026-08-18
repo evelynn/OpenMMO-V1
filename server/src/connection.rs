@@ -73,7 +73,7 @@ const HEARTBEAT_TIMEOUT_SECS: u64 = 30;
 const UNAUTH_TIMEOUT_SECS: u64 = 60;
 
 /// Caps tungstenite's 64 MiB default; legit client messages are a few KB.
-const MAX_WS_MESSAGE_BYTES: usize = 64 * 1024;
+pub(crate) const MAX_WS_MESSAGE_BYTES: usize = 64 * 1024;
 
 /// Per-connection read buffer; the 128 KiB default is oversized for game packets.
 const WS_READ_BUFFER_BYTES: usize = 16 * 1024;

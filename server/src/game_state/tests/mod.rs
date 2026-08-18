@@ -33,6 +33,7 @@ mod skills_tests;
 mod spawn_scale_tests;
 mod spawn_soak_tests;
 mod stall_tests;
+mod storage_scale_tests;
 mod tip_hat_tests;
 mod trading_tests;
 
