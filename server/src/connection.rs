@@ -1076,6 +1076,9 @@ async fn handle_client_message(
                     (!state.is_official_npc).then_some(selected_character.satiation),
                 )
                 .await;
+            game_state
+                .load_save_point(&id, selected_character.save_point)
+                .await;
             if !game_state
                 .attach_player_to_account_session(&authed_account_name, account_session_id, id)
                 .await
@@ -1373,6 +1376,14 @@ async fn handle_client_message(
                     .await;
             } else {
                 warn!("Received monster pickup from client that is not in game");
+            }
+        }
+
+        ClientMessage::SetSavePoint { npc_player_id } => {
+            if let Some(id) = &state.player_id {
+                game_state.set_save_point(id, &npc_player_id).await;
+            } else {
+                warn!("Received save point request from client that is not in game");
             }
         }
 

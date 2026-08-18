@@ -772,6 +772,7 @@ fn satiation_survives_a_save_and_reload() {
         floor_level: 0,
         gold: 0,
         satiation: 123,
+        save_point: None,
     };
     auth.save_batch(&[save], &[], &[], &[], None).unwrap();
 

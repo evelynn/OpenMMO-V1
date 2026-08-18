@@ -3,6 +3,7 @@ import { get } from 'svelte/store'
 import { gameStore, addChatMessage, isAdminUser } from './stores/gameStore'
 import { worldToTileCell } from './components/game-scene/terrain-utils'
 import { networkManager } from './network/socket'
+import { remotePlayerManager } from './managers/remotePlayerManager'
 import {
   editorHeightManager,
   editorSplatManager,
@@ -98,6 +99,33 @@ const COMMANDS: Record<string, Command> = {
       const message = args.trim()
       chatChannel.set('say')
       if (message) networkManager.sendChatMessage(message)
+    },
+  },
+  '/save': {
+    desc: 'Ask the nearest townsperson to mark your respawn point: /save',
+    run: () => {
+      const state = get(gameStore)
+      const me = state.currentPlayer
+      if (!me) return
+      // Nearest official NPC. The server re-checks range, floor and dungeon
+      // footprint — this only picks who to ask.
+      // Live positions live on the manager; the roster carries the NPC flag.
+      let nearest: { id: number; distSq: number } | null = null
+      for (const [id, remote] of remotePlayerManager.players) {
+        if (!state.otherPlayers.get(id)?.isOfficialNpc) continue
+        const dx = remote.position.x - me.position.x
+        const dz = remote.position.z - me.position.z
+        const distSq = dx * dx + dz * dz
+        if (!nearest || distSq < nearest.distSq) nearest = { id, distSq }
+      }
+      if (!nearest) {
+        addChatMessage({
+          text: 'There is no townsperson nearby to ask.',
+          sender: 'system',
+        })
+        return
+      }
+      networkManager.sendSetSavePoint(nearest.id)
     },
   },
   // No client-side handler: the server is the one resolver of song titles

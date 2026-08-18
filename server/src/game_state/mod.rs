@@ -408,6 +408,10 @@ pub struct GameState {
     no_spawn_zones: Vec<NoSpawnZone>,
     /// Player inventories (bag + equipment), keyed by player_id.
     inventories: Arc<RwLock<HashMap<PlayerId, PlayerInventory>>>,
+    /// Chosen respawn points, keyed by player. Absent means the world spawn,
+    /// which is every character that has not set one (IMP-2.2). Loaded on
+    /// entry and written back through the existing batch save.
+    save_points: Arc<RwLock<HashMap<PlayerId, crate::auth::SavePoint>>>,
     /// Items dropped on the ground, keyed by instance_id.
     ground_items: Arc<RwLock<HashMap<u64, ServerGroundItem>>>,
     /// What each looter monster is carrying, keyed by monster id. Memory
@@ -647,6 +651,7 @@ impl GameState {
             )),
             no_spawn_zones,
             inventories: Arc::new(RwLock::new(HashMap::new())),
+            save_points: Arc::new(RwLock::new(HashMap::new())),
             ground_items: Arc::new(RwLock::new(HashMap::new())),
             monster_loot: Arc::new(RwLock::new(HashMap::new())),
             next_item_instance_id: Arc::new(RwLock::new(1)),

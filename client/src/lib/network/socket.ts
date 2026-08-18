@@ -411,6 +411,10 @@ class NetworkManager {
     })
   }
 
+  sendSetSavePoint(npcPlayerId: number) {
+    this.sendMessage({ SetSavePoint: { npc_player_id: npcPlayerId } })
+  }
+
   requestRespawn() {
     if (this.sendAndSerialize('RequestRespawn')) {
       this.respawnRequested.emit()

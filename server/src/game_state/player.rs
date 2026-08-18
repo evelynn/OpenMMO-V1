@@ -132,9 +132,11 @@ fn build_save_data(
     xp: u64,
     gold: i64,
     satiation: u32,
+    save_point: Option<crate::auth::SavePoint>,
 ) -> CharacterSaveData {
     CharacterSaveData {
         character_id,
+        save_point,
         x: player.position.x,
         y: player.position.y,
         z: player.position.z,
@@ -304,6 +306,7 @@ impl super::GameState {
             let mut map = self.player_characters.write().await;
             map.remove(player_id);
         }
+        self.save_points.write().await.remove(player_id);
         {
             let mut gold_map = self.player_gold.write().await;
             gold_map.remove(player_id);
@@ -612,6 +615,7 @@ impl super::GameState {
         let player_gold = self.player_gold.read().await;
         let hunger = self.hunger.read().await;
         let inventories = self.inventories.read().await;
+        let save_points = self.save_points.read().await;
 
         let mut characters = Vec::with_capacity(player_characters.len());
         let mut inventory_rows = Vec::with_capacity(player_characters.len());
@@ -624,6 +628,7 @@ impl super::GameState {
                     *xp,
                     player_gold.get(player_id).copied().unwrap_or(0),
                     super::hunger::satiation_for_save(&hunger, player_id),
+                    save_points.get(player_id).copied(),
                 ));
             }
             if let Some(inventory) = inventories.get(player_id) {
@@ -1567,8 +1572,110 @@ impl super::GameState {
         self.void_summons_aimed_at(player_id).await;
     }
 
+    /// Set `player_id`'s respawn point to `npc_player_id`'s spot. Four gates,
+    /// in the order that leaks least: the target must be an official NPC (or
+    /// any player could name themselves and save anywhere), within
+    /// `MAX_TRADE_DISTANCE`, on the surface, and clear of every dungeon
+    /// footprint — the last two are what keep a save point from becoming a
+    /// dungeon warp (IMP-2.2).
+    pub async fn set_save_point(&self, player_id: &PlayerId, npc_player_id: &PlayerId) {
+        let point = {
+            let players = self.players.read().await;
+            let Some(player) = players.get(player_id) else {
+                return;
+            };
+            let Some(npc) = players.get(npc_player_id) else {
+                self.send_system_message(player_id, "There is nobody there")
+                    .await;
+                return;
+            };
+            if !npc.is_official_npc {
+                self.send_system_message(player_id, "Only townsfolk can mark a respawn point")
+                    .await;
+                return;
+            }
+            let Some(dist_sq) = super::combat::reachable_dist_sq(
+                player.position,
+                player.floor_level,
+                npc.position,
+                npc.floor_level,
+            ) else {
+                self.send_system_message(player_id, "They are on another floor")
+                    .await;
+                return;
+            };
+            if dist_sq > super::trading::MAX_TRADE_DISTANCE * super::trading::MAX_TRADE_DISTANCE {
+                self.send_system_message(player_id, "Too far away").await;
+                return;
+            }
+            if npc.floor_level != 0 {
+                self.send_system_message(player_id, "You can only save on the surface")
+                    .await;
+                return;
+            }
+            if onlinerpg_shared::dungeon::entrance_at(npc.position.x, npc.position.z).is_some() {
+                self.send_system_message(player_id, "Not at a dungeon entrance")
+                    .await;
+                return;
+            }
+            crate::auth::SavePoint {
+                x: npc.position.x,
+                y: npc.position.y,
+                z: npc.position.z,
+                rotation: npc.rotation,
+            }
+        };
+
+        self.save_points.write().await.insert(*player_id, point);
+        self.mark_dirty(player_id).await;
+        self.send_direct_message(
+            player_id,
+            ServerMessage::SavePointSet {
+                position: Position {
+                    x: point.x,
+                    y: point.y,
+                    z: point.z,
+                },
+            },
+        )
+        .await;
+    }
+
+    /// Put a character's stored respawn point into memory on entry. `None`
+    /// leaves the map empty, which is how a character that never chose one
+    /// keeps landing at the world spawn.
+    pub async fn load_save_point(
+        &self,
+        player_id: &PlayerId,
+        save_point: Option<crate::auth::SavePoint>,
+    ) {
+        if let Some(point) = save_point {
+            self.save_points.write().await.insert(*player_id, point);
+        }
+    }
+
+    /// Where this player comes back: their save point, or the world spawn
+    /// until they choose one. Death and the return scroll share it so there
+    /// is only one rule to learn.
+    pub(super) async fn respawn_placement(&self, player_id: &PlayerId) -> (Position, f32) {
+        if let Some(point) = self.save_points.read().await.get(player_id) {
+            return (
+                Position {
+                    x: point.x,
+                    y: point.y,
+                    z: point.z,
+                },
+                point.rotation,
+            );
+        }
+        let spawn = &world_config().spawn_position;
+        (spawn.position(), spawn.rotation)
+    }
+
     pub async fn respawn_player(&self, player_id: &PlayerId) {
         self.movement_intents.write().await.remove(player_id);
+        // Read before the roster guard: the save point map ranks below it.
+        let placement = self.respawn_placement(player_id).await;
         let respawned_player = {
             let mut players = self.players.write().await;
             if let Some(player) = players.get_mut(player_id) {
@@ -1582,9 +1689,8 @@ impl super::GameState {
                 player.health = player.max_health;
                 let old_floor = player.floor_level;
                 let old_position = player.position;
-                let spawn = &world_config().spawn_position;
-                player.position = spawn.position();
-                player.rotation = spawn.rotation;
+                player.position = placement.0;
+                player.rotation = placement.1;
                 // Death always returns to the surface — clears dungeon
                 // depths and stale housing floors alike.
                 player.floor_level = 0;
@@ -1754,6 +1860,7 @@ impl super::GameState {
         let player_chars = self.player_characters.read().await;
         let gold_map = self.player_gold.read().await;
         let hunger = self.hunger.read().await;
+        let save_points = self.save_points.read().await;
 
         let mut result = Vec::with_capacity(dirty_ids.len());
         for pid in &dirty_ids {
@@ -1762,7 +1869,14 @@ impl super::GameState {
             {
                 let gold = gold_map.get(pid).copied().unwrap_or(0);
                 let satiation = super::hunger::satiation_for_save(&hunger, pid);
-                result.push(build_save_data(player, *char_id, *xp, gold, satiation));
+                result.push(build_save_data(
+                    player,
+                    *char_id,
+                    *xp,
+                    gold,
+                    satiation,
+                    save_points.get(pid).copied(),
+                ));
             }
         }
 
@@ -1774,13 +1888,21 @@ impl super::GameState {
         let player_chars = self.player_characters.read().await;
         let gold_map = self.player_gold.read().await;
         let hunger = self.hunger.read().await;
+        let save_points = self.save_points.read().await;
 
         let player = players.get(player_id)?;
         let (char_id, xp, _) = player_chars.get(player_id)?;
         let gold = gold_map.get(player_id).copied().unwrap_or(0);
         let satiation = super::hunger::satiation_for_save(&hunger, player_id);
 
-        Some(build_save_data(player, *char_id, *xp, gold, satiation))
+        Some(build_save_data(
+            player,
+            *char_id,
+            *xp,
+            gold,
+            satiation,
+            save_points.get(player_id).copied(),
+        ))
     }
 
     async fn insert_player_spatial_cell(&self, player_id: &PlayerId, position: &Position) {

@@ -1,7 +1,6 @@
 use crate::auth::{AuthService, ItemRow};
 use crate::item_defs::UseEffect;
 use crate::types::{PlayerId, ServerMessage};
-use crate::world_config::world_config;
 use onlinerpg_shared::inventory::{EquipSlot, GroundItem, ItemInstance, PlayerInventory};
 use onlinerpg_shared::messages::BagLineItem;
 use onlinerpg_shared::monster_ai::MONSTER_LOOT_STACK_LIMIT;
@@ -898,9 +897,9 @@ impl super::GameState {
 
         self.consume_one_and_sync(player_id, instance_id).await;
 
-        let spawn = &world_config().spawn_position;
-        self.teleport_player(player_id, spawn.position(), spawn.rotation, 0)
-            .await;
+        // Same destination as death, so there is one rule rather than two.
+        let (position, rotation) = self.respawn_placement(player_id).await;
+        self.teleport_player(player_id, position, rotation, 0).await;
     }
 
     /// Read a scroll of party summon: ask every other online party member to

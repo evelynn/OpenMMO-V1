@@ -173,6 +173,19 @@ pub struct CharacterRecord {
     /// Nonzero unlocks admin for ADMIN_EMAILS-allowlisted accounts (tiers reserved).
     pub admin_role: i64,
     pub satiation: u32,
+    /// Chosen respawn point; `None` means the world spawn, which is what every
+    /// character that predates the columns keeps (IMP-2.2).
+    pub save_point: Option<SavePoint>,
+}
+
+/// Where a character revives, once they have chosen. Carries rotation because
+/// respawning is a placement, not just a position.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct SavePoint {
+    pub x: f32,
+    pub y: f32,
+    pub z: f32,
+    pub rotation: f32,
 }
 
 pub struct CharacterSaveData {
@@ -188,10 +201,11 @@ pub struct CharacterSaveData {
     pub floor_level: i8,
     pub gold: i64,
     pub satiation: u32,
+    pub save_point: Option<SavePoint>,
 }
 
 /// Column list shared between queries that return full CharacterRecord rows.
-const CHARACTER_COLUMNS: &str = "id, character_name, created_at, level, xp, max_hp, attr_str, attr_dex, attr_con, attr_int, attr_wis, attr_cha, attr_guard, class, last_x, last_y, last_z, last_rotation, health, floor_level, gender, gold, admin_role, satiation";
+const CHARACTER_COLUMNS: &str = "id, character_name, created_at, level, xp, max_hp, attr_str, attr_dex, attr_con, attr_int, attr_wis, attr_cha, attr_guard, class, last_x, last_y, last_z, last_rotation, health, floor_level, gender, gold, admin_role, satiation, save_x, save_y, save_z, save_rotation";
 
 fn character_record_from_row(row: &rusqlite::Row) -> rusqlite::Result<CharacterRecord> {
     Ok(CharacterRecord {
@@ -244,7 +258,26 @@ fn character_record_from_row(row: &rusqlite::Row) -> rusqlite::Result<CharacterR
             .get::<_, i64>(23)
             .unwrap_or(i64::from(onlinerpg_shared::hunger::SATIATION_START))
             .clamp(0, i64::from(onlinerpg_shared::hunger::SATIATION_MAX)) as u32,
+        // All four or none: a half-written point would revive someone inside
+        // geometry. Any NULL reads as "never chose one" — the world spawn.
+        save_point: match (
+            read_optional_real(row, 24),
+            read_optional_real(row, 25),
+            read_optional_real(row, 26),
+            read_optional_real(row, 27),
+        ) {
+            (Some(x), Some(y), Some(z), Some(rotation)) => Some(SavePoint { x, y, z, rotation }),
+            _ => None,
+        },
     })
+}
+
+/// A nullable REAL column, absent for a row written before the column existed.
+fn read_optional_real(row: &rusqlite::Row, index: usize) -> Option<f32> {
+    row.get::<_, Option<f64>>(index)
+        .ok()
+        .flatten()
+        .map(|v| v as f32)
 }
 
 #[derive(Debug)]
@@ -303,7 +336,8 @@ impl AuthService {
         let mut stmt = conn.prepare(
             "UPDATE characters SET last_x = ?1, last_y = ?2, last_z = ?3, last_rotation = ?4, \
              xp = ?5, level = ?6, max_hp = ?7, health = ?8, floor_level = ?9, gold = ?10, \
-             satiation = ?11 WHERE id = ?12",
+             satiation = ?11, save_x = ?12, save_y = ?13, save_z = ?14, save_rotation = ?15 \
+             WHERE id = ?16",
         )?;
         for d in data {
             stmt.execute(params![
@@ -318,6 +352,10 @@ impl AuthService {
                 i64::from(d.floor_level),
                 d.gold,
                 i64::from(d.satiation),
+                d.save_point.map(|p| f64::from(p.x)),
+                d.save_point.map(|p| f64::from(p.y)),
+                d.save_point.map(|p| f64::from(p.z)),
+                d.save_point.map(|p| f64::from(p.rotation)),
                 d.character_id,
             ])?;
         }
@@ -474,6 +512,7 @@ impl AuthService {
             [],
         )?;
         Self::ensure_character_attribute_columns(conn)?;
+        Self::ensure_character_save_point_columns(conn)?;
         conn.execute(
             "CREATE INDEX IF NOT EXISTS idx_characters_account_name ON characters(account_name)",
             [],
@@ -563,6 +602,22 @@ impl AuthService {
             .query_map([], |row| row.get::<_, String>(1))?
             .collect::<Result<HashSet<_>, _>>()?;
         Ok(columns)
+    }
+
+    /// Respawn point columns, added after release (IMP-2.2). Deliberately
+    /// nullable with no default: NULL is "never chose one", which is what
+    /// keeps every existing character respawning at the world spawn.
+    fn ensure_character_save_point_columns(conn: &Connection) -> Result<(), rusqlite::Error> {
+        let columns = Self::table_columns(conn, "characters")?;
+        for column in ["save_x", "save_y", "save_z", "save_rotation"] {
+            if !columns.contains(column) {
+                conn.execute(
+                    &format!("ALTER TABLE characters ADD COLUMN {column} REAL"),
+                    [],
+                )?;
+            }
+        }
+        Ok(())
     }
 
     /// Columns added to character_items after release; mirrors
@@ -1518,6 +1573,7 @@ impl AuthService {
             last_rotation: world_config().spawn_position.rotation,
             health: None,
             floor_level: 0,
+            save_point: None,
             gold: 0,
             admin_role: 0,
             satiation: onlinerpg_shared::hunger::SATIATION_START,
@@ -2011,6 +2067,109 @@ mod tests {
             .unwrap()
             .expect("the new ban applies");
         assert_eq!(ban.reason.as_deref(), Some("re-banned"));
+    }
+
+    /// Decision #7: adding the columns must leave every existing character
+    /// respawning exactly as before, which is what NULL has to mean.
+    #[test]
+    fn a_character_starts_with_no_save_point_and_keeps_one_once_set() {
+        let db_path = std::env::temp_dir().join(format!(
+            "onlinerpg_auth_save_point_{}.db",
+            uuid::Uuid::new_v4()
+        ));
+        let auth = AuthService::new(db_path).unwrap();
+        let account = auth.login_npc("npc_save_point").unwrap();
+        let record = auth
+            .create_character(
+                &account,
+                "Homebound",
+                &CharacterAttributes {
+                    r#str: 12,
+                    dex: 12,
+                    con: 12,
+                    int: 12,
+                    wis: 12,
+                    cha: 12,
+                    guard: 10,
+                },
+                16,
+                CharacterClass::Knight,
+                Gender::Male,
+            )
+            .unwrap();
+        assert!(
+            record.save_point.is_none(),
+            "a new character has not chosen one"
+        );
+
+        let point = SavePoint {
+            x: 12.5,
+            y: 3.0,
+            z: -40.25,
+            rotation: 1.5,
+        };
+        auth.save_batch(
+            &[CharacterSaveData {
+                character_id: record.id,
+                x: 0.0,
+                y: 0.0,
+                z: 0.0,
+                rotation: 0.0,
+                xp: 0,
+                level: 1,
+                max_hp: 16,
+                health: 16,
+                floor_level: 0,
+                gold: 0,
+                satiation: 500,
+                save_point: Some(point),
+            }],
+            &[],
+            &[],
+            &[],
+            None,
+        )
+        .unwrap();
+
+        let reloaded = auth.get_character_for_account(&account, record.id).unwrap();
+        assert_eq!(reloaded.save_point, Some(point));
+    }
+
+    /// The migration runs on every boot, so it has to be a no-op the second
+    /// time — and it must not disturb a point already stored.
+    #[test]
+    fn the_save_point_migration_is_idempotent() {
+        let db_path = std::env::temp_dir().join(format!(
+            "onlinerpg_auth_save_migrate_{}.db",
+            uuid::Uuid::new_v4()
+        ));
+        let auth = AuthService::new(db_path.clone()).unwrap();
+        let account = auth.login_npc("npc_save_migrate").unwrap();
+        let record = auth
+            .create_character(
+                &account,
+                "Migrant",
+                &CharacterAttributes {
+                    r#str: 12,
+                    dex: 12,
+                    con: 12,
+                    int: 12,
+                    wis: 12,
+                    cha: 12,
+                    guard: 10,
+                },
+                16,
+                CharacterClass::Knight,
+                Gender::Male,
+            )
+            .unwrap();
+        drop(auth);
+
+        // Second boot against the same file.
+        let auth = AuthService::new(db_path).unwrap();
+        let reloaded = auth.get_character_for_account(&account, record.id).unwrap();
+        assert_eq!(reloaded.name, "Migrant");
+        assert!(reloaded.save_point.is_none());
     }
 
     /// A ban outlives its characters, so `/unban` has to be able to name the

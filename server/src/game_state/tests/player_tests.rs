@@ -300,3 +300,139 @@ async fn active_character_cannot_be_deleted_from_another_session() {
         Err(crate::auth::AuthError::CharacterNotFound)
     ));
 }
+
+// ---- Save points (IMP-2.2) -------------------------------------------------
+
+/// An official NPC standing at `x`, on `floor`.
+async fn add_npc(game_state: &GameState, name: &str, x: f32, floor: i8) -> PlayerId {
+    let mut npc = make_player(name, x, 0.0);
+    npc.is_official_npc = true;
+    npc.floor_level = floor;
+    let id = npc.id;
+    game_state.add_player(npc).await;
+    id
+}
+
+async fn saved_point(
+    game_state: &GameState,
+    player_id: &PlayerId,
+) -> Option<crate::auth::SavePoint> {
+    game_state.save_points.read().await.get(player_id).copied()
+}
+
+#[tokio::test]
+async fn a_townsperson_marks_a_respawn_point() {
+    let game_state = make_test_game_state("save_point_set");
+    let player = pid("traveler");
+    game_state
+        .add_player(make_player("traveler", 0.0, 0.0))
+        .await;
+    let npc = add_npc(&game_state, "Rica", 2.0, 0).await;
+
+    game_state.set_save_point(&player, &npc).await;
+
+    let point = saved_point(&game_state, &player).await.expect("set");
+    assert_eq!(point.x, 2.0, "the NPC's spot, never a client-sent one");
+}
+
+/// Without this gate a player names themselves — distance zero — and saves
+/// anywhere on the surface, which is the whole point of the NPC.
+#[tokio::test]
+async fn a_player_cannot_be_their_own_save_point() {
+    let game_state = make_test_game_state("save_point_self");
+    let player = pid("selfsaver");
+    game_state
+        .add_player(make_player("selfsaver", 0.0, 0.0))
+        .await;
+    let other = pid("bystander");
+    game_state
+        .add_player(make_player("bystander", 1.0, 0.0))
+        .await;
+
+    game_state.set_save_point(&player, &player).await;
+    game_state.set_save_point(&player, &other).await;
+
+    assert!(saved_point(&game_state, &player).await.is_none());
+}
+
+#[tokio::test]
+async fn a_save_point_needs_the_townsperson_within_reach() {
+    let game_state = make_test_game_state("save_point_range");
+    let player = pid("distant");
+    game_state
+        .add_player(make_player("distant", 0.0, 0.0))
+        .await;
+    let npc = add_npc(&game_state, "FarRica", 50.0, 0).await;
+
+    game_state.set_save_point(&player, &npc).await;
+
+    assert!(saved_point(&game_state, &player).await.is_none());
+}
+
+/// The floor gate is what stops a save point from becoming a dungeon warp.
+#[tokio::test]
+async fn a_save_point_cannot_be_set_off_the_surface() {
+    let game_state = make_test_game_state("save_point_floor");
+    let player = pid("delver");
+    let mut body = make_player("delver", 0.0, 0.0);
+    body.floor_level = -1;
+    game_state.add_player(body).await;
+    let npc = add_npc(&game_state, "DeepRica", 2.0, -1).await;
+
+    game_state.set_save_point(&player, &npc).await;
+
+    assert!(saved_point(&game_state, &player).await.is_none());
+}
+
+#[tokio::test]
+async fn death_returns_a_player_to_their_save_point() {
+    let game_state = make_test_game_state("save_point_respawn");
+    let player = pid("fallen");
+    let mut body = make_player("fallen", 400.0, 0.0);
+    game_state.add_player(body.clone()).await;
+    let npc = add_npc(&game_state, "HomeRica", 402.0, 0).await;
+    game_state.set_save_point(&player, &npc).await;
+
+    // Die somewhere else entirely, so the revive position can only come from
+    // the save point.
+    {
+        let mut players = game_state.players.write().await;
+        let stored = players.get_mut(&player).expect("player");
+        stored.health = 0;
+        stored.position = Position {
+            x: -900.0,
+            y: 0.0,
+            z: -900.0,
+        };
+    }
+    body.health = 0;
+
+    game_state.respawn_player(&player).await;
+
+    let revived = game_state.players.read().await[&player].position;
+    assert_eq!(
+        revived.x, 402.0,
+        "back at the townsperson, not the world spawn"
+    );
+    assert_ne!(
+        revived.x,
+        crate::world_config::world_config().spawn_position.x,
+        "and the fixture would otherwise be indistinguishable"
+    );
+}
+
+/// Decision #7: a character that never set one keeps today's behavior.
+#[tokio::test]
+async fn death_without_a_save_point_still_uses_the_world_spawn() {
+    let game_state = make_test_game_state("save_point_default");
+    let player = pid("unsaved");
+    let mut body = make_player("unsaved", 400.0, 400.0);
+    body.health = 0;
+    game_state.add_player(body).await;
+
+    game_state.respawn_player(&player).await;
+
+    let spawn = &crate::world_config::world_config().spawn_position;
+    let revived = game_state.players.read().await[&player].position;
+    assert_eq!((revived.x, revived.z), (spawn.x, spawn.z));
+}

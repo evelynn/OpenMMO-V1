@@ -86,7 +86,9 @@ pub const NPC_TOKEN_FILENAME: &str = "npc_token";
 ///      client asks, the server decides — IMP-1.4.
 /// v34: GuardUpdated widens into EffectiveStats (guard + gear-adjusted
 ///      attributes + hunger-scaled max carry weight) — IMP-0.2.
-pub const PROTOCOL_VERSION: u32 = 34;
+/// v35: save points (SetSavePoint -> SavePointSet); death and the return
+///      scroll land there instead of the world spawn — IMP-2.2.
+pub const PROTOCOL_VERSION: u32 = 35;
 
 /// WebSocket close code sent when the handshake is refused (wrong protocol
 /// version, or traffic before `ClientInfo`). Lives outside the serialized

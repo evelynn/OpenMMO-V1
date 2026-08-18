@@ -422,6 +422,14 @@ pub enum ClientMessage {
         monster_id: String,
         target_player_id: PlayerId,
     },
+    /// Set the sender's respawn point to the named NPC's spot. Coordinates
+    /// are never sent: an arbitrary point would let a player save at a
+    /// dungeon mouth and sidestep IMP-2.4's "dungeons are not warp
+    /// destinations". The server validates the NPC, the range, the floor and
+    /// the dungeon footprint (IMP-2.2).
+    SetSavePoint {
+        npc_player_id: PlayerId,
+    },
     /// A looter the sender owns wants the ground item it reached. Validated
     /// exactly like a player's `PickupItem` — ownership, floor, distance and
     /// the carry cap — since the AI runs on the owner's client
@@ -1237,6 +1245,11 @@ pub enum ServerMessage {
     /// Direct message: the receiving player's current gold (smallest unit).
     GoldUpdate {
         gold: i64,
+    },
+    /// Direct message: the sender's respawn point now stands here. Death and
+    /// the return scroll both land on it.
+    SavePointSet {
+        position: Position,
     },
     /// Direct message: what the server actually resolves this player against,
     /// once gear and hunger are folded in. Every field here is one the client

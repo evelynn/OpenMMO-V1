@@ -544,6 +544,13 @@ export function handleServerMessage(
       addChatMessage({ text: data.message, sender: 'system' })
       break
 
+    case 'SavePointSet':
+      addChatMessage({
+        text: 'This is where you will return.',
+        sender: 'system',
+      })
+      break
+
     case 'PartyInviteReceived':
       enqueueConsent(
         pendingPartyInvites,

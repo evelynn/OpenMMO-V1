@@ -110,6 +110,12 @@ pub(super) enum AgentAction {
         #[serde(alias = "target", alias = "player_name", alias = "target_player")]
         player: String,
     },
+    /// Ask a nearby townsperson to mark your respawn point at their spot.
+    #[serde(rename = "set_save_point", alias = "save_point", alias = "set_respawn")]
+    SetSavePoint {
+        #[serde(alias = "target", alias = "player", alias = "player_name")]
+        npc: String,
+    },
     /// Invite a player to your party by name. Works at any distance, like a
     /// whisper.
     #[serde(rename = "party_invite", alias = "invite_party", alias = "invite")]
@@ -570,6 +576,14 @@ pub(super) const ACTION_SPECS: &[ActionSpec] = &[
   {"type": "offer_deal", "target": "darkcocoa", "item": "healing_potion", "kind": "buy", "modifier_pct": -10}"#,
     },
     ActionSpec {
+        names: &["set_save_point"],
+        aliases: &["save_point", "set_respawn"],
+        doc: r#"- Ask a townsperson standing next to you to mark where you come back
+  after dying. The return scroll lands there too. Must be an official NPC,
+  within about 6m, on the surface, and away from a dungeon mouth:
+  {"type": "set_save_point", "npc": "Rica"}"#,
+    },
+    ActionSpec {
         names: &["open_trade"],
         aliases: &["trade"],
         doc: r#"- (merchants only) Open your trade window on a nearby player's screen —
@@ -711,7 +725,8 @@ impl AgentAction {
             | Self::Buyback { .. }
             | Self::Fish { .. }
             | Self::Respawn => true,
-            Self::CheckMail
+            Self::SetSavePoint { .. }
+            | Self::CheckMail
             | Self::ClaimMail { .. }
             | Self::QuestBoard { .. }
             | Self::AcceptQuest { .. }
@@ -777,7 +792,8 @@ impl AgentAction {
             | Self::QuestBoard { .. }
             | Self::AcceptQuest { .. }
             | Self::TurnInQuest { .. } => true,
-            Self::Move { .. }
+            Self::SetSavePoint { .. }
+            | Self::Move { .. }
             | Self::Attack { .. }
             | Self::Follow { .. }
             | Self::Pickup { .. }
@@ -828,6 +844,7 @@ impl AgentAction {
             Self::StopFishing => "stop_fishing",
             Self::OfferDeal { .. } => "offer_deal",
             Self::OpenTrade { .. } => "open_trade",
+            Self::SetSavePoint { .. } => "set_save_point",
             Self::PartyInvite { .. } => "party_invite",
             Self::PartyAccept { .. } => "party_accept",
             Self::PartyDecline { .. } => "party_decline",
@@ -1231,6 +1248,8 @@ pub(super) fn action_to_command(
         // Handled in `execute::handle_response` (needs name resolution and a
         // background chase task).
         AgentAction::Follow { .. } => None,
+        // Needs the roster to turn a name into an id.
+        AgentAction::SetSavePoint { .. } => None,
         AgentAction::Say { message } => Some(ClientMessage::ChatMessage {
             message: message.clone(),
         }),

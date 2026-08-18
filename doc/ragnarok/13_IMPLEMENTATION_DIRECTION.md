@@ -697,7 +697,7 @@ CREATE TABLE IF NOT EXISTS mail_items (
 | 결정 | 채택 (09 #4-a) |
 | 난이도 | 소~중 |
 | 선행 조건 | 없음 |
-| 프로토콜 변경 | 있음 — `ClientMessage::SetSavePoint { npc_player_id }`, `ServerMessage::SavePointSet { position }` |
+| 프로토콜 변경 | 있음 — `ClientMessage::SetSavePoint { npc_player_id }`, `ServerMessage::SavePointSet { position }`, `PROTOCOL_VERSION` 34 → **35** |
 | 저장 스키마 변경 | 있음 — `characters`에 `save_x/save_y/save_z/save_rotation` (NULL 허용) |
 
 **손댈 파일**
@@ -707,15 +707,42 @@ CREATE TABLE IF NOT EXISTS mail_items (
   `write_character_states`(:268).
 - `server/src/game_state/player.rs:1563` `respawn_player` — 세이브 포인트 우선.
 - `server/src/game_state/inventory.rs:885` `use_return_scroll` — 동일 목적지.
-- `server/src/game_state/mod.rs` — `save_points: Arc<RwLock<HashMap<PlayerId, Position>>>`
+- `server/src/game_state/mod.rs` — `save_points: Arc<RwLock<HashMap<PlayerId, SavePoint>>>`
   및 `register_player_character` / `unregister_player_character`에서 등록·해제.
-- `server/src/connection.rs` — `EnterGame` arm에서 레코드의 세이브 포인트를 메모리에 적재.
+- `server/src/connection.rs` — `EnterGame` arm에서 레코드의 세이브 포인트를 메모리에 적재,
+  그리고 `SetSavePoint` 디스패치 arm.
+- `shared/src/messages.rs` · `shared/src/lib.rs` — 메시지 2종 + `PROTOCOL_VERSION` 35.
+- `client/src/lib/network/socket.ts` · `networkTypes.ts` · `messageHandlers.ts` — 송신·수신.
+- `agent-client/src/driver/action.rs` — `AgentAction::SetSavePoint` + `ACTION_SPECS`,
+  `agent-client/src/main.rs`의 `msg_name` arm(exhaustive match라 없으면 컴파일이 깨진다).
+
+> **개정 (IMP-2.2 착수 시)** — 네 가지를 고쳤다.
+>
+> 1. **저장 맵이 스키마를 담지 못한다.** 원문의 `HashMap<PlayerId, Position>`은
+>    `Position`이 `{x, y, z}`뿐인데(`shared/src/world.rs:49`) 같은 절의 스키마 표는
+>    `save_rotation`을 요구한다. `SavePoint { position, rotation }`으로 바꾼다.
+> 2. **프로토콜 번호를 확정한다.** 원문은 번호를 적지 않았다(IMP-2.1은 "v30 → v31"까지
+>    적었다). IMP-0.2가 v34를 가져갔으므로 이 항목은 **v35**다.
+> 3. **검증 3종으로는 부족하다 — 대상이 NPC인지 확인하지 않는다.** 거리·층·던전
+>    footprint만 보면 플레이어가 **자기 자신의 `PlayerId`를 넣어**(거리 0) 0층 아무
+>    데서나 세이브할 수 있다. 그러면 이 절이 스스로 내세운 "도시 서비스 NPC를 찾아갈
+>    이유"도, IMP-2.4 우회 방지 논거도 무너진다. `validate_trader`
+>    (`server/src/game_state/trading.rs:174`)와 같은 모양으로 **`is_official_npc` 검사를
+>    네 번째 조건으로 추가한다.**
+> 4. **전용 도시 서비스 NPC는 이 항목에서 만들지 않는다.** 현재 NPC는
+>    rica·karl·signe·wick 넷뿐이고 서비스 NPC가 없다. 새 NPC는 `npcs.csv` 행 + 에이전트
+>    프롬프트 디렉터리가 함께 필요한 **콘텐츠 작업**이며, 이 문서(§Phase 2 서두)가 이미
+>    IMP-2.2·2.3·2.4를 **하나의** 서비스 NPC에 묶겠다고 정했다. 따라서 NPC 신설은
+>    **창고(IMP-2.3)와 같은 릴리스로 미루고**, 그때까지는 **공식 NPC 누구나** 세이브
+>    포인트를 잡아 준다. 공식 NPC는 도시에 서 있고 층·던전 footprint 검사도 그대로
+>    걸리므로 우회 논거는 유지된다.
 
 **구현 방향**
 좌표를 클라이언트가 보내게 두지 않는다. `SetSavePoint`는 **NPC id만** 싣고 서버가
 그 NPC의 현재 위치를 저장한다 — 임의 좌표 세이브는 던전 앞 세이브를 허용해
-IMP-2.4의 "던전 워프 불가"를 우회한다. 검증 3종: NPC와의 거리(`MAX_TRADE_DISTANCE`
-6.0m 재사용), `floor_level == 0`, 그리고 `dungeon::entrance_at`의 footprint 밖.
+IMP-2.4의 "던전 워프 불가"를 우회한다. 검증 **4종**: 대상이 **공식 NPC**일 것,
+NPC와의 거리(`MAX_TRADE_DISTANCE` 6.0m 재사용), `floor_level == 0`,
+그리고 `dungeon::entrance_at`의 footprint 밖.
 `NULL = 월드 스폰`으로 두는 것이 마이그레이션의 핵심이다 — 컬럼을 추가해도 기존
 캐릭터는 `respawn_player`가 지금과 똑같이 `world_config().spawn_position`을 쓴다.
 `use_return_scroll`도 같은 목적지로 바꾼다. 그러지 않으면 "귀환 주문서는 수도로,
@@ -735,7 +762,8 @@ NPC를 찾아갈 이유가 반감된다.
 
 **검증**
 - `auth.rs` 테스트: 세이브 포인트 저장/로드 왕복, NULL 캐릭터의 기본 동작.
-- `game_state` 테스트: 던전 안/공중층에서의 `SetSavePoint` 거부, 거리 초과 거부.
+- `game_state` 테스트: 던전 안/공중층에서의 `SetSavePoint` 거부, 거리 초과 거부,
+  **NPC가 아닌 대상 거부**(자기 자신 포함), 세이브 포인트가 있는 캐릭터의 리스폰 위치.
 - 인게임: 도시에서 세이브 → 멀리서 사망 → 도시에서 부활, 귀환 주문서도 같은 지점.
 
 **성능** — 캐릭터당 f32 4개. 배치 세이브에 컬럼 4개가 붙을 뿐 새 쓰기 경로 없음.
