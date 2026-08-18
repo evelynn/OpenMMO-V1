@@ -546,6 +546,37 @@ pub(super) async fn handle_response(
         // ask the server to open our shop on their client. The server
         // validates range and trading capability; failures come back as a
         // TradeError event.
+        if let AgentAction::Travel { npc, node_id } = action {
+            let mut s = state.lock().await;
+            let Some((npc_id, is_npc)) = s.resolve_nearby_player(npc) else {
+                s.push_agent_event(format!(
+                    "[Travel] Nobody named '{npc}' is nearby; nothing was sent."
+                ));
+                continue;
+            };
+            if !is_npc {
+                s.push_agent_event(format!(
+                    "[Travel] {npc} is a traveler, not a townsperson - only official \
+                     NPCs arrange travel."
+                ));
+                continue;
+            }
+            let cmd = onlinerpg_shared::ClientMessage::RequestTravel {
+                npc_player_id: npc_id,
+                node_id: node_id.clone(),
+            };
+            if let Err(e) = s.send_command(cmd).await {
+                error!("Failed to send travel: {e}");
+            } else if node_id.is_empty() {
+                s.push_agent_event(format!("[Travel] You asked {npc} where the roads go."));
+            } else {
+                s.push_agent_event(format!(
+                    "[Travel] You asked {npc} to take you to {node_id}."
+                ));
+            }
+            continue;
+        }
+
         if let AgentAction::SetSavePoint { npc } = action {
             let mut s = state.lock().await;
             let Some((npc_id, is_npc)) = s.resolve_nearby_player(npc) else {

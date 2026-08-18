@@ -3,6 +3,7 @@ import { get } from 'svelte/store'
 import { gameStore, addChatMessage, isAdminUser } from './stores/gameStore'
 import { worldToTileCell } from './components/game-scene/terrain-utils'
 import { networkManager } from './network/socket'
+import { travelAgentId } from './stores/travelStore'
 import { remotePlayerManager } from './managers/remotePlayerManager'
 import {
   editorHeightManager,
@@ -136,6 +137,21 @@ const COMMANDS: Record<string, Command> = {
         return
       }
       networkManager.sendSetSavePoint(npc)
+    },
+  },
+  '/travel': {
+    desc: 'Ask the nearest townsperson where you can travel: /travel',
+    run: () => {
+      const npc = nearestTownsperson()
+      if (npc === null) {
+        addChatMessage({
+          text: 'There is no townsperson nearby to ask.',
+          sender: 'system',
+        })
+        return
+      }
+      travelAgentId.set(npc)
+      networkManager.sendRequestTravel(npc, '')
     },
   },
   '/storage': {

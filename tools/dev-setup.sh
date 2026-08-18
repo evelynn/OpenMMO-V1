@@ -8,9 +8,26 @@ CHECK_ONLY=0
 INSTALL_TOOLS=0
 SKIP_ASSETS=0
 SKIP_TERRAIN=0
-TERRAIN_MIN=-2
-TERRAIN_MAX=1
+# Default bake range is derived from the spawn point below, not hardcoded: a
+# square around the origin does not contain it, and a dev who bakes the wrong
+# regions gets a black world exactly where every character starts.
+TERRAIN_X_MIN=""
+TERRAIN_X_MAX=""
+TERRAIN_Z_MIN=""
+TERRAIN_Z_MAX=""
 TERRAIN_SEED=42
+
+# World region holding the spawn, from data-src/world.json. A region is 16
+# tiles and a tile is 64 world units, with tile 0 centred on the origin.
+spawn_region() {
+    python3 - "$1" <<'SPAWN'
+import json, math, sys
+axis = sys.argv[1]
+spawn = json.load(open("data-src/world.json"))["spawnPosition"]
+tile = math.floor((spawn[axis] + 32.0) / 64.0)
+print(math.floor(tile / 16))
+SPAWN
+}
 
 usage() {
     cat <<'EOF'
@@ -21,7 +38,8 @@ Usage: tools/dev-setup.sh [options]
   --skip-assets     Skip the Hugging Face binary asset download.
   --skip-terrain    Skip the terrain bake.
   --full-terrain    Bake all 32x32 regions (~73 GB) instead of the dev subset.
-  --regions MIN MAX Region range on both axes (default -2 1, ~1 GB).
+  --regions MIN MAX Region range on both axes. Default is the spawn's region
+                    plus one ring (3x3, ~600 MB) — the origin is not the spawn.
   --seed N          World seed for the bake (default 42).
 EOF
 }
@@ -32,8 +50,8 @@ while [ $# -gt 0 ]; do
         --install-tools) INSTALL_TOOLS=1 ;;
         --skip-assets) SKIP_ASSETS=1 ;;
         --skip-terrain) SKIP_TERRAIN=1 ;;
-        --full-terrain) TERRAIN_MIN=-16 TERRAIN_MAX=15 ;;
-        --regions) TERRAIN_MIN=$2 TERRAIN_MAX=$3; shift 2 ;;
+        --full-terrain) TERRAIN_X_MIN=-16 TERRAIN_X_MAX=15 TERRAIN_Z_MIN=-16 TERRAIN_Z_MAX=15 ;;
+        --regions) TERRAIN_X_MIN=$2 TERRAIN_X_MAX=$3 TERRAIN_Z_MIN=$2 TERRAIN_Z_MAX=$3; shift 2 ;;
         --seed) TERRAIN_SEED=$2; shift ;;
         -h|--help) usage; exit 0 ;;
         *) echo "unknown option: $1" >&2; usage >&2; exit 2 ;;
@@ -131,12 +149,19 @@ elif [ "$SKIP_TERRAIN" = 1 ]; then
 elif [ "$CHECK_ONLY" = 1 ]; then
     fail "not baked — cargo run -p terrain-gen --release -- bake --seed $TERRAIN_SEED"
 else
-    regions=$((TERRAIN_MAX - TERRAIN_MIN + 1))
-    echo "    baking ${regions}x${regions} regions (~$((regions * regions * 65)) MB, ~3-5 min)"
+    if [ -z "$TERRAIN_X_MIN" ]; then
+        sx=$(spawn_region x); sz=$(spawn_region z)
+        TERRAIN_X_MIN=$((sx - 1)); TERRAIN_X_MAX=$((sx + 1))
+        TERRAIN_Z_MIN=$((sz - 1)); TERRAIN_Z_MAX=$((sz + 1))
+        echo "    spawn sits in region ($sx, $sz); baking it plus one ring"
+    fi
+    wide=$((TERRAIN_X_MAX - TERRAIN_X_MIN + 1))
+    tall=$((TERRAIN_Z_MAX - TERRAIN_Z_MIN + 1))
+    echo "    baking ${wide}x${tall} regions (~$((wide * tall * 65)) MB, ~10 min)"
     cargo run -p terrain-gen --release -- bake \
         --seed "$TERRAIN_SEED" \
-        --region-x-min "$TERRAIN_MIN" --region-x-max "$TERRAIN_MAX" \
-        --region-z-min "$TERRAIN_MIN" --region-z-max "$TERRAIN_MAX"
+        --region-x-min "$TERRAIN_X_MIN" --region-x-max "$TERRAIN_X_MAX" \
+        --region-z-min "$TERRAIN_Z_MIN" --region-z-max "$TERRAIN_Z_MAX"
     ok "baked"
 fi
 

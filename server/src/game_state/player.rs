@@ -1582,12 +1582,13 @@ impl super::GameState {
         self.void_summons_aimed_at(player_id).await;
     }
 
-    /// Set `player_id`'s respawn point to `npc_player_id`'s spot. Four gates,
+    /// Set `player_id`'s respawn point to `npc_player_id`'s spot. Three gates,
     /// in the order that leaks least: the target must be an official NPC (or
     /// any player could name themselves and save anywhere), within
-    /// `MAX_TRADE_DISTANCE`, on the surface, and clear of every dungeon
-    /// footprint — the last two are what keep a save point from becoming a
-    /// dungeon warp (IMP-2.2).
+    /// `MAX_TRADE_DISTANCE`, and on the surface. The surface check is the one
+    /// that stops a save point becoming a dungeon escape; a dungeon-footprint
+    /// check would additionally refuse the entire starting town, which is
+    /// built over the old crypt (doc 13 IMP-2.2 revision 2).
     pub async fn set_save_point(&self, player_id: &PlayerId, npc_player_id: &PlayerId) {
         let point = {
             let players = self.players.read().await;
@@ -1620,11 +1621,6 @@ impl super::GameState {
             }
             if npc.floor_level != 0 {
                 self.send_system_message(player_id, "You can only save on the surface")
-                    .await;
-                return;
-            }
-            if onlinerpg_shared::dungeon::entrance_at(npc.position.x, npc.position.z).is_some() {
-                self.send_system_message(player_id, "Not at a dungeon entrance")
                     .await;
                 return;
             }

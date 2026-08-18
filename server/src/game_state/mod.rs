@@ -256,6 +256,7 @@ mod storage;
 mod time;
 mod tip_hat;
 mod trading;
+mod travel;
 pub use trading::BUYBACK_SWEEP_PERIOD;
 
 // Visible crate-wide so tests outside this module (e.g. the login gate in

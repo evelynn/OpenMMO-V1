@@ -91,7 +91,9 @@ pub const NPC_TOKEN_FILENAME: &str = "npc_token";
 /// v36: storage (OpenStorage/StorageDeposit/StorageWithdraw/CloseStorage ->
 ///      StorageOpened/StorageSlotChanged), 120 slots, delta transport —
 ///      IMP-2.3.
-pub const PROTOCOL_VERSION: u32 = 36;
+/// v37: paid travel (RequestTravel -> TravelDestinations/TravelDenied);
+///      fixed nodes only, fares burned, dungeons excluded — IMP-2.4.
+pub const PROTOCOL_VERSION: u32 = 37;
 
 /// WebSocket close code sent when the handshake is refused (wrong protocol
 /// version, or traffic before `ClientInfo`). Lives outside the serialized

@@ -277,6 +277,18 @@ pub fn resolve_title<'a>(
         .or_else(|| titles.find(|t| t.to_lowercase().contains(&wanted)))
 }
 
+/// One travel destination as the service offers it, with this character's
+/// state folded in — the client shows the reason rather than guessing it.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TravelOffer {
+    pub id: String,
+    pub name: String,
+    pub fare: i64,
+    pub min_level: u32,
+    /// False when the level gate or the purse says no.
+    pub affordable: bool,
+}
+
 /// One contract as the board shows it, with this character's state folded in.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct QuestOffer {
@@ -421,6 +433,13 @@ pub enum ClientMessage {
     MonsterAttack {
         monster_id: String,
         target_player_id: PlayerId,
+    },
+    /// Ask the travel service what it offers, or to be taken to `node_id`.
+    /// An empty `node_id` is the question; a named one is the request
+    /// (IMP-2.4).
+    RequestTravel {
+        npc_player_id: PlayerId,
+        node_id: String,
     },
     /// Open the storage container held for the sender by this NPC. The
     /// server answers with one `StorageOpened` snapshot; everything after is
@@ -1265,6 +1284,15 @@ pub enum ServerMessage {
     /// Direct message: the receiving player's current gold (smallest unit).
     GoldUpdate {
         gold: i64,
+    },
+    /// Direct message: where this player may travel from here, with the fare
+    /// and level gate already resolved for them.
+    TravelDestinations {
+        nodes: Vec<TravelOffer>,
+    },
+    /// Direct message: why the trip was refused.
+    TravelDenied {
+        reason: String,
     },
     /// Direct message: the whole container, once, when it opens. Every
     /// change after this is a `StorageSlotChanged` — re-pushing the snapshot

@@ -115,6 +115,15 @@ pub(super) enum AgentAction {
         #[serde(alias = "target", alias = "player_name", alias = "target_player")]
         player: String,
     },
+    /// Ask a nearby townsperson where you can travel, or to be taken there.
+    #[serde(rename = "travel", alias = "fast_travel")]
+    Travel {
+        #[serde(alias = "target", alias = "player_name")]
+        npc: String,
+        /// Empty asks for the list; a node id asks for the trip.
+        #[serde(default, alias = "node", alias = "destination")]
+        node_id: String,
+    },
     /// Put a bag item into the storage a nearby townsperson keeps.
     #[serde(rename = "deposit", alias = "store_item")]
     Deposit {
@@ -597,6 +606,16 @@ pub(super) const ACTION_SPECS: &[ActionSpec] = &[
   {"type": "offer_deal", "target": "darkcocoa", "item": "healing_potion", "kind": "buy", "modifier_pct": -10}"#,
     },
     ActionSpec {
+        names: &["travel"],
+        aliases: &["fast_travel"],
+        doc: r#"- Ask a townsperson beside you where the roads go, then pay to be taken
+  there. Leave the destination out to see the list first. Fares are in
+  copper and you must be on the surface, out of combat:
+  {"type": "travel", "npc": "Rica"}
+  {"type": "travel", "npc": "Rica", "node_id": "riverside"}
+  Dungeons are never destinations — you walk to those."#,
+    },
+    ActionSpec {
         names: &["deposit"],
         aliases: &["store_item"],
         doc: r#"- Put something in storage. Open it first by standing next to a
@@ -762,6 +781,7 @@ impl AgentAction {
             | Self::Fish { .. }
             | Self::Respawn => true,
             Self::SetSavePoint { .. }
+            | Self::Travel { .. }
             | Self::Deposit { .. }
             | Self::Withdraw { .. }
             | Self::CheckMail
@@ -831,6 +851,7 @@ impl AgentAction {
             | Self::AcceptQuest { .. }
             | Self::TurnInQuest { .. } => true,
             Self::SetSavePoint { .. }
+            | Self::Travel { .. }
             | Self::Deposit { .. }
             | Self::Withdraw { .. }
             | Self::Move { .. }
@@ -885,6 +906,7 @@ impl AgentAction {
             Self::OfferDeal { .. } => "offer_deal",
             Self::OpenTrade { .. } => "open_trade",
             Self::SetSavePoint { .. } => "set_save_point",
+            Self::Travel { .. } => "travel",
             Self::Deposit { .. } => "deposit",
             Self::Withdraw { .. } => "withdraw",
             Self::PartyInvite { .. } => "party_invite",
@@ -1292,6 +1314,7 @@ pub(super) fn action_to_command(
         AgentAction::Follow { .. } => None,
         // Needs the roster to turn a name into an id.
         AgentAction::SetSavePoint { .. } => None,
+        AgentAction::Travel { .. } => None,
         AgentAction::Deposit {
             instance_id,
             quantity,

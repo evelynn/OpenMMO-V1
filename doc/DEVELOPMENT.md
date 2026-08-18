@@ -77,20 +77,26 @@ cargo install wasm-pack cargo-watch
    한 번에 돈다. **fresh clone에서는 반드시 필요**하고, `shared/`를 고칠 때마다 다시 필요하다.
 4. **지형 베이크** — 하이트맵·스플랫맵·미니맵·수면 필드는 git에 없다.
    ```bash
-   # 개발용: 4x4 리전(약 1 GB). 시간은 전체 베이크와 비슷한 3~5분
+   # 개발용: 스폰 주변 3x3 리전(약 600 MB). 시간은 전체 베이크와 비슷한 10분 안팎
    # (침식·도로 시뮬레이션이 리전 범위와 무관하게 월드 전체를 계산한다)
    cargo run -p terrain-gen --release -- bake --seed 42 \
-     --region-x-min -2 --region-x-max 1 --region-z-min -2 --region-z-max 1
+     --region-x-min -3 --region-x-max -1 --region-z-min 3 --region-z-max 5
 
    # 전체 월드 (약 73 GB)
    cargo run -p terrain-gen --release -- bake --seed 42
    ```
+
+   **원점(0,0)이 아니라 스폰 주변을 굽는다.** 스폰은
+   `data-src/world.json`의 `(-1475.2, 0.7, 4741.6)`이고 그 리전은 **(-2, +4)**다 —
+   원점 중심으로 구우면 1 GB를 굽고도 캐릭터가 뜨는 자리는 검게 나온다.
+   `tools/dev-setup.sh`는 이 범위를 `world.json`에서 계산하므로 스폰이 옮겨져도
+   따라간다. 리전 하나는 16타일 × 64유닛 = 1,024유닛이다.
    `data/terrain/worldgen.json`이 **마지막에** 쓰이므로, 이 파일이 있으면 베이크가
    끝까지 돈 것이다. 베이크하지 않으면 지형 API가 404를 내고 월드가 검게 렌더링된다.
    `data/terrain/zones/`(마을 no-spawn — `monsterSpawns` 사각형은 에디터 전용 레거시)는
    git에 있고 베이크가 건드리지 않는다.
 
-베이크 범위 밖으로 걸어 나가면 지형이 없다. 개발 중에는 원점(0,0) 주변에서 논다.
+베이크 범위 밖으로 걸어 나가면 지형이 없다. 개발 중에는 **스폰 주변**에서 논다.
 
 ---
 

@@ -9,7 +9,7 @@
 ## 0. 현재 진행 상황 (이어서 작업할 때 먼저 읽는다)
 
 **브랜치**: `claude/project-analysis-dev-setup-9amcvt`
-**진행**: 30개 항목 중 **17개 완료**. **M0·M1이 전부 끝났고**, 세 스파이크(SPK-1·2·3)가 모두 **go**다. M2는 7/10.
+**진행**: 30개 항목 중 **18개 완료**. **M0·M1이 전부 끝났고**, 세 스파이크(SPK-1·2·3)가 모두 **go**다. M2는 8/10.
 
 | 항목 | 상태 | 커밋 |
 |------|------|------|
@@ -29,11 +29,11 @@
 | SPK-2 창고 델타 전송 | ✅ **go** — `STORAGE_SLOTS = 120` 확정 (§7 판정 규칙 1건 개정) | `32d5fb2` |
 | IMP-2.3 창고 | ✅ 완료 (프로토콜 v36, `character_storage` 테이블, 13 개정 4건) | `131a071` |
 | SPK-3 유료 이동 로딩 폭풍 | ✅ **go** (도착 27요청·97 KiB, p95 비율 약 1.5배, §7 판정 기준 1건 개정) | `6dba8ed` |
+| IMP-2.4 유료 이동 | ✅ 완료 (프로토콜 v37, 노드 2개, **13 개정 2건 — 시작 마을이 크립트 위에 있다**) | 아래 참조 |
 | IMP-0.2 EffectiveStats | ✅ 완료 (프로토콜 v34, 13 개정 5건) | `51a15b7` |
 
-**다음에 집을 것**: 체크되지 않은 첫 행은 **순번 16, IMP-2.4 유료 이동**이다 —
-선행 둘(IMP-2.2 · SPK-3)이 모두 끝났다. 그다음은 IMP-2.7(미니보스) →
-IMP-2.8(MVP 기여도)로 M2가 끝난다.
+**다음에 집을 것**: 남은 것은 **IMP-2.7(미니보스) → IMP-2.8(MVP 기여도)** 둘뿐이고,
+그러면 M2가 끝난다. 선행(IMP-1.2)은 이미 끝나 있다.
 
 **세 스파이크가 모두 go로 끝나면서 게이트가 전부 열렸다** — IMP-2.4(SPK-3),
 IMP-2.3(SPK-2, 완료), IMP-2.8과 IMP-4.3(SPK-1). 남은 제약은 SPK-1이 만든
@@ -74,7 +74,10 @@ M1이 끝났으므로 밸런싱 기준선이 섰다: 레벨에 안 맞는 몬스
   줍는지 → 잡아서 되찾는지 → 로그아웃으로 디스폰시켜도 아이템이 남는지 →
   반지를 끼면 시트의 CHA가 오르는지 → 쇠약 상태에서 인벤 하중 상한이 줄어 보이는지 →
   `/save` 후 멀리서 죽어 그 자리에서 부활하는지 → `/storage`로 넣고 빼고 재접속 후 잔존.
-- **프로토콜이 v29 → v36으로 일곱 번 올랐다.** 서버와 클라이언트를 반드시 함께 배포한다.
+- **프로토콜이 v29 → v37로 여덟 번 올랐다.** 서버와 클라이언트를 반드시 함께 배포한다.
+- **여행 목적지가 2곳뿐이다.** 스폰 리전 주변에 실제로 존재하는 정착지가 수도와
+  리버사이드 둘뿐이라 그렇다(`worldgen.json`의 settlements에서 확인). 월드를 더
+  구우면 후보가 늘어나고, 상한은 10곳이다.
 - **도시 서비스 NPC가 아직 없다.** IMP-2.2(세이브 포인트)와 IMP-2.3(창고) 둘 다
   **공식 NPC 누구나**로 동작한다 — 기능은 완결이고 게이트도 전부 걸리지만, 전용 NPC를
   세우려면 `schedule.json`에 **검증된 월드 좌표**가 필요해 지형 없는 환경에서는 배치를
@@ -113,12 +116,14 @@ M1이 끝났으므로 밸런싱 기준선이 섰다: 레벨에 안 맞는 몬스
 | R1 | 툴체인 (Rust stable, `wasm32-unknown-unknown`, `wasm-pack`, Node 22+) | `bash tools/dev-setup.sh --check` |
 | R2 | 바이너리 에셋 내려받음 (`assets.lock` 기준 sha256 일치) | `bash tools/fetch-assets.sh` |
 | R3 | 생성 데이터 + WASM 존재 (`data/*.json`, `client/src/lib/wasm/`) | `npm --prefix client run build:wasm` |
-| R4 | 지형 베이크 완료 — `data/terrain/worldgen.json`이 있어야 끝까지 돈 것 | `cargo run -p terrain-gen --release -- bake --seed 42 --region-x-min -2 --region-x-max 1 --region-z-min -2 --region-z-max 1` |
+| R4 | 지형 베이크 완료 — `data/terrain/worldgen.json`이 있어야 끝까지 돈 것 | `bash tools/dev-setup.sh`(스폰 리전을 `world.json`에서 계산한다), 또는 `cargo run -p terrain-gen --release -- bake --seed 42 --region-x-min -3 --region-x-max -1 --region-z-min 3 --region-z-max 5` |
 | R5 | 환경 파일 — `client/.env.local`의 `VITE_GOOGLE_CLIENT_ID`와 서버 `GOOGLE_CLIENT_ID`가 같은 Web ID | 로그인 버튼이 에러를 안 냄 |
 | R6 | CI 동등 검증을 로컬에서 완주 (§3 명령이 전부 통과) | 아래 §3 |
 | R7 | 인게임 진입 가능 — 서버·WASM watch·Vite 3터미널 ([DEVELOPMENT.md](DEVELOPMENT.md) §1) | `http://localhost:10004/`에서 캐릭터 진입 |
 
-베이크 범위 밖으로 걸어 나가면 지형이 없다. 개발 중에는 원점 근처에서 확인한다.
+베이크 범위 밖으로 걸어 나가면 지형이 없다. 개발 중에는 **스폰 근처**에서 확인한다 —
+원점이 아니다. 스폰은 리전 **(-2, +4)**에 있어서, 예전에 적혀 있던 원점 중심
+`-2..1` 범위는 1 GB를 굽고도 스폰을 덮지 못했다.
 
 ---
 
@@ -352,7 +357,7 @@ Phase 번호와 1:1이다(M1 = Phase 1 …). **작업 ID는 13의 ID가 정본�
 | [x] 13 | SPK-2 | 창고 델타 전송 스파이크 — **go** | — | S | server(test) | 슬롯 상한 후보(60 / **120** / 240)별 바이트 측정 + §7 판정. 120은 13 IMP-2.3의 확정값이므로 **검증 대상**이다 |
 | [x] 14 | IMP-2.3 | 창고 (Storage) | IMP-2.2, SPK-2, IMP-0.1 | L | shared/server/client | `STORAGE_SLOTS = 120`, 열기/입금/출금/닫기 프로토콜(**델타**), 거리(NPC 근처)·슬롯 상한·원자성 검증 — **창고 자체에는 무게 제한이 없다**(출금 시 인벤토리 `max_carry_weight`만 검사), 기존 배치 세이브 합류, UI + `overlayStack.ts` 등록 |
 | [x] 15 | SPK-3 | 유료 이동 로딩 폭풍 스파이크 — **go** | — | S | server/client(test) | 도착 순간의 타일·하우징·오브젝트 요청 폭 측정 + §7 판정 ([LOADING_OPTIMIZATION.md](LOADING_OPTIMIZATION.md)) |
-| 16 | IMP-2.4 | 유료 이동 + "던전 워프 불가" | IMP-2.2, SPK-3 | L | shared/server/client | **도시 소수 고정 지점만**(임의 좌표 금지), 요금 제니 싱크, 던전 입구·내부 목적지 제외, 타일 캐시 예열(`terrain/src/tile_cache.rs`) |
+| [x] 16 | IMP-2.4 | 유료 이동 + "던전 워프 불가" | IMP-2.2, SPK-3 | L | shared/server/client | **도시 소수 고정 지점만**(임의 좌표 금지), 요금 제니 싱크, 던전 입구·내부 목적지 제외, 타일 캐시 예열(`terrain/src/tile_cache.rs`) |
 | [x] 17 | IMP-2.5 | 헌팅 보드 반복 퀘스트 | IMP-2.1, IMP-1.1 | L | data/shared/server/client | `data-src/hunting_quests.csv` (`id,boardId,name,monsterId,count,minLevel,maxLevel,rewardXp,rewardZeny,rewardItem,dailyLimit`), `character_quests` 테이블(`day_key`/`day_count` 포함), 런타임은 quest id를 u16 인턴한 `Vec<(u16,u16)>`(수락 상한 5), 처치 훅은 `combat.rs:499~:511`의 XP 수령자 목록 재사용, **보상은 우편 지급** |
 | [x] 18 | IMP-2.6 | 일일 한도 + 고효율 | IMP-2.5, IMP-0.1 | M | data/server/client | 보드당 일일 한도(캐릭터 단위), 리셋 기준 시각 고정, 한도 소진 UI 표시. **IMP-2.5와 같은 릴리스에 나간다** |
 | 19 | IMP-2.7 | 미니보스 (장주기 + 변량 리스폰) | IMP-1.2 | M | data/server | `data-src/world_bosses.csv`(신규) + `server/src/world_boss_defs.rs`(신규), `tick_world_bosses` 30초 틱(`server/src/main.rs:84` `run_ticks`), 부팅 시 `monsterId`의 `boss=true` assert, `client/src/lib/components/map-editor/MapEditorCursor.svelte`에 좌표 복사 버튼 |

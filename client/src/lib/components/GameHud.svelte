@@ -21,6 +21,7 @@
   import FriendPanel from './FriendPanel.svelte'
   import MailPanel from './MailPanel.svelte'
   import StoragePanel from './StoragePanel.svelte'
+  import TravelPanel from './TravelPanel.svelte'
   import QuestBoardPanel from './QuestBoardPanel.svelte'
   import QuestTracker from './QuestTracker.svelte'
   import NpcContextMenu from './NpcContextMenu.svelte'
@@ -130,6 +131,7 @@
     <FriendPanel />
     <MailPanel />
     <StoragePanel />
+    <TravelPanel />
     <QuestBoardPanel />
     <QuestTracker />
     <NpcContextMenu />

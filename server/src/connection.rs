@@ -1379,6 +1379,17 @@ async fn handle_client_message(
             }
         }
 
+        ClientMessage::RequestTravel {
+            npc_player_id,
+            node_id,
+        } => {
+            if let Some(id) = &state.player_id {
+                game_state
+                    .request_travel(id, &npc_player_id, &node_id)
+                    .await;
+            }
+        }
+
         ClientMessage::OpenStorage { npc_player_id } => {
             if let Some(id) = &state.player_id {
                 game_state

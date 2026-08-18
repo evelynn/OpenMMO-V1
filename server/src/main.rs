@@ -21,6 +21,7 @@ mod semicolon_list;
 mod terrain;
 #[cfg(test)]
 mod test_util;
+mod travel_defs;
 mod types;
 mod world_config;
 mod world_drop_defs;
@@ -298,6 +299,7 @@ async fn main() -> ExitCode {
     let monster_defs = monster_defs::MonsterDefs::load();
     let item_defs = item_defs::item_defs().clone();
     let dungeon_defs = dungeon_defs::DungeonDefs::load(&item_defs, &monster_defs);
+    travel_defs::assert_nodes_are_valid();
     let quest_defs = quest_defs::QuestDefs::load(&monster_defs, &item_defs);
     let world_drop_defs = world_drop_defs::WorldDropDefs::load(&item_defs);
     let paths = state_paths(&args.state_dir);

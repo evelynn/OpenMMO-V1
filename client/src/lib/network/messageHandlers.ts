@@ -29,6 +29,7 @@ import {
   openStorage as openStoragePanel,
   applyStorageSlot,
 } from '../stores/storageStore'
+import { showTravelOffers, type TravelOffer } from '../stores/travelStore'
 import {
   setInventory,
   playerGold,
@@ -547,6 +548,14 @@ export function handleServerMessage(
 
     case 'SystemMessage':
       addChatMessage({ text: data.message, sender: 'system' })
+      break
+
+    case 'TravelDestinations':
+      showTravelOffers(data.nodes as TravelOffer[])
+      break
+
+    case 'TravelDenied':
+      addChatMessage({ text: data.reason, sender: 'system' })
       break
 
     case 'StorageOpened':

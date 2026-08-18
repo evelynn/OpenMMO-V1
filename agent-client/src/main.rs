@@ -470,6 +470,8 @@ pub fn msg_name(msg: &onlinerpg_shared::ServerMessage) -> &'static str {
         ServerMessage::GoldUpdate { .. } => "GoldUpdate",
         ServerMessage::EffectiveStats { .. } => "EffectiveStats",
         ServerMessage::SavePointSet { .. } => "SavePointSet",
+        ServerMessage::TravelDestinations { .. } => "TravelDestinations",
+        ServerMessage::TravelDenied { .. } => "TravelDenied",
         ServerMessage::StorageOpened { .. } => "StorageOpened",
         ServerMessage::StorageSlotChanged { .. } => "StorageSlotChanged",
         ServerMessage::GoldGained { .. } => "GoldGained",

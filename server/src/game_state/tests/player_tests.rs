@@ -436,3 +436,176 @@ async fn death_without_a_save_point_still_uses_the_world_spawn() {
     let revived = game_state.players.read().await[&player].position;
     assert_eq!((revived.x, revived.z), (spawn.x, spawn.z));
 }
+
+/// The regression that in-game data caught: the starting town is built over
+/// old_crypt's 80x80 footprint, so a footprint gate refused every NPC in the
+/// only town that has any. The surface check is what actually guards this.
+#[tokio::test]
+async fn a_townsperson_standing_over_a_dungeon_can_still_mark_a_point() {
+    let game_state = make_test_game_state("save_point_over_dungeon");
+    let crypt = onlinerpg_shared::dungeon::entrances()
+        .first()
+        .expect("at least one dungeon");
+    // Where Rica actually stands: inside the footprint, 26m from the mouth.
+    let npc_x = crypt.x - 23.3;
+    let npc_z = crypt.z + 12.8;
+    assert!(
+        onlinerpg_shared::dungeon::entrance_at(npc_x, npc_z).is_some(),
+        "the fixture must sit in the footprint or it tests nothing"
+    );
+
+    let player = pid("townie");
+    game_state
+        .add_player(make_player("townie", npc_x - 1.0, npc_z))
+        .await;
+    let npc = add_npc(&game_state, "TownRica", npc_x, 0).await;
+    game_state
+        .players
+        .write()
+        .await
+        .get_mut(&npc)
+        .unwrap()
+        .position
+        .z = npc_z;
+
+    game_state.set_save_point(&player, &npc).await;
+
+    assert!(
+        saved_point(&game_state, &player).await.is_some(),
+        "a town built over a crypt is still a town"
+    );
+}
+
+// ---- Paid travel (IMP-2.4) -------------------------------------------------
+
+async fn travel_ready(game_state: &GameState, name: &str, gold: i64) -> (PlayerId, PlayerId) {
+    let player = pid(name);
+    let mut body = make_player(name, 0.0, 0.0);
+    // Past every node's minLevel, so the level gate is not what these
+    // fixtures are exercising.
+    body.level = 20;
+    game_state.add_player(body).await;
+    game_state
+        .register_player_character(&player, 1, 0, attrs_with_cha(10), gold, Some(500))
+        .await;
+    let npc = add_npc(game_state, &format!("{name}_agent"), 2.0, 0).await;
+    (player, npc)
+}
+
+async fn purse(game_state: &GameState, player_id: &PlayerId) -> i64 {
+    game_state
+        .player_gold
+        .read()
+        .await
+        .get(player_id)
+        .copied()
+        .unwrap_or(0)
+}
+
+fn paid_node() -> &'static crate::travel_defs::TravelNode {
+    crate::travel_defs::travel_nodes()
+        .iter()
+        .find(|n| n.fare > 0)
+        .expect("one paid destination")
+}
+
+#[tokio::test]
+async fn paying_the_fare_moves_the_player_and_burns_the_money() {
+    let game_state = make_test_game_state("travel_paid");
+    let node = paid_node();
+    let (player, npc) = travel_ready(&game_state, "traveler", node.fare + 100).await;
+
+    let before: i64 = game_state.player_gold.read().await.values().sum();
+    game_state.request_travel(&player, &npc, &node.id).await;
+
+    let after: i64 = game_state.player_gold.read().await.values().sum();
+    assert_eq!(
+        after,
+        before - node.fare,
+        "the fare left the world rather than moving to a wallet"
+    );
+    assert_eq!(purse(&game_state, &player).await, 100);
+    let position = game_state.players.read().await[&player].position;
+    assert_eq!((position.x, position.z), (node.x, node.z));
+}
+
+/// The rule that stops travel from becoming a dungeon exit.
+#[tokio::test]
+async fn a_dungeon_floor_cannot_be_departed_from() {
+    let game_state = make_test_game_state("travel_from_dungeon");
+    let node = paid_node();
+    let (player, npc) = travel_ready(&game_state, "delver", node.fare + 100).await;
+    for id in [&player, &npc] {
+        game_state
+            .players
+            .write()
+            .await
+            .get_mut(id)
+            .unwrap()
+            .floor_level = -3;
+    }
+
+    game_state.request_travel(&player, &npc, &node.id).await;
+
+    assert_eq!(
+        purse(&game_state, &player).await,
+        node.fare + 100,
+        "refused before the fare is taken"
+    );
+    assert_eq!(
+        game_state.players.read().await[&player].floor_level,
+        -3,
+        "still underground"
+    );
+}
+
+/// The level gate, on its own.
+#[tokio::test]
+async fn a_road_can_be_beyond_a_traveler() {
+    let game_state = make_test_game_state("travel_level");
+    let node = paid_node();
+    let (player, npc) = travel_ready(&game_state, "novice", node.fare + 100).await;
+    game_state
+        .players
+        .write()
+        .await
+        .get_mut(&player)
+        .unwrap()
+        .level = 1;
+    assert!(node.min_level > 1, "the fixture needs a gated destination");
+
+    game_state.request_travel(&player, &npc, &node.id).await;
+
+    assert_eq!(purse(&game_state, &player).await, node.fare + 100);
+    assert_eq!(game_state.players.read().await[&player].position.x, 0.0);
+}
+
+#[tokio::test]
+async fn travel_is_refused_mid_fight_and_while_broke() {
+    let game_state = make_test_game_state("travel_refusals");
+    let node = paid_node();
+
+    let (fighter, fighter_npc) = travel_ready(&game_state, "fighter", node.fare + 100).await;
+    game_state
+        .players
+        .write()
+        .await
+        .get_mut(&fighter)
+        .unwrap()
+        .last_combat_at = GameState::now_ms();
+    game_state
+        .request_travel(&fighter, &fighter_npc, &node.id)
+        .await;
+    assert_eq!(purse(&game_state, &fighter).await, node.fare + 100);
+
+    let (pauper, pauper_npc) = travel_ready(&game_state, "pauper", node.fare - 1).await;
+    game_state
+        .request_travel(&pauper, &pauper_npc, &node.id)
+        .await;
+    assert_eq!(purse(&game_state, &pauper).await, node.fare - 1);
+    assert_eq!(
+        game_state.players.read().await[&pauper].position.x,
+        0.0,
+        "and nobody moved"
+    );
+}

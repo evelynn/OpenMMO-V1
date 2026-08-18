@@ -150,6 +150,7 @@ export type ClientMessage =
   | { MonsterPickupItem: { monster_id: string; instance_id: number } }
   | { SetSavePoint: { npc_player_id: number } }
   | { OpenStorage: { npc_player_id: number } }
+  | { RequestTravel: { npc_player_id: number; node_id: string } }
   | { StorageDeposit: { instance_id: number; quantity: number } }
   | { StorageWithdraw: { slot_index: number; quantity: number } }
   | 'CloseStorage'

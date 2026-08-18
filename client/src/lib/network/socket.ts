@@ -411,6 +411,12 @@ class NetworkManager {
     })
   }
 
+  sendRequestTravel(npcPlayerId: number, nodeId: string) {
+    this.sendMessage({
+      RequestTravel: { npc_player_id: npcPlayerId, node_id: nodeId },
+    })
+  }
+
   sendOpenStorage(npcPlayerId: number) {
     this.sendMessage({ OpenStorage: { npc_player_id: npcPlayerId } })
   }
