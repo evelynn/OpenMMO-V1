@@ -1086,6 +1086,20 @@ async fn handle_client_message(
                     selected_character.skill_points,
                 )
                 .await;
+            let (unlocked, counters) = auth_service
+                .load_achievements(selected_character.id)
+                .unwrap_or_else(|e| {
+                    warn!("Failed to load achievements: {e}");
+                    (Vec::new(), Vec::new())
+                });
+            game_state
+                .load_achievements(
+                    &id,
+                    unlocked,
+                    counters,
+                    selected_character.active_title.clone(),
+                )
+                .await;
             if !game_state
                 .attach_player_to_account_session(&authed_account_name, account_session_id, id)
                 .await
@@ -1173,6 +1187,7 @@ async fn handle_client_message(
                 skill_points: selected_character.skill_points,
             });
             responses.push(game_state.skill_cooldowns_msg(&id).await);
+            responses.push(game_state.achievement_list_msg(&id).await);
 
             responses.push(ServerMessage::DungeonDiscoveries {
                 entrance_ids: discovered_dungeons,
@@ -1341,6 +1356,12 @@ async fn handle_client_message(
                     .await;
             } else {
                 warn!("Received skill use from client that is not in game");
+            }
+        }
+
+        ClientMessage::SetTitle { title } => {
+            if let Some(id) = &state.player_id {
+                game_state.set_title(id, title).await;
             }
         }
 

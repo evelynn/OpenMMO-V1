@@ -403,6 +403,11 @@ class NetworkManager {
     this.sendMessage('CancelCast')
   }
 
+  /** Show an unlocked title, or none. The server refuses an unearned one. */
+  sendSetTitle(title: string | null) {
+    this.sendMessage({ SetTitle: { title } })
+  }
+
   sendLearnSkill(skill: string) {
     this.sendMessage({ LearnSkill: { skill } })
   }

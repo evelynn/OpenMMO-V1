@@ -1,0 +1,11 @@
+id,name,description,trigger,triggerArg,threshold,titleId,rewardItem,rewardZeny
+first_blood,First Blood,Slay your first monster.,monster_kill,,1,,,100
+hundred_slain,Centurion,Slay one hundred monsters.,monster_kill,,100,Centurion,,2000
+orc_bane,Orc Bane,Slay twenty orcs.,monster_kill,orc,20,Orc Bane,,1500
+angler,Angler,Land a trophy fish.,fish_trophy,,1,Angler,,500
+master_angler,Master Angler,Land ten trophy fish.,fish_trophy,,10,Master Angler,,3000
+deep_delver,Deep Delver,Reach dungeon depth 5.,dungeon_depth,,5,Delver,,2000
+abyss_walker,Abyss Walker,Reach dungeon depth 10.,dungeon_depth,,10,Abyss Walker,,5000
+first_song,Busker,Play your first song.,song_played,,1,Busker,busker_hat,0
+troubadour,Troubadour,Play fifty songs.,song_played,,50,Troubadour,,2500
+cook,Camp Cook,Grill twenty five catches.,cook,,25,Camp Cook,,1500

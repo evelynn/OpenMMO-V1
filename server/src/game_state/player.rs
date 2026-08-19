@@ -135,10 +135,12 @@ fn build_save_data(
     satiation: u32,
     save_point: Option<crate::auth::SavePoint>,
     job: super::skill::JobProgress,
+    active_title: Option<String>,
 ) -> CharacterSaveData {
     CharacterSaveData {
         character_id,
         save_point,
+        active_title,
         job_xp: job.xp,
         skill_points: job.points,
         x: player.position.x,
@@ -322,6 +324,7 @@ impl super::GameState {
         self.forget_whisper_partner(player_id).await;
         self.forget_player_skills(player_id).await;
         self.forget_job_progress(player_id).await;
+        self.forget_achievements(player_id).await;
         self.remove_dungeon_discoveries(player_id).await;
         self.forget_hunger(player_id).await;
     }
@@ -629,6 +632,7 @@ impl super::GameState {
         let inventories = self.inventories.read().await;
         let save_points = self.save_points.read().await;
         let job_progress = self.job_progress.read().await;
+        let achievements = self.achievements.read().await;
 
         let mut characters = Vec::with_capacity(player_characters.len());
         let mut inventory_rows = Vec::with_capacity(player_characters.len());
@@ -643,6 +647,9 @@ impl super::GameState {
                     super::hunger::satiation_for_save(&hunger, player_id),
                     save_points.get(player_id).copied(),
                     job_progress.get(player_id).copied().unwrap_or_default(),
+                    achievements
+                        .get(player_id)
+                        .and_then(|a| a.active_title.clone()),
                 ));
             }
             if let Some(inventory) = inventories.get(player_id) {
@@ -670,12 +677,14 @@ impl super::GameState {
         let (dirty_skill_ids, dirty_skills) = self.collect_dirty_skill_states().await;
         let (dirty_quest_ids, dirty_quests) = self.collect_dirty_quest_states().await;
         let dirty_discoveries = self.take_pending_discovery_saves().await;
+        let dirty_counter_rows = self.dirty_counters().await;
         if dirty_states.is_empty()
             && dirty_inventories.is_empty()
             && dirty_storages.is_empty()
             && dirty_skills.is_empty()
             && dirty_quests.is_empty()
             && dirty_discoveries.is_empty()
+            && dirty_counter_rows.is_empty()
         {
             return;
         }
@@ -697,6 +706,7 @@ impl super::GameState {
                 for (character_id, rows) in &dirty_quests {
                     auth.save_quest_progress(*character_id, rows)?;
                 }
+                auth.write_counters(&dirty_counter_rows)?;
                 info!(
                     "Batch-saved {} character state(s), {} inventory/inventories",
                     character_count, inventory_count
@@ -1766,25 +1776,46 @@ impl super::GameState {
         }
     }
 
-    /// Mirror the worn cosmetics onto the roster entry and tell everyone who
-    /// can see the player. Same shape as `set_player_main_hand`, and quiet
-    /// when nothing moved.
+    /// Mirror the worn costume onto the roster entry, keeping whatever title
+    /// is showing.
     pub async fn set_player_costume(
         &self,
         player_id: &PlayerId,
         head: Option<String>,
         back: Option<String>,
     ) {
-        let (costume, position) = {
+        self.update_cosmetics(player_id, |c| {
+            c.costume_head = head;
+            c.costume_back = back;
+        })
+        .await;
+    }
+
+    /// Mirror the active title onto the roster entry, keeping the costume.
+    pub(crate) async fn set_player_title(&self, player_id: &PlayerId, title: Option<String>) {
+        self.update_cosmetics(player_id, |c| c.title = title).await;
+    }
+
+    /// Apply `edit` to the player's display-only extras and tell everyone who
+    /// can see them. Same shape as `set_player_main_hand`, and quiet when
+    /// nothing moved.
+    async fn update_cosmetics(
+        &self,
+        player_id: &PlayerId,
+        edit: impl FnOnce(&mut onlinerpg_shared::entity::Cosmetics),
+    ) {
+        let (cosmetics, position) = {
             let mut players = self.players.write().await;
             let Some(player) = players.get_mut(player_id) else {
                 return;
             };
-            let next = onlinerpg_shared::entity::Costume::from_slots(head, back);
-            if player.costume == next {
+            let mut next = player.cosmetics.clone().unwrap_or_default();
+            edit(&mut next);
+            let next = next.or_none();
+            if player.cosmetics == next {
                 return;
             }
-            player.costume = next.clone();
+            player.cosmetics = next.clone();
             (next, (player.position, player.floor_level))
         };
 
@@ -1792,9 +1823,9 @@ impl super::GameState {
             &position.0,
             position.1,
             super::EVENT_DELIVERY_RADIUS,
-            ServerMessage::PlayerCostumeChanged {
+            ServerMessage::PlayerCosmeticsChanged {
                 player_id: *player_id,
-                costume,
+                cosmetics,
             },
             None,
         )
@@ -1913,6 +1944,7 @@ impl super::GameState {
         let hunger = self.hunger.read().await;
         let save_points = self.save_points.read().await;
         let job_progress = self.job_progress.read().await;
+        let achievements = self.achievements.read().await;
 
         let mut result = Vec::with_capacity(dirty_ids.len());
         for pid in &dirty_ids {
@@ -1929,6 +1961,7 @@ impl super::GameState {
                     satiation,
                     save_points.get(pid).copied(),
                     job_progress.get(pid).copied().unwrap_or_default(),
+                    achievements.get(pid).and_then(|a| a.active_title.clone()),
                 ));
             }
         }
@@ -1961,6 +1994,7 @@ impl super::GameState {
                 .get(player_id)
                 .copied()
                 .unwrap_or_default(),
+            self.active_title(player_id).await,
         ))
     }
 

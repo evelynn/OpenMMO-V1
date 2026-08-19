@@ -12,6 +12,7 @@ use onlinerpg_shared::messages::DealKind;
 use tokio::sync::broadcast::error::TryRecvError;
 use tokio::sync::mpsc::error::TryRecvError as MpscTryRecvError;
 
+mod achievement_tests;
 mod cast_tests;
 mod chat_tests;
 mod collision_tests;
@@ -70,7 +71,7 @@ fn make_player(id: &str, x: f32, z: f32) -> Player {
         floor_level: 0,
         object_type: None,
         main_hand: None,
-        costume: None,
+        cosmetics: None,
         object_id: None,
         last_combat_at: 0,
         client_kind: Default::default(),

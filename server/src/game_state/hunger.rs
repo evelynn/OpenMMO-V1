@@ -562,6 +562,8 @@ impl super::GameState {
             .await;
             self.send_system_message(&player_id, format!("The {name} sizzles over the fire."))
                 .await;
+            self.bump(&player_id, crate::achievement_defs::Trigger::Cook, None, 1)
+                .await;
         }
     }
 

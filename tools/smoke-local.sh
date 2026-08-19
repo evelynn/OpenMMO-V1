@@ -65,6 +65,9 @@ for c in ("job_xp", "skill_points"):
     print("ok" if c in cols else "FAIL", "characters.%s (IMP-3.2)" % c)
 tables = {r[0] for r in db.execute("SELECT name FROM sqlite_master WHERE type='table'")}
 print("ok" if "character_storage" in tables else "FAIL", "character_storage table (IMP-2.3)")
+for t in ("character_achievements", "character_counters"):
+    print("ok" if t in tables else "FAIL", "%s table (IMP-3.7)" % t)
+print("ok" if "active_title" in cols else "FAIL", "characters.active_title (IMP-3.7)")
 if "character_storage" in tables:
     scols = [r[1] for r in db.execute("PRAGMA table_info(character_storage)")]
     print("ok" if "enchant" in scols else "FAIL", "character_storage.enchant from the first migration")

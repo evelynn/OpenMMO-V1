@@ -108,7 +108,11 @@ pub const NPC_TOKEN_FILENAME: &str = "npc_token";
 ///      `Player` fields carrying what is worn over real gear, plus
 ///      PlayerCostumeChanged so a change is seen without re-entering
 ///      anyone's view — IMP-3.6.
-pub const PROTOCOL_VERSION: u32 = 41;
+/// v42: achievements and titles (SetTitle → AchievementUnlocked/
+///      AchievementList/TitleSet); `Player`'s costume field widens into
+///      `cosmetics`, carrying the active title in the same wire slot —
+///      IMP-3.7.
+pub const PROTOCOL_VERSION: u32 = 42;
 
 /// WebSocket close code sent when the handshake is refused (wrong protocol
 /// version, or traffic before `ClientInfo`). Lives outside the serialized
@@ -212,7 +216,7 @@ mod tests {
             floor_level: 0,
             object_type: None,
             main_hand: None,
-            costume: None,
+            cosmetics: None,
             object_id: None,
             last_combat_at: 0,
             client_kind: Default::default(),

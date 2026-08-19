@@ -68,6 +68,11 @@ import {
 } from '../stores/combatSkillStore'
 import { applySkillLevel } from '../stores/skillsStore'
 import {
+  activeTitle,
+  applyAchievementList,
+  applyUnlock,
+} from '../stores/achievementStore'
+import {
   shopSession,
   applyDealUpdate,
   setMerchantDeals,
@@ -189,7 +194,8 @@ function toRemotePlayer(sp: ServerPlayer): RemotePlayer {
     gender: sp.gender,
     torchOn: sp.torch_on,
     mainHand: sp.main_hand ?? null,
-    costumeHead: sp.costume?.head ?? null,
+    costumeHead: sp.cosmetics?.costume_head ?? null,
+    title: sp.cosmetics?.title ?? null,
     floorLevel: sp.floor_level ?? 0,
     isOfficialNpc: sp.is_official_npc ?? false,
   }
@@ -1064,9 +1070,12 @@ export function handleServerMessage(
       break
     }
 
-    case 'PlayerCostumeChanged': {
+    case 'PlayerCosmeticsChanged': {
       if (get(gameStore).currentPlayer?.id === data.player_id) break
-      updatePlayer(data.player_id, { costumeHead: data.costume?.head ?? null })
+      updatePlayer(data.player_id, {
+        costumeHead: data.cosmetics?.costume_head ?? null,
+        title: data.cosmetics?.title ?? null,
+      })
       break
     }
 
@@ -1469,6 +1478,19 @@ export function handleServerMessage(
       })
       break
     }
+
+    case 'AchievementList':
+      applyAchievementList(data.unlocked ?? [], data.active_title ?? null)
+      break
+
+    case 'AchievementUnlocked': {
+      applyUnlock(data.achievement_id)
+      break
+    }
+
+    case 'TitleSet':
+      activeTitle.set(data.title ?? null)
+      break
 
     case 'MvpBonus': {
       // Deliberately not "you got the kill": the biggest contributor and the

@@ -932,6 +932,15 @@ impl GameState {
         // (`use_item`) for its copper. Junk is rarityTier 0, so the XP
         // formula below grants nothing for it naturally.
         self.award_item(player_id, &fish.item_def_id).await;
+        if fish.trophy {
+            self.bump(
+                player_id,
+                crate::achievement_defs::Trigger::FishTrophy,
+                None,
+                1,
+            )
+            .await;
+        }
         let xp = CATCH_XP_PER_RARITY_SQ * u64::from(fish.rarity) * u64::from(fish.rarity);
         self.add_skill_xp(player_id, SkillId::Fishing, xp).await;
         self.end_fishing(

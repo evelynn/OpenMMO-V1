@@ -96,6 +96,8 @@
     mainHand?: string | null
     /** Cosmetic head layer worn by a remote player (IMP-3.6). */
     costumeHead?: string | null
+    /** Unlocked title shown above the name (IMP-3.7). */
+    title?: string | null
     torchEffectsDisabled?: boolean
     /** Set for NPC remote players so canvas clicks can resolve this model
      *  back to its player id (read from userData by the input raycast). */
@@ -130,6 +132,7 @@
     torchOn = false,
     mainHand = null,
     costumeHead = null,
+    title = null,
     torchEffectsDisabled = false,
     npcPlayerId,
   }: Props = $props()
@@ -1058,6 +1061,19 @@
 
 <!-- Name tag (separate from character to avoid rotation inheritance) -->
 <T.Group bind:ref={nametagGroup}>
+  {#if title}
+    <T.Group position.y={0.3}>
+      <TextLabel
+        text={`<${title}>`}
+        fontSize={0.22}
+        color="#e2b93b"
+        outlineColor="#000000"
+        outlineWidth={7}
+        anchorX="center"
+        anchorY="middle"
+      />
+    </T.Group>
+  {/if}
   <TextLabel
     text={name}
     fontSize={0.3}

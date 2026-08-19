@@ -715,6 +715,16 @@ impl super::GameState {
                 // Same kill, same sharers, a different curve: skill points
                 // arrive at their own pace instead of tracking levels (IMP-3.2).
                 self.grant_job_xp(&recipients, u64::from(share)).await;
+
+                // Only the killer's tally moves: an achievement for slaying a
+                // hundred monsters means a hundred you slew (IMP-3.7).
+                self.bump(
+                    player_id,
+                    crate::achievement_defs::Trigger::MonsterKill,
+                    Some(monster_type),
+                    1,
+                )
+                .await;
                 // Same recipient list as the XP: a party member who shares
                 // the kill must share the contract progress, or partying
                 // becomes a penalty for hunters (IMP-2.5).

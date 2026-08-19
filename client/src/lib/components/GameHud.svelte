@@ -11,6 +11,7 @@
   import InventoryPanel from './InventoryPanel.svelte'
   import QuickslotBar from './QuickslotBar.svelte'
   import SkillBar from './SkillBar.svelte'
+  import AchievementToast from './AchievementToast.svelte'
   import HungerIndicator from './HungerIndicator.svelte'
   import TradeWindow from './TradeWindow.svelte'
   import FishingPrompt from './FishingPrompt.svelte'
@@ -138,6 +139,8 @@
     <NpcContextMenu />
     <FishingPrompt />
   {/if}
+
+  <AchievementToast />
 
   <div class="bottom-hud">
     {#if !$mapEditorMode}

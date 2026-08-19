@@ -534,6 +534,13 @@ impl super::GameState {
             .write()
             .await
             .insert(*player_id, (track.to_string(), Instant::now()));
+        self.bump(
+            player_id,
+            crate::achievement_defs::Trigger::SongPlayed,
+            None,
+            1,
+        )
+        .await;
 
         let listeners = self
             .player_ids_within(player_id, super::EVENT_DELIVERY_RADIUS)

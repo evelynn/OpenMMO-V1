@@ -486,6 +486,11 @@ pub enum ClientMessage {
     LearnSkill {
         skill: crate::skills::SkillId,
     },
+    /// Show one of the titles this character has unlocked, or `None` to show
+    /// none. The server refuses a title the character has not earned.
+    SetTitle {
+        title: Option<String>,
+    },
     MonsterAttack {
         monster_id: String,
         target_player_id: PlayerId,
@@ -1278,12 +1283,29 @@ pub enum ServerMessage {
         player_id: PlayerId,
         item_def_id: Option<String>,
     },
-    /// A costume layer changed. Fans out like `PlayerMainHandChanged` and for
-    /// the same reason: a cosmetic nobody can see change is half a feature
-    /// (IMP-3.6 revision).
-    PlayerCostumeChanged {
+    /// A display-only extra changed — a costume slot or the active title.
+    /// Fans out like `PlayerMainHandChanged` and for the same reason: a
+    /// cosmetic nobody can see change is half a feature (IMP-3.6 revision).
+    PlayerCosmeticsChanged {
         player_id: PlayerId,
-        costume: Option<crate::entity::Costume>,
+        cosmetics: Option<crate::entity::Cosmetics>,
+    },
+    /// Owner-only: an achievement just unlocked. The reward, if any, is
+    /// already in the mailbox (IMP-3.7).
+    AchievementUnlocked {
+        achievement_id: String,
+        /// Title this unlocked, if it carried one.
+        title: Option<String>,
+    },
+    /// Owner-only: everything unlocked so far, plus which title is showing.
+    /// Pushed on entry so the panel has something to draw.
+    AchievementList {
+        unlocked: Vec<String>,
+        active_title: Option<String>,
+    },
+    /// Owner-only: the active title after a `SetTitle`. `None` means none.
+    TitleSet {
+        title: Option<String>,
     },
     PlayerInteractionChanged {
         player_id: PlayerId,

@@ -102,6 +102,10 @@ pub struct ItemRow {
     pub enchant: i32,
 }
 
+/// What `load_achievements` returns: the unlocked ids, and every counter with
+/// its value.
+pub type AchievementRows = (Vec<String>, Vec<(String, u64)>);
+
 /// One trained skill as stored in `character_skills`. The skill id is kept as
 /// its wire string (`SkillId::as_str`) so rows written by a newer server
 /// survive a rollback: unknown ids load as rows, get skipped at the
@@ -182,6 +186,8 @@ pub struct CharacterRecord {
     /// proportional to level would erase the balancing baseline.
     pub job_xp: u64,
     pub skill_points: u32,
+    /// Title the character is showing, if any (IMP-3.7).
+    pub active_title: Option<String>,
 }
 
 /// Where a character revives, once they have chosen. Carries rotation because
@@ -210,10 +216,11 @@ pub struct CharacterSaveData {
     pub save_point: Option<SavePoint>,
     pub job_xp: u64,
     pub skill_points: u32,
+    pub active_title: Option<String>,
 }
 
 /// Column list shared between queries that return full CharacterRecord rows.
-const CHARACTER_COLUMNS: &str = "id, character_name, created_at, level, xp, max_hp, attr_str, attr_dex, attr_con, attr_int, attr_wis, attr_cha, attr_guard, class, last_x, last_y, last_z, last_rotation, health, floor_level, gender, gold, admin_role, satiation, save_x, save_y, save_z, save_rotation, job_xp, skill_points";
+const CHARACTER_COLUMNS: &str = "id, character_name, created_at, level, xp, max_hp, attr_str, attr_dex, attr_con, attr_int, attr_wis, attr_cha, attr_guard, class, last_x, last_y, last_z, last_rotation, health, floor_level, gender, gold, admin_role, satiation, save_x, save_y, save_z, save_rotation, job_xp, skill_points, active_title";
 
 fn character_record_from_row(row: &rusqlite::Row) -> rusqlite::Result<CharacterRecord> {
     Ok(CharacterRecord {
@@ -279,6 +286,7 @@ fn character_record_from_row(row: &rusqlite::Row) -> rusqlite::Result<CharacterR
         },
         job_xp: row.get::<_, i64>(28).unwrap_or(0) as u64,
         skill_points: row.get::<_, i64>(29).unwrap_or(0) as u32,
+        active_title: row.get::<_, Option<String>>(30).ok().flatten(),
     })
 }
 
@@ -347,8 +355,8 @@ impl AuthService {
             "UPDATE characters SET last_x = ?1, last_y = ?2, last_z = ?3, last_rotation = ?4, \
              xp = ?5, level = ?6, max_hp = ?7, health = ?8, floor_level = ?9, gold = ?10, \
              satiation = ?11, save_x = ?12, save_y = ?13, save_z = ?14, save_rotation = ?15, \
-             job_xp = ?16, skill_points = ?17 \
-             WHERE id = ?18",
+             job_xp = ?16, skill_points = ?17, active_title = ?18 \
+             WHERE id = ?19",
         )?;
         for d in data {
             stmt.execute(params![
@@ -369,6 +377,7 @@ impl AuthService {
                 d.save_point.map(|p| f64::from(p.rotation)),
                 d.job_xp as i64,
                 i64::from(d.skill_points),
+                d.active_title.as_deref(),
                 d.character_id,
             ])?;
         }
@@ -479,6 +488,7 @@ impl AuthService {
         Self::ensure_world_time_schema(&conn)?;
         Self::ensure_dungeon_chest_schema(&conn)?;
         Self::ensure_dungeon_discovery_schema(&conn)?;
+        Self::ensure_achievement_schema(&conn)?;
         Self::ensure_mail_schema(&conn)?;
         Self::ensure_quest_schema(&conn)?;
         Self::ensure_storage_schema(&conn)?;
@@ -622,6 +632,9 @@ impl AuthService {
     /// Job progress, added after release. Existing characters start at 0 and
     /// nothing is granted retroactively (IMP-3.2 migration note).
     fn ensure_character_job_columns(conn: &Connection) -> Result<(), rusqlite::Error> {
+        if !Self::table_columns(conn, "characters")?.contains("active_title") {
+            conn.execute("ALTER TABLE characters ADD COLUMN active_title TEXT", [])?;
+        }
         let columns = Self::table_columns(conn, "characters")?;
         for column in ["job_xp", "skill_points"] {
             if !columns.contains(column) {
@@ -718,6 +731,92 @@ impl AuthService {
     /// Dungeon entrances each character has discovered (world-map markers).
     /// Row presence is the whole fact — losing one only means rediscovering
     /// by walking near the entrance again.
+    /// Achievements and the counters that feed them (IMP-3.7). Two tables
+    /// rather than columns on `characters`: five triggers would be five
+    /// columns on the hottest row in the database, read only when something
+    /// unlocks (doc 13 IMP-3.7 revision).
+    fn ensure_achievement_schema(conn: &Connection) -> Result<(), rusqlite::Error> {
+        conn.execute(
+            "CREATE TABLE IF NOT EXISTS character_achievements (
+                character_id   INTEGER NOT NULL REFERENCES characters(id) ON DELETE CASCADE,
+                achievement_id TEXT NOT NULL,
+                unlocked_at    INTEGER NOT NULL,
+                PRIMARY KEY (character_id, achievement_id)
+            )",
+            [],
+        )?;
+        conn.execute(
+            "CREATE TABLE IF NOT EXISTS character_counters (
+                character_id INTEGER NOT NULL REFERENCES characters(id) ON DELETE CASCADE,
+                counter      TEXT NOT NULL,
+                value        INTEGER NOT NULL,
+                PRIMARY KEY (character_id, counter)
+            )",
+            [],
+        )?;
+        Ok(())
+    }
+
+    /// Everything a character has unlocked, and every counter feeding one.
+    pub fn load_achievements(&self, character_id: i64) -> Result<AchievementRows, AuthError> {
+        let conn = self
+            .pool
+            .get()
+            .map_err(|e| AuthError::Database(e.to_string()))?;
+        let mut stmt = conn
+            .prepare("SELECT achievement_id FROM character_achievements WHERE character_id = ?1")?;
+        let unlocked = stmt
+            .query_map(params![character_id], |row| row.get::<_, String>(0))?
+            .collect::<Result<Vec<_>, _>>()?;
+        let mut stmt =
+            conn.prepare("SELECT counter, value FROM character_counters WHERE character_id = ?1")?;
+        let counters = stmt
+            .query_map(params![character_id], |row| {
+                Ok((row.get::<_, String>(0)?, row.get::<_, i64>(1)? as u64))
+            })?
+            .collect::<Result<Vec<_>, _>>()?;
+        Ok((unlocked, counters))
+    }
+
+    /// Record an unlock. Idempotent by primary key, and the row count is what
+    /// tells the caller whether this was the first time — which is what stops
+    /// a duplicate reward mail.
+    pub fn unlock_achievement(
+        &self,
+        character_id: i64,
+        achievement_id: &str,
+    ) -> Result<bool, AuthError> {
+        let conn = self
+            .pool
+            .get()
+            .map_err(|e| AuthError::Database(e.to_string()))?;
+        let changed = conn.execute(
+            "INSERT OR IGNORE INTO character_achievements (character_id, achievement_id, unlocked_at) \
+             VALUES (?1, ?2, ?3)",
+            params![character_id, achievement_id, unix_now()],
+        )?;
+        Ok(changed > 0)
+    }
+
+    pub fn write_counters(&self, rows: &[(i64, String, u64)]) -> Result<(), AuthError> {
+        let mut conn = self
+            .pool
+            .get()
+            .map_err(|e| AuthError::Database(e.to_string()))?;
+        let tx = conn.transaction()?;
+        {
+            let mut stmt = tx.prepare(
+                "INSERT INTO character_counters (character_id, counter, value) VALUES (?1, ?2, ?3) \
+                 ON CONFLICT(character_id, counter) DO UPDATE SET value = excluded.value",
+            )?;
+            for (character_id, counter, value) in rows {
+                stmt.execute(params![character_id, counter, *value as i64])?;
+            }
+        }
+        tx.commit()?;
+        Ok(())
+    }
+
     fn ensure_dungeon_discovery_schema(conn: &Connection) -> Result<(), rusqlite::Error> {
         conn.execute(
             "CREATE TABLE IF NOT EXISTS character_dungeon_discoveries (
@@ -1681,6 +1780,7 @@ impl AuthService {
             satiation: onlinerpg_shared::hunger::SATIATION_START,
             job_xp: 0,
             skill_points: 0,
+            active_title: None,
         })
     }
 
@@ -2356,6 +2456,7 @@ mod tests {
                 save_point: Some(point),
                 job_xp: 0,
                 skill_points: 0,
+                active_title: None,
             }],
             &[],
             &[],

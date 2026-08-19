@@ -931,6 +931,15 @@ impl GameState {
     }
 
     async fn enter_dungeon_floor(&self, player_id: &PlayerId, entrance_id: &str, depth: u8) {
+        // High-water, not cumulative: reaching floor 3 twice is still floor 3
+        // (IMP-3.7).
+        self.bump(
+            player_id,
+            crate::achievement_defs::Trigger::DungeonDepth,
+            None,
+            u64::from(depth),
+        )
+        .await;
         self.ensure_dungeon_runtime(entrance_id).await;
         let (broken, opened): (Vec<u32>, Vec<u32>) = {
             let mut dungeons = self.dungeons.write().await;

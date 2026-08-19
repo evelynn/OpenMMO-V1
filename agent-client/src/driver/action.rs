@@ -28,6 +28,11 @@ pub(super) enum AgentAction {
         )]
         monster_id: String,
     },
+    #[serde(rename = "set_title")]
+    SetTitle {
+        #[serde(alias = "name", default)]
+        title: Option<String>,
+    },
     #[serde(rename = "learn_skill")]
     LearnSkill {
         #[serde(alias = "skillId", alias = "skill_id", alias = "name")]
@@ -430,6 +435,14 @@ pub(super) const ACTION_SPECS: &[ActionSpec] = &[
   You walk into range first, then strike."#,
     },
     ActionSpec {
+        names: &["set_title"],
+        aliases: &[],
+        doc: r#"- Show a title you have unlocked beside your name (omit it to show none):
+  {"type": "set_title", "title": "Angler"}
+  Titles come from achievements. Asking for one you have not earned is
+  ignored."#,
+    },
+    ActionSpec {
         names: &["learn_skill"],
         aliases: &[],
         doc: r#"- Spend one skill point to learn a combat skill or raise it a level:
@@ -804,7 +817,7 @@ impl AgentAction {
     /// must not be able to slip past this.
     pub(super) fn takes_over_movement(&self) -> bool {
         match self {
-            Self::LearnSkill { .. } => false,
+            Self::LearnSkill { .. } | Self::SetTitle { .. } => false,
             Self::Move { .. }
             | Self::Attack { .. }
             | Self::UseSkill { .. }
@@ -888,6 +901,7 @@ impl AgentAction {
             | Self::AcceptQuest { .. }
             | Self::TurnInQuest { .. } => true,
             Self::LearnSkill { .. }
+            | Self::SetTitle { .. }
             | Self::SetSavePoint { .. }
             | Self::Travel { .. }
             | Self::Deposit { .. }
@@ -934,6 +948,7 @@ impl AgentAction {
             Self::Attack { .. } => "attack",
             Self::UseSkill { .. } => "use_skill",
             Self::LearnSkill { .. } => "learn_skill",
+            Self::SetTitle { .. } => "set_title",
             Self::Move { .. } => "move",
             Self::Follow { .. } => "follow",
             Self::Respawn => "respawn",
@@ -1375,6 +1390,9 @@ pub(super) fn action_to_command(
         }),
         AgentAction::Attack { monster_id } => Some(ClientMessage::PlayerAttack {
             monster_id: monster_id.clone(),
+        }),
+        AgentAction::SetTitle { title } => Some(ClientMessage::SetTitle {
+            title: title.clone(),
         }),
         AgentAction::LearnSkill { skill } => Some(ClientMessage::LearnSkill {
             skill: skill.parse().ok()?,

@@ -529,6 +529,15 @@ pub(crate) fn format_event(state: &SharedState, msg: &ServerMessage) -> Option<S
                 "[Mail] #{mail_id} not claimed — your bag cannot hold all of it. Make room and retry."
             ),
         }),
+        ServerMessage::AchievementUnlocked {
+            achievement_id,
+            title,
+        } => Some(match title {
+            Some(title) => format!(
+                "[Achievement] {achievement_id} unlocked - the title \"{title}\" is yours (set_title shows it)"
+            ),
+            None => format!("[Achievement] {achievement_id} unlocked"),
+        }),
         ServerMessage::SkillRejected { skill, reason } => Some(format!(
             "[Skill] {} refused: {reason}",
             skill.as_str()

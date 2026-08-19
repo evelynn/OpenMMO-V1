@@ -1,3 +1,4 @@
+mod achievement_defs;
 mod announcements;
 mod api_auth;
 mod auth;
@@ -304,6 +305,7 @@ async fn main() -> ExitCode {
     travel_defs::assert_nodes_are_valid();
     world_boss_defs::assert_spawns_are_valid(&monster_defs);
     skill_defs::assert_skills_are_valid();
+    achievement_defs::assert_achievements_are_valid(&item_defs);
     let quest_defs = quest_defs::QuestDefs::load(&monster_defs, &item_defs);
     let world_drop_defs = world_drop_defs::WorldDropDefs::load(&item_defs);
     let paths = state_paths(&args.state_dir);
@@ -586,6 +588,7 @@ async fn main() -> ExitCode {
     // Hunger (doc/HUNGER.md): grills every 250ms; campfires, debuffs and
     // food regeneration every second. Activity drain rides movement/kills.
     let game_state_for_hunger = Arc::clone(&game_state);
+    let auth_for_hunger = Arc::clone(&auth_service);
     let mut hunger_tick_count = 0u64;
     background.spawn(run_ticks(
         "hunger",
@@ -594,9 +597,12 @@ async fn main() -> ExitCode {
         move || {
             hunger_tick_count = hunger_tick_count.wrapping_add(1);
             let game_state = Arc::clone(&game_state_for_hunger);
+            let auth = Arc::clone(&auth_for_hunger);
             let count = hunger_tick_count;
             async move {
                 game_state.tick_grills().await;
+                // Announce what the last frames earned (IMP-3.7).
+                game_state.tick_achievements(&auth).await;
                 if count.is_multiple_of(4) {
                     game_state.tick_campfires().await;
                     game_state.tick_debuffs().await;

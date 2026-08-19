@@ -550,6 +550,7 @@
         torchOn={player.torchOn}
         mainHand={player.mainHand}
         costumeHead={player.costumeHead}
+        title={player.title}
         {torchEffectsDisabled}
         npcPlayerId={player.isOfficialNpc ? player.id : undefined}
         onInteractionFinished={() =>

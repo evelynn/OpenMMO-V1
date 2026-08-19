@@ -5,6 +5,7 @@ import type { CharacterClass, Gender } from '../network/networkTypes'
 import { resetInventoryStore } from './inventoryStore'
 import { resetSkillsStore } from './skillsStore'
 import { resetCombatSkills } from './combatSkillStore'
+import { resetAchievements } from './achievementStore'
 import { resetPartyStores } from './partyStore'
 import { resetFriendStores } from './friendStore'
 import { resetFishingStore } from './fishingStore'
@@ -41,6 +42,8 @@ interface PlayerBase {
   mainHand?: string | null
   /** Cosmetic head layer; purely visual (IMP-3.6). */
   costumeHead?: string | null
+  /** Unlocked title shown above the name (IMP-3.7). */
+  title?: string | null
   lastDamageInfo?: PlayerDamageInfo
   lastRegenInfo?: PlayerDamageInfo
   lastGoldInfo?: PlayerGoldInfo
@@ -126,6 +129,7 @@ export const resetGameStore = () => {
   resetInventoryStore()
   resetSkillsStore()
   resetCombatSkills()
+  resetAchievements()
   resetFishingStore()
   resetPartyStores()
   resetFriendStores()

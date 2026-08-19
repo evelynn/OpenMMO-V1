@@ -229,6 +229,7 @@ pub(crate) fn encode_server_msg(msg: &ServerMessage) -> Option<Bytes> {
     }
 }
 
+mod achievement;
 mod cast;
 mod chat;
 pub(crate) use chat::{parse_admin_command, parse_notice_command};
@@ -448,6 +449,14 @@ pub struct GameState {
     dungeons: Arc<RwLock<HashMap<String, dungeon::DungeonRuntime>>>,
     /// monster_id → dungeon spawn slot, for respawn bookkeeping on death.
     dungeon_monsters: Arc<RwLock<HashMap<String, dungeon::DungeonMonsterRef>>>,
+    /// Achievement unlocks, counters and the active title, keyed by player
+    /// (IMP-3.7). Loaded at entry, written back through the batch save.
+    achievements: Arc<RwLock<HashMap<PlayerId, achievement::AchievementState>>>,
+    /// Players whose counters moved since the last flush.
+    dirty_counters: Arc<RwLock<HashSet<PlayerId>>>,
+    /// Achievements earned but not yet recorded and rewarded. The earning
+    /// side has no database handle; the drain does.
+    pending_unlocks: Arc<RwLock<Vec<(PlayerId, String)>>>,
     /// Job XP and unspent skill points, keyed by player (IMP-3.2). Loaded on
     /// entry from the `characters` row and written back through the same
     /// batch save.
@@ -708,6 +717,9 @@ impl GameState {
             dungeon_monsters: Arc::new(RwLock::new(HashMap::new())),
             world_bosses: Arc::new(RwLock::new(HashMap::new())),
             boss_damage: Arc::new(RwLock::new(HashMap::new())),
+            achievements: Arc::new(RwLock::new(HashMap::new())),
+            dirty_counters: Arc::new(RwLock::new(HashSet::new())),
+            pending_unlocks: Arc::new(RwLock::new(Vec::new())),
             job_progress: Arc::new(RwLock::new(HashMap::new())),
             next_cast_seq: Arc::new(std::sync::atomic::AtomicU64::new(1)),
             casting: Arc::new(RwLock::new(HashMap::new())),

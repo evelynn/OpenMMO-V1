@@ -76,17 +76,14 @@ pub struct Player {
     /// Equipped main-hand item def id; `None` renders the class default.
     #[serde(default)]
     pub main_hand: Option<String>,
-    /// Cosmetic layers, appended after `main_hand` because everything below
-    /// is `#[serde(skip)]` — so this is the end of the wire array, and no
-    /// existing field moves (IMP-3.6).
+    /// Display-only extras (costume slots, active title), appended after
+    /// `main_hand` because everything below is `#[serde(skip)]` — so this is
+    /// the end of the wire array and no existing field moves.
     ///
-    /// One field rather than two on purpose. `Player` serializes as a
-    /// positional array and had 14 elements; two more would have made 16,
-    /// one past msgpack's 15-element fixarray, widening the header from one
-    /// byte to three for **every** player in every snapshot. Nested, an
-    /// unworn costume is a single `nil` — cheaper than the two it replaces.
+    /// One nested field rather than one per extra, and that is a hard
+    /// constraint rather than a preference: see `Cosmetics`.
     #[serde(default)]
-    pub costume: Option<Costume>,
+    pub cosmetics: Option<Cosmetics>,
     #[serde(skip)]
     pub object_id: Option<u32>,
     #[serde(skip)]
@@ -98,21 +95,30 @@ pub struct Player {
     pub client_kind: ClientKind,
 }
 
-/// What a player is wearing over their real gear. Absent when nothing is.
+/// Everything about a player that is shown and affects nothing: the two
+/// costume slots and the active title.
+///
+/// Grouped by their wire role rather than their source, because that is what
+/// the constraint is about — `Player` serializes as a positional array and
+/// msgpack's fixarray tops out at 15 elements. Each of these as its own field
+/// would push past it and widen the header for every player in every
+/// snapshot, worn or not (IMP-3.6, IMP-3.7).
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
-pub struct Costume {
-    pub head: Option<String>,
-    pub back: Option<String>,
+pub struct Cosmetics {
+    pub costume_head: Option<String>,
+    pub costume_back: Option<String>,
+    /// Unlocked title the player has chosen to show.
+    pub title: Option<String>,
 }
 
-impl Costume {
-    /// `None` when neither slot is filled, so an empty costume never costs
-    /// more than the one byte a missing one does.
-    pub fn from_slots(head: Option<String>, back: Option<String>) -> Option<Self> {
-        if head.is_none() && back.is_none() {
+impl Cosmetics {
+    /// `None` when nothing is shown, so an unadorned player costs the one
+    /// byte a missing field does rather than three nils.
+    pub fn or_none(self) -> Option<Self> {
+        if self == Self::default() {
             return None;
         }
-        Some(Self { head, back })
+        Some(self)
     }
 }
 
@@ -313,7 +319,7 @@ mod tests {
             floor_level: 0,
             object_type: None,
             main_hand: None,
-            costume: None,
+            cosmetics: None,
             object_id: None,
             last_combat_at: 0,
             client_kind: ClientKind::default(),
@@ -360,7 +366,7 @@ mod tests {
             floor_level: 0,
             object_type: None,
             main_hand: None,
-            costume: None,
+            cosmetics: None,
             object_id: None,
             last_combat_at: 0,
             client_kind: ClientKind::default(),

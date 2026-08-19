@@ -30,6 +30,7 @@
   import { itemTooltip } from '../actions/itemTooltip'
   import CharacterStatusPane from './CharacterStatusPane.svelte'
   import SkillTreePanel from './SkillTreePanel.svelte'
+  import AchievementPanel from './AchievementPanel.svelte'
   import { getSkillDef } from '../data/skillDefs'
   import {
     characterPanelTab,
@@ -107,7 +108,13 @@
       : CLASS_LABELS[characterClass]
   )
 
-  const TABS: CharacterPanelTab[] = ['stats', 'skills', 'combat', 'status']
+  const TABS: CharacterPanelTab[] = [
+    'stats',
+    'skills',
+    'combat',
+    'deeds',
+    'status',
+  ]
 
   // Combat skills live in their own tab: they are bought, so an XP bar
   // beside them would always read empty (IMP-3.2).
@@ -403,6 +410,11 @@
         {#if $characterPanelTab === 'combat'}
           <div class="pane-skills">
             <SkillTreePanel />
+          </div>
+        {/if}
+        {#if $characterPanelTab === 'deeds'}
+          <div class="pane-skills">
+            <AchievementPanel />
           </div>
         {/if}
         {#if $characterPanelTab === 'status'}
