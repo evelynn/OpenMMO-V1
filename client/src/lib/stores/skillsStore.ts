@@ -6,6 +6,7 @@ export type { SkillId, Skills }
 /** Player-facing skill names (mirrors shared `SkillId::display_name`). */
 export const SKILL_DISPLAY_NAMES: Record<SkillId, string> = {
   fishing: 'Fishing',
+  trading: 'Trading',
   power_strike: 'Power Strike',
   cleave: 'Cleave',
   flame_dart: 'Flame Dart',

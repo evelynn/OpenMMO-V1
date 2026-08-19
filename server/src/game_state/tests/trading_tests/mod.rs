@@ -4,6 +4,7 @@ mod batch_tests;
 mod buyback_tests;
 mod merchant_tests;
 mod resident_tests;
+mod skill_tests;
 
 // --- Haggling (economy phase 2) ---
 

@@ -100,7 +100,10 @@ pub const NPC_TOKEN_FILENAME: &str = "npc_token";
 ///      SkillCastCancelled/SkillResult/SkillRejected/SkillCooldowns/
 ///      SkillPointsUpdate/SkillLearned); the server judges every part of a
 ///      skill use and the client predicts none of it — IMP-3.2.
-pub const PROTOCOL_VERSION: u32 = 39;
+/// v40: `SkillId::Trading`. No new message, but the id travels inside
+///      SkillsUpdate/SkillXpGained as its name, so a build that has never
+///      heard of it cannot decode a trader's skill list — IMP-3.4.
+pub const PROTOCOL_VERSION: u32 = 40;
 
 /// WebSocket close code sent when the handshake is refused (wrong protocol
 /// version, or traffic before `ClientInfo`). Lives outside the serialized

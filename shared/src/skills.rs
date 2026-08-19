@@ -19,6 +19,8 @@ pub enum SkillId {
     Cleave,
     #[serde(rename = "flame_dart")]
     FlameDart,
+    #[serde(rename = "trading")]
+    Trading,
 }
 
 impl SkillId {
@@ -28,6 +30,7 @@ impl SkillId {
             SkillId::PowerStrike => "power_strike",
             SkillId::Cleave => "cleave",
             SkillId::FlameDart => "flame_dart",
+            SkillId::Trading => "trading",
         }
     }
 
@@ -37,7 +40,7 @@ impl SkillId {
     /// grant from quietly raising a skill somebody paid points for.
     pub fn is_combat(&self) -> bool {
         match self {
-            SkillId::Fishing => false,
+            SkillId::Fishing | SkillId::Trading => false,
             SkillId::PowerStrike | SkillId::Cleave | SkillId::FlameDart => true,
         }
     }
@@ -50,6 +53,7 @@ impl SkillId {
             SkillId::PowerStrike,
             SkillId::Cleave,
             SkillId::FlameDart,
+            SkillId::Trading,
         ]
     }
 
@@ -60,6 +64,7 @@ impl SkillId {
             SkillId::PowerStrike => "Power Strike",
             SkillId::Cleave => "Cleave",
             SkillId::FlameDart => "Flame Dart",
+            SkillId::Trading => "Trading",
         }
     }
 }
@@ -73,6 +78,7 @@ impl std::str::FromStr for SkillId {
             "power_strike" => Ok(SkillId::PowerStrike),
             "cleave" => Ok(SkillId::Cleave),
             "flame_dart" => Ok(SkillId::FlameDart),
+            "trading" => Ok(SkillId::Trading),
             _ => Err(()),
         }
     }
@@ -100,6 +106,52 @@ pub fn skill_level_from_xp(xp: u64) -> u32 {
         level += 1;
     }
     level
+}
+
+/// Which side of a trade a price adjustment applies to. The caps differ, so
+/// the direction has to be named rather than inferred.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TradeSide {
+    /// The player is selling: the payout goes up.
+    Sell,
+    /// The player is buying: the price comes down.
+    Buy,
+}
+
+/// What a maxed trader gains on a sale, in basis points (+25%).
+pub const TRADING_SELL_CAP_BP: i32 = 2_500;
+/// What a maxed trader saves on a purchase, in basis points (-15%).
+///
+/// Lower than the sell cap on purpose: the buy side is the half that opens
+/// arbitrage against a counterparty who pays over the odds, so it is the half
+/// that has to stay small.
+pub const TRADING_BUY_CAP_BP: i32 = 1_500;
+
+/// How far `Trading` moves a merchant's fixed rate at `level`, in basis
+/// points. Linear to the cap at `SKILL_LEVEL_CAP`; level 0 moves nothing, so
+/// an untrained character trades at exactly today's prices.
+///
+/// Deliberately capped rather than unbounded: an uncapped multiplier on both
+/// sides of a trade is a currency generator, and this game already has a
+/// counterparty (`karl`, wishlist 120%) who pays more than base price.
+pub fn trade_rate_bonus_bp(level: u32, side: TradeSide) -> i32 {
+    let cap = match side {
+        TradeSide::Sell => TRADING_SELL_CAP_BP,
+        TradeSide::Buy => TRADING_BUY_CAP_BP,
+    };
+    let level = level.min(SKILL_LEVEL_CAP) as i32;
+    cap * level / SKILL_LEVEL_CAP as i32
+}
+
+/// `amount` after the trader's skill: a seller receives more, a buyer pays
+/// less, and neither ever reaches zero.
+pub fn trade_price_with_skill(amount: i64, level: u32, side: TradeSide) -> i64 {
+    let bp = i64::from(trade_rate_bonus_bp(level, side));
+    let scaled = match side {
+        TradeSide::Sell => amount * (10_000 + bp) / 10_000,
+        TradeSide::Buy => amount * (10_000 - bp) / 10_000,
+    };
+    scaled.max(1)
 }
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -216,6 +268,81 @@ mod tests {
         assert!(r.leveled_up);
         // A maxed skill reports nothing — no dirty flag, no message.
         assert!(skills.add_xp(SkillId::Fishing, 1).is_none());
+    }
+
+    /// A skill goes over the wire and into the database as its serde name,
+    /// so `as_str` is that name and not a second spelling of it. A drift
+    /// between the two would strand every saved row for that skill.
+    #[test]
+    fn a_skill_travels_as_the_name_as_str_reports() {
+        for skill in SkillId::all() {
+            let encoded = rmp_serde::to_vec(skill).expect("encodes");
+            let decoded: SkillId = rmp_serde::from_slice(&encoded).expect("round trips");
+            assert_eq!(&decoded, skill);
+            let name: String = rmp_serde::from_slice(&encoded).expect("is a string on the wire");
+            assert_eq!(name, skill.as_str());
+            assert_eq!(skill.as_str().parse::<SkillId>(), Ok(*skill));
+        }
+    }
+
+    #[test]
+    fn an_untrained_trader_pays_todays_prices() {
+        assert_eq!(trade_rate_bonus_bp(0, TradeSide::Sell), 0);
+        assert_eq!(trade_rate_bonus_bp(0, TradeSide::Buy), 0);
+        assert_eq!(trade_price_with_skill(1_000, 0, TradeSide::Sell), 1_000);
+        assert_eq!(trade_price_with_skill(1_000, 0, TradeSide::Buy), 1_000);
+    }
+
+    #[test]
+    fn a_maxed_trader_lands_exactly_on_the_caps() {
+        assert_eq!(
+            trade_rate_bonus_bp(SKILL_LEVEL_CAP, TradeSide::Sell),
+            TRADING_SELL_CAP_BP
+        );
+        assert_eq!(
+            trade_rate_bonus_bp(SKILL_LEVEL_CAP, TradeSide::Buy),
+            TRADING_BUY_CAP_BP
+        );
+        assert_eq!(
+            trade_price_with_skill(1_000, SKILL_LEVEL_CAP, TradeSide::Sell),
+            1_250
+        );
+        assert_eq!(
+            trade_price_with_skill(1_000, SKILL_LEVEL_CAP, TradeSide::Buy),
+            850
+        );
+    }
+
+    /// Past the cap is the cap: an unbounded multiplier on both sides of a
+    /// trade is a currency generator.
+    #[test]
+    fn the_caps_do_not_move_past_the_level_cap() {
+        assert_eq!(
+            trade_rate_bonus_bp(u32::MAX, TradeSide::Sell),
+            TRADING_SELL_CAP_BP
+        );
+        assert_eq!(
+            trade_rate_bonus_bp(u32::MAX, TradeSide::Buy),
+            TRADING_BUY_CAP_BP
+        );
+    }
+
+    #[test]
+    fn a_price_never_falls_to_nothing() {
+        assert_eq!(
+            trade_price_with_skill(1, SKILL_LEVEL_CAP, TradeSide::Buy),
+            1
+        );
+    }
+
+    /// Trading is practised, not bought — unlike the combat skills it shares
+    /// a container with.
+    #[test]
+    fn trading_is_trained_by_use() {
+        assert!(!SkillId::Trading.is_combat());
+        let mut skills = Skills::default();
+        assert!(skills.add_xp(SkillId::Trading, 100).is_some());
+        assert_eq!(skills.get(SkillId::Trading).level, 1);
     }
 
     #[test]

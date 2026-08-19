@@ -9,7 +9,7 @@
 ## 0. 현재 진행 상황 (이어서 작업할 때 먼저 읽는다)
 
 **브랜치**: `claude/project-analysis-dev-setup-9amcvt`
-**진행**: §5의 33행 중 **23행 완료**(작업 30 + 스파이크 3). **M0·M1·M2가 전부 끝났고**, 세 스파이크(SPK-1·2·3)가 모두 **go**다. M3는 3/7.
+**진행**: §5의 33행 중 **24행 완료**(작업 30 + 스파이크 3). **M0·M1·M2가 전부 끝났고**, 세 스파이크(SPK-1·2·3)가 모두 **go**다. M3는 4/7.
 
 | 항목 | 상태 | 커밋 |
 |------|------|------|
@@ -36,9 +36,10 @@
 | IMP-3.1 시간 4분할 | ✅ 완료 (프로토콜 변경 없음, COMBAT.md 절 신설, 13 개정 3건) | `f4a7ed7` |
 | IMP-3.2 전투 스킬 | ✅ 완료 (프로토콜 v39, `characters` 2컬럼, 13 개정 6건) | `d05f0a8` |
 | IMP-3.3 방어 2단 | ✅ 완료 (프로토콜 변경 없음, `items.csv` 2컬럼, 13 개정 2건) | `316db48` |
+| IMP-3.4 경제 스킬 Trading | ✅ 완료 (프로토콜 v40, **13 개정 4건 — 핵심 검증 항목이 통과 불가였다**) | `(이 커밋)` |
 
-**다음에 집을 것**: **IMP-3.4(경제 스킬 Trading)**. 선행이 없고, IMP-3.5(고액 거래
-수수료)와 같은 PR로 묶는 것이 권장이다(§5 24·25행).
+**다음에 집을 것**: **IMP-3.5(고액 거래 수수료)**. IMP-3.4가 가격 계산 지점을 이미
+정리해 뒀으므로 차감 지점이 분명하다.
 
 **세 스파이크가 모두 go로 끝나면서 게이트가 전부 열렸다** — IMP-2.4(SPK-3),
 IMP-2.3(SPK-2, 완료), IMP-2.8과 IMP-4.3(SPK-1). 남은 제약은 SPK-1이 만든
@@ -82,7 +83,12 @@ M1이 끝났으므로 밸런싱 기준선이 섰다: 레벨에 안 맞는 몬스
   줍는지 → 잡아서 되찾는지 → 로그아웃으로 디스폰시켜도 아이템이 남는지 →
   반지를 끼면 시트의 CHA가 오르는지 → 쇠약 상태에서 인벤 하중 상한이 줄어 보이는지 →
   `/save` 후 멀리서 죽어 그 자리에서 부활하는지 → `/storage`로 넣고 빼고 재접속 후 잔존.
-- **프로토콜이 v29 → v39로 열 번 올랐다.** 서버와 클라이언트를 반드시 함께 배포한다.
+- **프로토콜이 v29 → v40으로 열한 번 올랐다.** 서버와 클라이언트를 반드시 함께 배포한다.
+- **주민 위시리스트 차익이 열려 있다.** `karl`이 횃불·단검을 정가의 120%에 사므로
+  상인에게 사서 karl에게 파는 왕복이 **스킬 0에서 이미 +20%**다. 막고 있는 것은
+  `walletCap`(30,000) 하나뿐이고, IMP-3.4의 구매 할인(최대 15%)이 그 폭을 넓힌다.
+  `Trading`이 위시리스트 매각가를 건드리지 않게 막아 뒀지만(테스트로 고정),
+  근본 해결은 위시리스트 요율을 100 이하로 내리거나 일일 매입 수량을 두는 것이다.
 - **여행 목적지가 2곳뿐이다.** 스폰 리전 주변에 실제로 존재하는 정착지가 수도와
   리버사이드 둘뿐이라 그렇다(`worldgen.json`의 settlements에서 확인). 월드를 더
   구우면 후보가 늘어나고, 상한은 10곳이다.
@@ -382,7 +388,7 @@ Phase 번호와 1:1이다(M1 = Phase 1 …). **작업 ID는 13의 ID가 정본�
 | [x] 21 | IMP-3.1 | 시간 4분할 (VCT / FCT / after-cast delay / cooldown) | — | L | shared/server/client | `shared/src/cast.rs`(신규) + `wasm_api::cast_timing_for`, 서버 3개 맵 + 이동 캔슬·접속 종료 정리, [COMBAT.md](COMBAT.md) 4분할 표. 평타는 그대로 애니메이션에 묶여 있다(13 개정 3건) |
 | [x] 22 | IMP-3.2 | 전투 스킬 시스템 | IMP-3.1 | L | data/shared/server/client | `SkillId` 확장(전투 3종) + `job_xp`/`skill_points`, `data-src/skills.csv`, 메시지 10종, `skill_defs.rs` + `game_state/skill.rs`, `SkillBar`/`SkillTreePanel`, 에이전트 `use_skill`/`learn_skill`. 서버가 전부 판정하고 클라이언트는 예측하지 않는다(13 개정 6건) |
 | [x] 23 | IMP-3.3 | 방어 2단 (Hard/Soft) | IMP-3.2 | M | data/server/doc/client | **`guard`는 명중 판정(AC)으로 유지**하고 축을 하나 더 만든다 — `data-src/items.csv`에 `armorPct`/`armorFlat`, `server/src/game/combat.rs`에 `apply_defense`(비율 → 감산 → 최소 1), 두 축의 역할 분리를 [COMBAT.md](COMBAT.md)에 문서화 |
-| 24 | IMP-3.4 | 경제 스킬 `SkillId::Trading` | — | M | shared/server/client | 기존 haggle(`game_state/deals.rs`의 딜 원장, 와이어 타입은 `shared/src/messages.rs:52` `ActiveDeal`)·상인 `sellRatePercent`에 곱, CHA와의 역할 분리를 [ECONOMY.md](ECONOMY.md)에 **먼저** 문서화 |
+| [x] 24 | IMP-3.4 | 경제 스킬 `SkillId::Trading` | — | M | shared/server/client | 기존 haggle(`game_state/deals.rs`의 딜 원장, 와이어 타입은 `shared/src/messages.rs:52` `ActiveDeal`)·상인 `sellRatePercent`에 곱, CHA와의 역할 분리를 [ECONOMY.md](ECONOMY.md)에 **먼저** 문서화 |
 | 25 | IMP-3.5 | 고액 거래 수수료 | IMP-0.1 | M | shared/server | `shared`에 `trade_fee(amount)`, `game_state/trading.rs:1073` `sell_item` / `:1336` `sell_items`에서 **상대가 `merchants.csv` 상인이 아닐 때만** 임계 초과분 차감, **수수료는 소각**, `TRADE_FEE_THRESHOLD`/`TRADE_FEE_PCT` 상수, [ECONOMY.md](ECONOMY.md) 갱신. IMP-3.4와 같은 PR 권장 |
 | 26 | IMP-3.6 | 코스튬 레이어 | — | M | data/shared/server/client | `EquipSlot`에 `CostumeHead`/`CostumeBack`, `shared/src/entity.rs`의 `Player`에 필드 2개 **끝에 append** + `PROTOCOL_VERSION` +1, `equipped_guard`에서 코스튬 슬롯 명시적 제외(테스트로 고정), `items.csv`에 `category=costume` 행(weight 0, guard 없음) |
 | 27 | IMP-3.7 | 업적 · 칭호 | IMP-2.1 | M | data/shared/server/client | 기존 행동 재사용(낚시 `trophyCm`, 던전 심층, 하우징, 공연, 요리), **보상은 우편**, 칭호는 채팅·이름표 표시만 |

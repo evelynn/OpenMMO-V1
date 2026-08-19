@@ -5,7 +5,12 @@ use onlinerpg_shared::inventory::ItemInstance;
 use onlinerpg_shared::messages::{
     ActiveDeal, BagLineItem, BuybackEntry, DealKind, StockEntry, TradeLineItem,
 };
+use onlinerpg_shared::skills::{trade_price_with_skill, SkillId, TradeSide};
 use tracing::info;
+
+/// Skill XP one completed trade is worth. Sized so the first Trading level
+/// arrives after a hundred trades rather than a hundred thousand.
+const TRADING_XP_PER_TRADE: u64 = 1;
 
 use super::combat::reachable_dist_sq;
 use super::deals::{buy_price, deal_half_band_pct, resident_half_band_pct, sell_payout, DealEntry};
@@ -555,6 +560,34 @@ impl super::GameState {
     /// Buy one unit of `item_def_id` from a trading NPC. Merchants create
     /// the item from its definition (unlimited stock); residents transfer
     /// a unit out of their real inventory and pocket the gold.
+    /// The player's `Trading` level; 0 when never trained, which is exactly
+    /// today's prices.
+    async fn trading_level(&self, player_id: &PlayerId) -> u32 {
+        self.skill_level(player_id, SkillId::Trading).await
+    }
+
+    /// A price after the player's `Trading` skill.
+    ///
+    /// Merchant transactions only. A resident's wishlist rate is left alone
+    /// on purpose: `karl` already pays 120% of base price, so a skill that
+    /// raised that number would widen an arbitrage loop that exists at level
+    /// 0 rather than open a new one (doc 13 IMP-3.4 revision).
+    fn traded_price(amount: i64, level: u32, is_resident: bool, side: TradeSide) -> i64 {
+        if is_resident {
+            amount
+        } else {
+            trade_price_with_skill(amount, level, side)
+        }
+    }
+
+    /// One completed trade is one point of practice. Deliberately not scaled
+    /// by the amount: a single round trip in something expensive would
+    /// otherwise max the skill.
+    async fn credit_trading_practice(&self, player_id: &PlayerId) {
+        self.add_skill_xp(player_id, SkillId::Trading, TRADING_XP_PER_TRADE)
+            .await;
+    }
+
     pub async fn buy_item(
         &self,
         player_id: &PlayerId,
@@ -607,7 +640,12 @@ impl super::GameState {
                 .send_trade_error(player_id, "They won't part with that")
                 .await;
         }
-        let price = buy_price(base_price, deal.as_ref().map_or(0, |d| d.modifier_pct));
+        let price = Self::traded_price(
+            buy_price(base_price, deal.as_ref().map_or(0, |d| d.modifier_pct)),
+            self.trading_level(player_id).await,
+            is_resident,
+            TradeSide::Buy,
+        );
 
         let item_weight = self.item_defs.weight(item_def_id);
         let stackable = self.item_defs.stackable(item_def_id);
@@ -724,6 +762,7 @@ impl super::GameState {
                 .await;
         }
         info!("{player_name} bought {item_def_id} from {npc_name} for {price}");
+        self.credit_trading_practice(player_id).await;
         self.mark_dirty(player_id).await;
         self.mark_inventory_dirty(player_id).await;
         self.send_direct_message(
@@ -901,6 +940,7 @@ impl super::GameState {
         }
 
         let mut total_price: i64 = 0;
+        let trading_level = self.trading_level(player_id).await;
         let taken = {
             let line_defs: Vec<&str> = plans.iter().map(|p| p.item_def_id.as_str()).collect();
             self.take_deals(player_id, &npc_name, DealKind::Buy, &line_defs)
@@ -909,9 +949,16 @@ impl super::GameState {
         for (plan, deal) in plans.iter_mut().zip(taken) {
             let deal_units: u32 = if deal.is_some() { 1 } else { 0 };
             let normal_units = plan.qty - deal_units;
-            let price = buy_price(plan.base_price, deal.as_ref().map_or(0, |d| d.modifier_pct))
-                * deal_units as i64
-                + buy_price(plan.base_price, 0) * normal_units as i64;
+            let unit = |modifier_pct| {
+                Self::traded_price(
+                    buy_price(plan.base_price, modifier_pct),
+                    trading_level,
+                    is_resident,
+                    TradeSide::Buy,
+                )
+            };
+            let price = unit(deal.as_ref().map_or(0, |d| d.modifier_pct)) * deal_units as i64
+                + unit(0) * normal_units as i64;
             plan.deal_taken = deal;
             plan.price = price;
             total_price += price;
@@ -1019,6 +1066,7 @@ impl super::GameState {
             );
         }
 
+        self.credit_trading_practice(player_id).await;
         self.mark_dirty(player_id).await;
         self.mark_inventory_dirty(player_id).await;
         self.send_direct_message(
@@ -1130,10 +1178,15 @@ impl super::GameState {
         let deal = self
             .take_deal(player_id, &npc_name, &item_def_id, DealKind::Sell)
             .await;
-        let payout = sell_payout(
-            base_price,
-            rate,
-            deal.as_ref().map_or(0, |d| d.modifier_pct),
+        let payout = Self::traded_price(
+            sell_payout(
+                base_price,
+                rate,
+                deal.as_ref().map_or(0, |d| d.modifier_pct),
+            ),
+            self.trading_level(player_id).await,
+            is_resident,
+            TradeSide::Sell,
         );
 
         let item_weight = self.item_defs.weight(&item_def_id);
@@ -1291,6 +1344,7 @@ impl super::GameState {
                 .await;
         }
         info!("{player_name} sold {item_def_id} to {npc_name} for {payout}");
+        self.credit_trading_practice(player_id).await;
         self.mark_dirty(player_id).await;
         self.mark_inventory_dirty(player_id).await;
         self.send_direct_message(
@@ -1477,6 +1531,7 @@ impl super::GameState {
         // across the whole batch) and price every line; restore them all if
         // the resident wallet check below then fails.
         let mut total_payout: i64 = 0;
+        let trading_level = self.trading_level(player_id).await;
         let taken = {
             let line_defs: Vec<&str> = plans.iter().map(|p| p.item_def_id.as_str()).collect();
             self.take_deals(player_id, &npc_name, DealKind::Sell, &line_defs)
@@ -1485,12 +1540,16 @@ impl super::GameState {
         for (plan, deal) in plans.iter_mut().zip(taken) {
             let deal_units: u32 = if deal.is_some() { 1 } else { 0 };
             let normal_units = plan.qty - deal_units;
-            let payout = sell_payout(
-                plan.base_price,
-                rate,
-                deal.as_ref().map_or(0, |d| d.modifier_pct),
-            ) * deal_units as i64
-                + sell_payout(plan.base_price, rate, 0) * normal_units as i64;
+            let unit = |modifier_pct| {
+                Self::traded_price(
+                    sell_payout(plan.base_price, rate, modifier_pct),
+                    trading_level,
+                    is_resident,
+                    TradeSide::Sell,
+                )
+            };
+            let payout = unit(deal.as_ref().map_or(0, |d| d.modifier_pct)) * deal_units as i64
+                + unit(0) * normal_units as i64;
             plan.deal_taken = deal;
             plan.payout = payout;
             total_payout += payout;
@@ -1607,6 +1666,7 @@ impl super::GameState {
             );
         }
 
+        self.credit_trading_practice(player_id).await;
         self.mark_dirty(player_id).await;
         self.mark_inventory_dirty(player_id).await;
         self.send_direct_message(
@@ -1632,12 +1692,20 @@ impl super::GameState {
         }
         let npc_gold = self.get_player_gold(npc_player_id).await;
         for plan in &plans {
-            let normal_payout = sell_payout(plan.base_price, rate, 0);
+            let priced = |modifier_pct| {
+                Self::traded_price(
+                    sell_payout(plan.base_price, rate, modifier_pct),
+                    trading_level,
+                    is_resident,
+                    TradeSide::Sell,
+                )
+            };
+            let normal_payout = priced(0);
             for unit in 0..plan.qty {
                 let unit_payout = if unit == 0 {
-                    plan.deal_taken.as_ref().map_or(normal_payout, |deal| {
-                        sell_payout(plan.base_price, rate, deal.modifier_pct)
-                    })
+                    plan.deal_taken
+                        .as_ref()
+                        .map_or(normal_payout, |deal| priced(deal.modifier_pct))
                 } else {
                     normal_payout
                 };
