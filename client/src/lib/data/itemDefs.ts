@@ -27,6 +27,10 @@ export interface ItemDefinition {
   consumable?: boolean
   /** Satiation restored when eaten (doc/HUNGER.md). */
   nutrition?: number
+  /** Hard defence: percent of a landed hit turned away (IMP-3.3). */
+  armorPct?: number
+  /** Soft defence: flat reduction applied after the percentage. */
+  armorFlat?: number
 }
 
 const itemDefs = itemsJson as Record<string, ItemDefinition>
@@ -36,10 +40,15 @@ export function getItemDef(itemDefId: string): ItemDefinition | undefined {
 }
 
 /** Tooltip lines for what an item does: `guard` (with any armor enchant folded
- *  in, as combat resolves it) then `effects`. */
+ *  in, as combat resolves it), then the two armour axes, then `effects`.
+ *  Guard and armour are shown together because they are different halves of
+ *  the same question — whether you are hit, and how much it costs. */
 export function statLabels(def: ItemDefinition, enchant = 0): string[] {
   const guard = (def.guard ?? 0) + (def.category === 'armor' ? enchant : 0)
   const lines = guard ? [`Guard: +${guard}`] : []
+  // Enchant deliberately does not appear here: it rides guard only.
+  if (def.armorPct) lines.push(`Armor: ${def.armorPct}%`)
+  if (def.armorFlat) lines.push(`Armor: -${def.armorFlat}`)
   for (const raw of def.effects?.split(';') ?? []) {
     const token = raw.trim()
     if (!token) continue

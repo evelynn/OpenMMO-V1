@@ -1323,3 +1323,107 @@ async fn stale_monster_attack_is_rejected_as_invalid_target() {
         expect_attack_rejected(&mut attacker_rx, target, AttackRejectReason::InvalidTarget);
     }
 }
+
+/// Armour is applied where it can be seen: the number the client is told is
+/// the number the player lost, not the raw roll (IMP-3.3).
+#[tokio::test]
+async fn worn_armour_reduces_what_a_monster_takes_off() {
+    let game_state = make_test_game_state("armour_reduces_damage");
+    let owner = pid("owner");
+    let victim = pid("victim");
+    game_state.add_player(make_player("owner", 0.0, 0.0)).await;
+    let mut target = make_player("victim", 1.0, 0.0);
+    target.health = 5_000;
+    target.max_health = 5_000;
+    game_state.add_player(target).await;
+    let mut rx = game_state.register_direct_channel(&victim).await;
+
+    // Full plate, so the reduction is large enough to see through the dice.
+    let mut inventory = PlayerInventory::default();
+    for (slot, item) in [
+        (EquipSlot::Head, "plate_helmet"),
+        (EquipSlot::Chest, "breastplate"),
+        (EquipSlot::Pants, "plate_greaves"),
+        (EquipSlot::Boots, "plate_boots"),
+        (EquipSlot::Hands, "plate_gauntlets"),
+    ] {
+        inventory
+            .equipped
+            .insert(slot, bag_item(slot as u64 + 1, item, 1));
+    }
+    let (_, pct, flat) = game_state.equipped_defense(&inventory);
+    assert!(pct > 0 && flat > 0, "the fixture must actually wear armour");
+    game_state
+        .inventories
+        .write()
+        .await
+        .insert(victim, inventory);
+
+    {
+        let mut monsters = game_state.monsters.write().await;
+        let mut monster = make_monster("biter", pos(1.0), 0);
+        monster.owner_id = Some(owner);
+        monster.monster_type = "goblin".to_string();
+        monsters.insert("biter".to_string(), monster);
+    }
+
+    // Swing until one lands; misses carry no damage to compare.
+    let mut landed = None;
+    for _ in 0..200 {
+        game_state
+            .monsters
+            .write()
+            .await
+            .get_mut("biter")
+            .unwrap()
+            .last_attack_at = 0;
+        game_state
+            .broadcast_monster_attack(&owner, "biter", &victim)
+            .await;
+        for msg in drain(&mut rx) {
+            if let ServerMessage::MonsterAttackedPlayer {
+                hit: true, damage, ..
+            } = msg
+            {
+                landed = Some(damage);
+            }
+        }
+        if landed.is_some() {
+            break;
+        }
+    }
+    let damage = landed.expect("a goblin lands a hit within 200 swings");
+    assert!(damage >= 1, "a landed hit always costs at least one");
+    let health = game_state.players.read().await[&victim].health;
+    assert_eq!(
+        5_000 - health,
+        damage,
+        "the reported damage is the damage taken, armour included"
+    );
+}
+
+/// The shipped table has to stay under the cap on its own, or the cap is
+/// doing balance work the data should be doing.
+#[tokio::test]
+async fn the_shipped_armour_set_stays_under_the_hard_cap() {
+    let game_state = make_test_game_state("armour_cap");
+    let mut inventory = PlayerInventory::default();
+    for (slot, item) in [
+        (EquipSlot::Head, "plate_helmet"),
+        (EquipSlot::Chest, "breastplate"),
+        (EquipSlot::Pants, "plate_greaves"),
+        (EquipSlot::Boots, "plate_boots"),
+        (EquipSlot::Hands, "plate_gauntlets"),
+        (EquipSlot::OffHand, "raven_shield"),
+    ] {
+        inventory
+            .equipped
+            .insert(slot, bag_item(slot as u64 + 1, item, 1));
+    }
+    let (_, pct, _) = game_state.equipped_defense(&inventory);
+    assert!(
+        pct < crate::game::combat::MAX_ARMOR_PCT,
+        "the best gear in the game reaches {pct}%, at or past the {}% ceiling",
+        crate::game::combat::MAX_ARMOR_PCT
+    );
+}

@@ -62,6 +62,16 @@ pub struct ItemDefinition {
     /// equipped items and added to the wearer's base guard when attacked.
     #[serde(default)]
     pub guard: Option<i32>,
+    /// Hard defence: percent of incoming damage this piece turns away.
+    /// Summed across worn gear and capped, because a percentage alone
+    /// becomes immunity at high enough numbers (IMP-3.3).
+    #[serde(rename = "armorPct", default)]
+    pub armor_pct: Option<u32>,
+    /// Soft defence: flat damage subtracted after the percentage. Deliberately
+    /// a second axis: subtraction alone would zero every small hit, and a
+    /// percentage alone would never stop one.
+    #[serde(rename = "armorFlat", default)]
+    pub armor_flat: Option<u32>,
     /// Special effects granted while equipped. Resolved into `effects` at
     /// load; an unknown token fails the boot.
     #[serde(

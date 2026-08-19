@@ -1514,6 +1514,18 @@ final      = max(1, after_hard − armor_flat)
 방어구 인챈트(`enchant`)는 지금처럼 `guard`에 붙는다 — `armor`에도 붙이면 한 번의
 강화가 두 축을 올려 인챈트 사다리 밸런스가 무너진다.
 
+> **개정 (IMP-3.3 착수 시)** — 두 가지.
+>
+> 1. **`equipped_guard`를 없애지 않고 `equipped_defense`가 대신 계산하게 했다.**
+>    원문은 `equipped_armor`를 따로 두라고 했지만 성능 항목이 곧바로 "같은 순회이므로
+>    합치라"고 말한다. 두 함수를 두면 순회가 둘로 갈라지므로, `equipped_defense`가
+>    `(guard, pct, flat)`을 한 번에 돌려주고 `equipped_guard`는 그 첫 값을 꺼내는
+>    한 줄로 남겼다 — 기존 호출부(`effective_guard`, `EffectiveStats`)는 그대로다.
+> 2. **`client/src/lib/data/itemDefs.ts`를 손댔다** — 원문 "손댈 파일"에 없던
+>    파일이다. 툴팁이 이미 `Guard: +N`을 보여주고 있는데 방어의 나머지 절반만 안
+>    보이면, 플레이어는 자기 장비가 무엇을 하는지 절반만 알게 된다. 프로토콜은
+>    바뀌지 않는다(클라이언트는 같은 `items.json`을 이미 읽고 있다).
+
 **데이터 스키마**
 
 | 컬럼 | 의미 | 빈 칸 |

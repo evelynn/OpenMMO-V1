@@ -211,11 +211,39 @@ impl super::GameState {
     /// Equipped `guard` plus worn-armor enchant levels. A weapon's enchant
     /// stays on attack and damage rolls and never protects.
     pub(super) fn equipped_guard(&self, inv: &PlayerInventory) -> i32 {
+        self.equipped_defense(inv).0
+    }
+
+    /// Both defensive axes in one pass over the worn gear: the guard an
+    /// attacker has to beat, and the two-stage reduction applied to a hit
+    /// that lands (IMP-3.3). One traversal because the attack path wants
+    /// both and they read the same items.
+    ///
+    /// Enchant rides `guard` only. Letting it raise armour too would make a
+    /// single upgrade move two axes, which is what the enchant ladder is
+    /// balanced against.
+    pub(super) fn equipped_defense(&self, inv: &PlayerInventory) -> (i32, u32, u32) {
         self.equipped_pairs(inv)
-            .map(|(item, def)| {
-                def.guard.unwrap_or(0) + if def.is_armor() { item.enchant } else { 0 }
+            .fold((0, 0, 0), |(guard, pct, flat), (item, def)| {
+                (
+                    guard + def.guard.unwrap_or(0) + if def.is_armor() { item.enchant } else { 0 },
+                    pct + def.armor_pct.unwrap_or(0),
+                    flat + def.armor_flat.unwrap_or(0),
+                )
             })
-            .sum()
+    }
+
+    /// A player's worn hard/soft defence, or nothing worn.
+    pub(super) async fn player_armor(&self, player_id: &PlayerId) -> (u32, u32) {
+        self.inventories
+            .read()
+            .await
+            .get(player_id)
+            .map(|inv| {
+                let (_, pct, flat) = self.equipped_defense(inv);
+                (pct, flat)
+            })
+            .unwrap_or((0, 0))
     }
 
     /// A player's effective guard: base attribute plus equipped-gear bonuses.
@@ -1137,9 +1165,18 @@ impl super::GameState {
             0,
         );
 
+        // Armour applies after the roll, never inside it: the dice stay a pure
+        // function, exactly as the size multiplier does on the other side.
+        let damage = if result.hit {
+            let (armor_pct, armor_flat) = self.player_armor(target_player_id).await;
+            combat::apply_defense(result.damage, armor_pct, armor_flat)
+        } else {
+            0
+        };
+
         debug!(
-            "Monster {} attacks player {}: Roll {}, Hit: {}, Damage: {}",
-            monster_id, target_player_name, result.roll, result.hit, result.damage
+            "Monster {} attacks player {}: Roll {}, Hit: {}, Damage: {} (rolled {})",
+            monster_id, target_player_name, result.roll, result.hit, damage, result.damage
         );
 
         // Update player HP and combat timestamp
@@ -1157,7 +1194,7 @@ impl super::GameState {
                 player.last_combat_at = now;
 
                 if result.hit {
-                    player.health = player.health.saturating_sub(result.damage);
+                    player.health = player.health.saturating_sub(damage);
                     if player.health == 0 {
                         did_die = true;
                     }
@@ -1179,7 +1216,7 @@ impl super::GameState {
             player_id: *target_player_id,
             hit: result.hit,
             roll: result.roll,
-            damage: result.damage,
+            damage,
             current_health,
         };
         if let Some((target_position, target_floor)) = target_loc {

@@ -98,6 +98,25 @@ pub fn scale_damage(damage: u32, mult: f32) -> u32 {
     ((damage as f32 * mult).round() as i64).clamp(1, u32::MAX as i64) as u32
 }
 
+/// Ceiling on summed hard defence. Without it, enough gear is immunity —
+/// and the point of the second axis is that neither half can do that alone.
+pub const MAX_ARMOR_PCT: u32 = 60;
+
+/// Hard defence first, soft second, never below 1 (IMP-3.3, RO's order).
+///
+/// The order is the specification, not an implementation detail: subtracting
+/// before scaling would make flat armour worth more the harder you are hit,
+/// which is backwards. The floor of 1 is what keeps a fully armoured player
+/// from being immune to small hits rather than merely resistant to them.
+pub fn apply_defense(damage: u32, hard_pct: u32, soft_flat: u32) -> u32 {
+    if damage == 0 {
+        return 0;
+    }
+    let kept = 100 - hard_pct.min(MAX_ARMOR_PCT);
+    let after_hard = (u64::from(damage) * u64::from(kept)) / 100;
+    after_hard.saturating_sub(u64::from(soft_flat)).max(1) as u32
+}
+
 pub fn roll_attack(
     attack_bonus: i32,
     target_guard: i32,
@@ -156,6 +175,43 @@ mod tests {
     }
 
     use super::*;
+
+    /// The order is the spec: scaling then subtracting is not the same
+    /// number as subtracting then scaling, and only one of them makes flat
+    /// armour worth less against a bigger hit.
+    #[test]
+    fn hard_defence_runs_before_soft_defence() {
+        // 100 → 50 → 40.
+        assert_eq!(apply_defense(100, 50, 10), 40);
+        // Reversed it would be (100 - 10) * 0.5 = 45.
+        assert_ne!(apply_defense(100, 50, 10), 45);
+    }
+
+    /// Subtraction alone would zero every small hit; the floor is the whole
+    /// reason the two axes can be stacked safely.
+    #[test]
+    fn a_landed_hit_always_costs_at_least_one() {
+        assert_eq!(apply_defense(1, 60, 100), 1);
+        assert_eq!(apply_defense(5, 0, 999), 1);
+        assert_eq!(apply_defense(0, 0, 0), 0, "a miss stays a miss");
+    }
+
+    #[test]
+    fn hard_defence_is_capped() {
+        // Anything past the cap reads as the cap, so gear cannot buy immunity.
+        assert_eq!(
+            apply_defense(100, 200, 0),
+            apply_defense(100, MAX_ARMOR_PCT, 0)
+        );
+        assert_eq!(apply_defense(100, MAX_ARMOR_PCT, 0), 40);
+    }
+
+    #[test]
+    fn bare_defence_changes_nothing() {
+        for damage in [1, 7, 40, 1000] {
+            assert_eq!(apply_defense(damage, 0, 0), damage);
+        }
+    }
 
     #[test]
     fn extra_damage_roll_is_added_on_hit() {
