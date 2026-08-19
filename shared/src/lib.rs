@@ -4,6 +4,7 @@
 //! using flat `onlinerpg_shared::Position` paths regardless of where the
 //! type now lives.
 
+pub mod cast;
 pub mod character;
 pub mod debuff;
 pub mod dungeon;
@@ -119,6 +120,7 @@ pub const CLOSE_CODE_IDLE_TIMEOUT: u16 = 4003;
 #[cfg(target_arch = "wasm32")]
 mod wasm_api;
 
+pub use cast::{CastSchedule, CastTiming};
 pub use character::{Character, CharacterAttributes, CharacterClass, Gender};
 pub use entity::{Monster, MonsterLifecycle, MonsterState, Player, PlayerId};
 pub use messages::{

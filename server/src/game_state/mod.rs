@@ -229,6 +229,7 @@ pub(crate) fn encode_server_msg(msg: &ServerMessage) -> Option<Bytes> {
     }
 }
 
+mod cast;
 mod chat;
 pub(crate) use chat::{parse_admin_command, parse_notice_command};
 mod combat;
@@ -446,6 +447,19 @@ pub struct GameState {
     dungeons: Arc<RwLock<HashMap<String, dungeon::DungeonRuntime>>>,
     /// monster_id → dungeon spawn slot, for respawn bookkeeping on death.
     dungeon_monsters: Arc<RwLock<HashMap<String, dungeon::DungeonMonsterRef>>>,
+    /// Who is mid-cast, and the four deadlines that use produced (IMP-3.1).
+    /// Absent means "not casting" — the overwhelming majority — so the map
+    /// is the size of the crowd currently casting, not the population.
+    casting: Arc<RwLock<HashMap<PlayerId, cast::CastState>>>,
+    /// When each player's after-cast delay ends: every skill is refused
+    /// until then, movement and normal attacks are not.
+    global_cast_delay_until: Arc<RwLock<HashMap<PlayerId, u64>>>,
+    /// Per-skill cooldown deadlines. A `Vec` rather than a nested map for the
+    /// reason `quest_progress` is one — a player holds a handful of skills, so
+    /// a linear scan beats a string-keyed map's per-entry overhead at 5,000
+    /// players, and a disconnect drops one entry instead of scanning
+    /// everything (doc 13 IMP-3.1 revision).
+    skill_cooldowns: Arc<RwLock<HashMap<PlayerId, cast::SkillCooldowns>>>,
     /// monster_id → who has hurt it and how much, bosses only (IMP-2.8).
     /// Capped at `MVP_MAX_CONTRIBUTORS` per monster: only the top entry is
     /// ever read, so an exact tail is worth less than a bounded map. Cleared
@@ -686,6 +700,9 @@ impl GameState {
             dungeon_monsters: Arc::new(RwLock::new(HashMap::new())),
             world_bosses: Arc::new(RwLock::new(HashMap::new())),
             boss_damage: Arc::new(RwLock::new(HashMap::new())),
+            casting: Arc::new(RwLock::new(HashMap::new())),
+            global_cast_delay_until: Arc::new(RwLock::new(HashMap::new())),
+            skill_cooldowns: Arc::new(RwLock::new(HashMap::new())),
             open_shops: Arc::new(RwLock::new(HashMap::new())),
             parties: Arc::new(RwLock::new(party::Parties::default())),
             buybacks: Arc::new(RwLock::new(HashMap::new())),

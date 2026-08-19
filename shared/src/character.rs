@@ -168,6 +168,13 @@ pub struct CharacterAttributes {
     pub guard: u8,
 }
 
+/// D&D ability modifier for a 3–18 score: −4 at 3, 0 at 10–11, +4 at 18.
+/// Lives here rather than in the server because the cast-time shortening
+/// (IMP-3.1) has to come out the same on both sides of the wire.
+pub fn ability_modifier(score: u8) -> i32 {
+    (i32::from(score) - 10).div_euclid(2)
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Character {
     pub id: i64,

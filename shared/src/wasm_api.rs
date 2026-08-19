@@ -59,6 +59,36 @@ pub fn close_code_protocol_mismatch() -> u16 {
     crate::CLOSE_CODE_PROTOCOL_MISMATCH
 }
 
+/// One skill's times after the caster's DEX/INT shortening (IMP-3.1), so the
+/// cast bar is drawn from the same numbers the server counts down. Returns
+/// `{ vct_ms, fct_ms, after_cast_delay_ms, cooldown_ms }`.
+#[wasm_bindgen]
+pub fn cast_timing_for(
+    vct_ms: u32,
+    fct_ms: u32,
+    after_cast_delay_ms: u32,
+    cooldown_ms: u32,
+    dex: u8,
+    int: u8,
+) -> Result<JsValue, JsError> {
+    let attrs = crate::character::CharacterAttributes {
+        r#str: 10,
+        dex,
+        con: 10,
+        int,
+        wis: 10,
+        cha: 10,
+        guard: 0,
+    };
+    let timing = crate::cast::CastTiming {
+        vct_ms,
+        fct_ms,
+        after_cast_delay_ms,
+        cooldown_ms,
+    };
+    to_js(&timing.resolve(&attrs))
+}
+
 /// XP threshold for a given level, as an f64 for JS interop.
 /// Saturates at Number.MAX_SAFE_INTEGER for levels beyond safe integer range.
 #[wasm_bindgen]

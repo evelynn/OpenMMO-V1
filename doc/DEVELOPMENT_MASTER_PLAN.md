@@ -9,7 +9,7 @@
 ## 0. 현재 진행 상황 (이어서 작업할 때 먼저 읽는다)
 
 **브랜치**: `claude/project-analysis-dev-setup-9amcvt`
-**진행**: 30개 항목 중 **20개 완료**. **M0·M1·M2가 전부 끝났고**, 세 스파이크(SPK-1·2·3)가 모두 **go**다. 다음은 M3.
+**진행**: 30개 항목 중 **21개 완료**. **M0·M1·M2가 전부 끝났고**, 세 스파이크(SPK-1·2·3)가 모두 **go**다. M3는 1/7.
 
 | 항목 | 상태 | 커밋 |
 |------|------|------|
@@ -33,9 +33,10 @@
 | IMP-0.2 EffectiveStats | ✅ 완료 (프로토콜 v34, 13 개정 5건) | `51a15b7` |
 | IMP-2.7 미니보스 | ✅ 완료 (프로토콜 변경 없음, 스폰 지점 1개, 13 개정 4건) | `411cfc0` |
 | IMP-2.8 MVP 기여도 | ✅ 완료 (프로토콜 v38, 기여자 상한 16, 13 개정 4건) | `658001e` |
+| IMP-3.1 시간 4분할 | ✅ 완료 (프로토콜 변경 없음, COMBAT.md 절 신설, 13 개정 3건) | `(이 커밋)` |
 
-**다음에 집을 것**: **M2가 끝났다**(20/30). 다음은 M3 — IMP-3.1(시간 4분할)이
-IMP-3.2(전투 스킬)의 선결 조건이므로 거기서 시작한다.
+**다음에 집을 것**: **IMP-3.2(전투 스킬)**. 선행 IMP-3.1이 끝나 네 시간의 의미와
+저장 위치가 확정됐으니, 이제 `skills.csv`와 `UseSkill`/`SkillResult`가 그 위에 올라간다.
 
 **세 스파이크가 모두 go로 끝나면서 게이트가 전부 열렸다** — IMP-2.4(SPK-3),
 IMP-2.3(SPK-2, 완료), IMP-2.8과 IMP-4.3(SPK-1). 남은 제약은 SPK-1이 만든
@@ -373,7 +374,7 @@ Phase 번호와 1:1이다(M1 = Phase 1 …). **작업 ID는 13의 ID가 정본�
 
 | 순번 | 작업 ID | 작업 | 선행 | 크기 | 영역 | 산출물 |
 |------|---------|------|------|------|------|--------|
-| 21 | IMP-3.1 | 시간 4분할 (VCT / FCT / after-cast delay / cooldown) | — | L | shared/server/client | 4개 타이머의 서버 권위 상태 기계 + 애니메이션 결합 규약. 기존 `data-src/player_anim_timing.csv` / `attackImpactDelay` 접근과 정합. **스킬 정의보다 먼저** |
+| [x] 21 | IMP-3.1 | 시간 4분할 (VCT / FCT / after-cast delay / cooldown) | — | L | shared/server/client | `shared/src/cast.rs`(신규) + `wasm_api::cast_timing_for`, 서버 3개 맵 + 이동 캔슬·접속 종료 정리, [COMBAT.md](COMBAT.md) 4분할 표. 평타는 그대로 애니메이션에 묶여 있다(13 개정 3건) |
 | 22 | IMP-3.2 | 전투 스킬 시스템 | IMP-3.1 | L | data/shared/server/client | `shared/src/skills.rs`의 `SkillId` 확장 + 스킬 포인트, `data-src/skills.csv`, `ClientMessage::UseSkill` / `ServerMessage::SkillResult`. **서버가 쿨다운·사거리·자원을 판정한다. 클라이언트 예측 금지** |
 | 23 | IMP-3.3 | 방어 2단 (Hard/Soft) | IMP-3.2 | M | data/server/doc | **`guard`는 명중 판정(AC)으로 유지**하고 축을 하나 더 만든다 — `data-src/items.csv`에 `armorPct`/`armorFlat`, `server/src/game/combat.rs`에 `apply_defense`(비율 → 감산 → 최소 1), 두 축의 역할 분리를 [COMBAT.md](COMBAT.md)에 문서화 |
 | 24 | IMP-3.4 | 경제 스킬 `SkillId::Trading` | — | M | shared/server/client | 기존 haggle(`game_state/deals.rs`의 딜 원장, 와이어 타입은 `shared/src/messages.rs:52` `ActiveDeal`)·상인 `sellRatePercent`에 곱, CHA와의 역할 분리를 [ECONOMY.md](ECONOMY.md)에 **먼저** 문서화 |

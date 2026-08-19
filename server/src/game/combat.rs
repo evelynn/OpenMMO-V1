@@ -31,7 +31,7 @@ pub fn roll_dice(notation: &str) -> u32 {
 }
 
 pub fn ability_modifier(score: u8) -> i32 {
-    (i32::from(score) - 10).div_euclid(2)
+    onlinerpg_shared::character::ability_modifier(score)
 }
 
 pub fn level_attack_bonus(level: u32) -> i32 {

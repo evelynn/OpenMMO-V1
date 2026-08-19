@@ -485,6 +485,7 @@ impl super::GameState {
 
     async fn cleanup_player_session(&self, player_id: &PlayerId, auth: &AuthService) {
         self.cancel_concentration_if_active(player_id).await;
+        self.clear_cast_state(player_id).await;
         self.persist_and_detach_player(player_id, auth).await;
         self.unregister_connection_channel(player_id).await;
         self.unregister_player_character(player_id).await;
@@ -1418,6 +1419,8 @@ impl super::GameState {
     ) {
         if old_position != moved_player.position || old_floor != moved_player.floor_level {
             self.cancel_concentration_if_active(player_id).await;
+            // Only the variable part; a fixed cast survives the walk (IMP-3.1).
+            self.cancel_cast_on_move(player_id).await;
         }
         let new_position = moved_player.position;
         let floor_level = moved_player.floor_level;

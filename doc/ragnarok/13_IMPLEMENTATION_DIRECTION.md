@@ -1326,6 +1326,25 @@ DEX 18 / INT 18(mod +4 둘)이면 `(8+4)×4 = 48%` 단축, 상한 60%에서 무�
 그 역할이고, ASPD 공식은 09 #29에서 기각했다. after-cast delay는 평타를 막지 않으므로
 이 두 시스템은 서로 간섭하지 않는다.
 
+> **개정 (IMP-3.1 착수 시)** — 세 가지.
+>
+> 1. **`ability_modifier`를 `shared/src/character.rs`로 옮긴다**(서버 쪽은 위임만
+>    남긴다). 단축식이 어빌리티 모디파이어를 쓰는데 그 함수는 지금
+>    `server/src/game/combat.rs`에만 있다. 클라이언트가 캐스팅 바를 "같은 숫자로"
+>    그리려면 같은 공식을 써야 하고, 그러려면 공식이 `shared`에 있어야 한다.
+>    원문 "손댈 파일"에 `shared/src/character.rs`와 `server/src/game/combat.rs`를
+>    더한다. 호출부는 위임 덕에 한 곳도 바뀌지 않는다.
+> 2. **`skill_cooldowns`는 `HashMap<PlayerId, Vec<(SkillId, u64)>>`다.** 원문 표기
+>    `skill_cooldowns[(player, skill)]`을 튜플 키 맵으로 읽으면 5,000명 × 스킬 수
+>    만큼의 문자열 키 엔트리가 생기고, 접속 종료 정리가 **맵 전체 스캔**이 된다.
+>    `quest_progress`가 같은 이유로 이미 `Vec`인 것을 따른다(플레이어당 스킬은
+>    한 자릿수라 선형 탐색이 맵보다 싸다). 정리는 O(1)이 된다.
+> 3. **오늘 존재하는 두 경로는 이번에 배선한다** — 이동 시 VCT 캔슬
+>    (`player.rs:1420`, `cancel_concentration_if_active` 옆)과 접속 종료 시 세 맵
+>    비우기(`cleanup_player_session`). IMP-3.2가 오기 전에는 아무것도 이 맵에
+>    쓰지 않지만, **쓰기 전에 정리가 먼저 있어야** 5,000명 상한이 지켜진다.
+>    원문 "손댈 파일"에 `server/src/game_state/player.rs`를 더한다.
+
 **데이터 스키마** — 없음. IMP-3.2의 `skills.csv`가 이 네 값을 컬럼으로 갖는다.
 
 **마이그레이션** — 없음.

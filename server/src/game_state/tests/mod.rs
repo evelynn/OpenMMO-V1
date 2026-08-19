@@ -12,6 +12,7 @@ use onlinerpg_shared::messages::DealKind;
 use tokio::sync::broadcast::error::TryRecvError;
 use tokio::sync::mpsc::error::TryRecvError as MpscTryRecvError;
 
+mod cast_tests;
 mod chat_tests;
 mod collision_tests;
 mod combat_scale_tests;
