@@ -37,6 +37,14 @@ export type ServerPlayer = {
   floor_level: number
   object_type?: string
   main_hand?: string | null
+  /** Cosmetic layers worn over real gear; purely visual. Nested in one
+   *  field so `Player` stays inside msgpack's 15-element fixarray (IMP-3.6). */
+  costume?: Costume | null
+}
+
+export type Costume = {
+  head?: string | null
+  back?: string | null
 }
 
 export type ServerMonster = {
@@ -254,6 +262,8 @@ export type EquipSlot =
   | 'hands'
   | 'back'
   | 'shirt'
+  | 'costume_head'
+  | 'costume_back'
 
 export type ItemInstance = {
   instance_id: number

@@ -139,6 +139,8 @@
     hands: 'Hands',
     back: 'Back',
     shirt: 'Shirt',
+    costume_head: 'Costume',
+    costume_back: 'Cloak',
   }
 
   // null = wire slot without a panel cell yet (back/shirt until their items ship)
@@ -160,6 +162,11 @@
     boots: { top: 88, left: 50 },
     back: null,
     shirt: null,
+    // Sits beside the head slot: it is worn over it, and reads that way.
+    costume_head: { top: 9, left: 70 },
+    // No cape asset exists yet; the slot is on the wire and works, but it
+    // has nothing to hold (IMP-3.6 revision).
+    costume_back: null,
   }
 
   const VISIBLE_SLOTS = (

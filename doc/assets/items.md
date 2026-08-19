@@ -72,3 +72,13 @@
     - 원화는 ChatGPT 이미지 생성 (ChatGPT Pro 20x, 2026-08-03) ![원화](../images/campfire_kit.png)
 - tip_hat.glb — Meshy.ai (유료 생성, 2026-08-13, "Feathered Coin Pouch"). 완전 소유권·상업 OK (characters.md License 참조). GLB를 Blender로 임포트해 폭 0.45m로 스케일 적용(0.45×0.20×0.45m, campfire_kit과 같은 폭), 원점=바닥 중심, 텍스처 2048²→512² 축소, emissive 없음 확인. 아이콘 tip_hat.png는 Cycles 직교 측면·위 각도 렌더 512²→128² (2026-08-13). 바닥에 놓는 팁 모자(`tip_hat` 아이템, doc/ECONOMY.md)
     - 원화는 ChatGPT 이미지 생성 (ChatGPT Pro 20x, 2026-08-13) ![원화](../images/tip_hat.png)
+
+## 코스튬 (IMP-3.6)
+
+| 아이템 | 모델 | 출처 |
+|--------|------|------|
+| `busker_hat` (Busker's Hat) | `models/objects/tip_hat.glb` | **기존 애셋 재사용** — 버스킹 모자 소품(IMP-1.x 팁 모자)을 코스튬 머리 슬롯에 그대로 붙였다. 새 애셋 없음. |
+
+`costume_back`(망토) 슬롯은 프로토콜과 서버에 존재하지만 **아이템이 없다** — 등에
+붙일 모델이 애셋 목록에 하나도 없기 때문이다. 망토 애셋이 생기면 CSV 한 행으로
+켜진다.

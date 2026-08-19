@@ -104,7 +104,11 @@ pub const NPC_TOKEN_FILENAME: &str = "npc_token";
 /// v40: `SkillId::Trading`. No new message, but the id travels inside
 ///      SkillsUpdate/SkillXpGained as its name, so a build that has never
 ///      heard of it cannot decode a trader's skill list — IMP-3.4.
-pub const PROTOCOL_VERSION: u32 = 40;
+/// v41: costume layers — `EquipSlot::CostumeHead`/`CostumeBack` and two
+///      `Player` fields carrying what is worn over real gear, plus
+///      PlayerCostumeChanged so a change is seen without re-entering
+///      anyone's view — IMP-3.6.
+pub const PROTOCOL_VERSION: u32 = 41;
 
 /// WebSocket close code sent when the handshake is refused (wrong protocol
 /// version, or traffic before `ClientInfo`). Lives outside the serialized
@@ -208,6 +212,7 @@ mod tests {
             floor_level: 0,
             object_type: None,
             main_hand: None,
+            costume: None,
             object_id: None,
             last_combat_at: 0,
             client_kind: Default::default(),

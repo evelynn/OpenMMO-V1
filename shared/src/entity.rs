@@ -76,6 +76,17 @@ pub struct Player {
     /// Equipped main-hand item def id; `None` renders the class default.
     #[serde(default)]
     pub main_hand: Option<String>,
+    /// Cosmetic layers, appended after `main_hand` because everything below
+    /// is `#[serde(skip)]` — so this is the end of the wire array, and no
+    /// existing field moves (IMP-3.6).
+    ///
+    /// One field rather than two on purpose. `Player` serializes as a
+    /// positional array and had 14 elements; two more would have made 16,
+    /// one past msgpack's 15-element fixarray, widening the header from one
+    /// byte to three for **every** player in every snapshot. Nested, an
+    /// unworn costume is a single `nil` — cheaper than the two it replaces.
+    #[serde(default)]
+    pub costume: Option<Costume>,
     #[serde(skip)]
     pub object_id: Option<u32>,
     #[serde(skip)]
@@ -85,6 +96,24 @@ pub struct Player {
     /// broadcasting it would let clients label individual players.
     #[serde(skip)]
     pub client_kind: ClientKind,
+}
+
+/// What a player is wearing over their real gear. Absent when nothing is.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Costume {
+    pub head: Option<String>,
+    pub back: Option<String>,
+}
+
+impl Costume {
+    /// `None` when neither slot is filled, so an empty costume never costs
+    /// more than the one byte a missing one does.
+    pub fn from_slots(head: Option<String>, back: Option<String>) -> Option<Self> {
+        if head.is_none() && back.is_none() {
+            return None;
+        }
+        Some(Self { head, back })
+    }
 }
 
 /// Client program on the other end of a connection. Self-reported, so it may
@@ -284,6 +313,7 @@ mod tests {
             floor_level: 0,
             object_type: None,
             main_hand: None,
+            costume: None,
             object_id: None,
             last_combat_at: 0,
             client_kind: ClientKind::default(),
@@ -292,6 +322,16 @@ mod tests {
         // first element — and 42 fits msgpack's single-byte positive fixint.
         let bytes = rmp_serde::to_vec(&player).unwrap();
         assert_eq!(bytes[1], 42, "id must encode as a bare msgpack integer");
+        // …which is only true while the array header is one byte. Fifteen
+        // elements is msgpack's fixarray ceiling; a sixteenth field would
+        // widen the header to three bytes for every player in every
+        // snapshot, so the count is pinned here rather than discovered
+        // later under load (IMP-3.6).
+        assert_eq!(
+            bytes[0] & 0xF0,
+            0x90,
+            "Player must stay inside msgpack's 15-element fixarray"
+        );
 
         // Standalone too, so bare id fields are covered.
         let id_bytes = rmp_serde::to_vec(&PlayerId::from(7)).unwrap();
@@ -320,6 +360,7 @@ mod tests {
             floor_level: 0,
             object_type: None,
             main_hand: None,
+            costume: None,
             object_id: None,
             last_combat_at: 0,
             client_kind: ClientKind::default(),

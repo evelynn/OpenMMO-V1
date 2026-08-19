@@ -343,6 +343,30 @@ impl ItemDefs {
             }
         }
 
+        // A costume is a look and nothing else. Catching a stat here rather
+        // than at combat time means the rule cannot be broken by data
+        // (IMP-3.6).
+        for def in defs.values() {
+            if !def.equip_slot.is_some_and(|slot| slot.is_costume()) {
+                continue;
+            }
+            assert!(
+                def.guard.is_none() && def.armor_pct.is_none() && def.armor_flat.is_none(),
+                "item '{}' is a costume but carries defence",
+                def.id
+            );
+            assert!(
+                def.effect_tokens.is_empty(),
+                "item '{}' is a costume but carries effects",
+                def.id
+            );
+            assert!(
+                def.weight == 0.0,
+                "item '{}' is a costume but has weight",
+                def.id
+            );
+        }
+
         // A tier outside 1..=5 would shift the ladder off the end of the
         // table, and one on armor would silently do nothing.
         for def in defs.values() {

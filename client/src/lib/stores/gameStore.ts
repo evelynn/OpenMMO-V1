@@ -39,6 +39,8 @@ interface PlayerBase {
   gender: Gender
   torchOn?: boolean
   mainHand?: string | null
+  /** Cosmetic head layer; purely visual (IMP-3.6). */
+  costumeHead?: string | null
   lastDamageInfo?: PlayerDamageInfo
   lastRegenInfo?: PlayerDamageInfo
   lastGoldInfo?: PlayerGoldInfo

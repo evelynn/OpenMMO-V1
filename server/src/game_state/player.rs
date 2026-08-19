@@ -1766,6 +1766,41 @@ impl super::GameState {
         }
     }
 
+    /// Mirror the worn cosmetics onto the roster entry and tell everyone who
+    /// can see the player. Same shape as `set_player_main_hand`, and quiet
+    /// when nothing moved.
+    pub async fn set_player_costume(
+        &self,
+        player_id: &PlayerId,
+        head: Option<String>,
+        back: Option<String>,
+    ) {
+        let (costume, position) = {
+            let mut players = self.players.write().await;
+            let Some(player) = players.get_mut(player_id) else {
+                return;
+            };
+            let next = onlinerpg_shared::entity::Costume::from_slots(head, back);
+            if player.costume == next {
+                return;
+            }
+            player.costume = next.clone();
+            (next, (player.position, player.floor_level))
+        };
+
+        self.send_direct_message_to_players_within_position(
+            &position.0,
+            position.1,
+            super::EVENT_DELIVERY_RADIUS,
+            ServerMessage::PlayerCostumeChanged {
+                player_id: *player_id,
+                costume,
+            },
+            None,
+        )
+        .await;
+    }
+
     pub async fn set_player_main_hand(&self, player_id: &PlayerId, item_def_id: Option<String>) {
         let position = {
             let mut players = self.players.write().await;

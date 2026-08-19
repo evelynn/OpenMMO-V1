@@ -1427,3 +1427,61 @@ async fn the_shipped_armour_set_stays_under_the_hard_cap() {
         crate::game::combat::MAX_ARMOR_PCT
     );
 }
+
+/// The promise of a cosmetic layer, held by code rather than by a document:
+/// wearing one changes no number the combat system reads (IMP-3.6).
+#[tokio::test]
+async fn a_costume_moves_no_defensive_number() {
+    let game_state = make_test_game_state("costume_is_inert");
+    let wearer = pid("wearer");
+    game_state.add_player(make_player("wearer", 0.0, 0.0)).await;
+    game_state
+        .register_player_character(&wearer, 1, 0, attrs_with_cha(10), 0, None)
+        .await;
+
+    let mut inventory = PlayerInventory::default();
+    inventory
+        .equipped
+        .insert(EquipSlot::Head, bag_item(1, "plate_helmet", 1));
+    game_state
+        .inventories
+        .write()
+        .await
+        .insert(wearer, inventory.clone());
+    let bare = game_state.equipped_defense(&inventory);
+    let bare_guard = game_state.effective_guard(&wearer).await;
+
+    inventory
+        .equipped
+        .insert(EquipSlot::CostumeHead, bag_item(2, "busker_hat", 1));
+    game_state
+        .inventories
+        .write()
+        .await
+        .insert(wearer, inventory.clone());
+
+    assert_eq!(
+        game_state.equipped_defense(&inventory),
+        bare,
+        "a costume must not touch guard or either armour axis"
+    );
+    assert_eq!(game_state.effective_guard(&wearer).await, bare_guard);
+}
+
+/// The exclusion is by slot, not by the item's stats, so a costume row that
+/// somehow carried defence would still be worn for nothing.
+#[tokio::test]
+async fn the_costume_exclusion_is_by_slot_not_by_stats() {
+    let game_state = make_test_game_state("costume_slot_rule");
+    let mut inventory = PlayerInventory::default();
+    // A real piece of plate, worn in the cosmetic slot.
+    inventory
+        .equipped
+        .insert(EquipSlot::CostumeHead, bag_item(1, "plate_helmet", 1));
+
+    assert_eq!(
+        game_state.equipped_defense(&inventory),
+        (0, 0, 0),
+        "the cosmetic slot grants nothing, whatever is put in it"
+    );
+}

@@ -24,6 +24,10 @@ pub enum EquipSlot {
     Hands,
     Back,
     Shirt,
+    /// Cosmetic layers. Worn over real gear and deliberately inert: they
+    /// carry no guard, no armour and no effects (IMP-3.6).
+    CostumeHead,
+    CostumeBack,
 }
 
 impl EquipSlot {
@@ -43,7 +47,16 @@ impl EquipSlot {
             EquipSlot::Hands => "hands",
             EquipSlot::Back => "back",
             EquipSlot::Shirt => "shirt",
+            EquipSlot::CostumeHead => "costume_head",
+            EquipSlot::CostumeBack => "costume_back",
         }
+    }
+
+    /// Whether this slot is cosmetic. Cosmetic slots are excluded from every
+    /// defensive total by name rather than by the item's stats — an armour
+    /// value that slipped into a costume row would otherwise be worn for free.
+    pub fn is_costume(&self) -> bool {
+        matches!(self, EquipSlot::CostumeHead | EquipSlot::CostumeBack)
     }
 
     /// For slots that have an alternate (e.g. ring/ring_left),
@@ -76,6 +89,8 @@ impl std::str::FromStr for EquipSlot {
             "hands" => Ok(EquipSlot::Hands),
             "back" => Ok(EquipSlot::Back),
             "shirt" => Ok(EquipSlot::Shirt),
+            "costume_head" => Ok(EquipSlot::CostumeHead),
+            "costume_back" => Ok(EquipSlot::CostumeBack),
             _ => Err(()),
         }
     }
@@ -117,6 +132,16 @@ impl PlayerInventory {
         self.equipped
             .get(&EquipSlot::MainHand)
             .map(|item| item.item_def_id.clone())
+    }
+
+    /// What is worn in the two cosmetic slots, in `(head, back)` order.
+    pub fn costume_def_ids(&self) -> (Option<String>, Option<String>) {
+        let worn = |slot| {
+            self.equipped
+                .get(&slot)
+                .map(|item: &ItemInstance| item.item_def_id.clone())
+        };
+        (worn(EquipSlot::CostumeHead), worn(EquipSlot::CostumeBack))
     }
 
     /// Everything the player carries: bag and worn gear alike.
@@ -172,6 +197,8 @@ mod tests {
         EquipSlot::Hands,
         EquipSlot::Back,
         EquipSlot::Shirt,
+        EquipSlot::CostumeHead,
+        EquipSlot::CostumeBack,
     ];
 
     #[test]

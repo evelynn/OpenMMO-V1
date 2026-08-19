@@ -189,6 +189,7 @@ function toRemotePlayer(sp: ServerPlayer): RemotePlayer {
     gender: sp.gender,
     torchOn: sp.torch_on,
     mainHand: sp.main_hand ?? null,
+    costumeHead: sp.costume?.head ?? null,
     floorLevel: sp.floor_level ?? 0,
     isOfficialNpc: sp.is_official_npc ?? false,
   }
@@ -1060,6 +1061,12 @@ export function handleServerMessage(
         break
       }
       updatePlayer(data.player_id, { mainHand: data.item_def_id ?? null })
+      break
+    }
+
+    case 'PlayerCostumeChanged': {
+      if (get(gameStore).currentPlayer?.id === data.player_id) break
+      updatePlayer(data.player_id, { costumeHead: data.costume?.head ?? null })
       break
     }
 

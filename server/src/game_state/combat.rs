@@ -183,10 +183,16 @@ impl super::GameState {
     fn equipped_pairs<'a>(
         &'a self,
         inv: &'a PlayerInventory,
-    ) -> impl Iterator<Item = (&'a ItemInstance, &'a crate::item_defs::ItemDefinition)> {
+    ) -> impl Iterator<
+        Item = (
+            &'a EquipSlot,
+            &'a ItemInstance,
+            &'a crate::item_defs::ItemDefinition,
+        ),
+    > {
         inv.equipped
-            .values()
-            .filter_map(|item| Some((item, self.item_defs.get(&item.item_def_id)?)))
+            .iter()
+            .filter_map(|(slot, item)| Some((slot, item, self.item_defs.get(&item.item_def_id)?)))
     }
 
     /// The defs behind a player's worn gear, for callers that don't need the
@@ -195,7 +201,7 @@ impl super::GameState {
         &'a self,
         inv: &'a PlayerInventory,
     ) -> impl Iterator<Item = &'a crate::item_defs::ItemDefinition> {
-        self.equipped_pairs(inv).map(|(_, def)| def)
+        self.equipped_pairs(inv).map(|(_, _, def)| def)
     }
 
     /// Sum of one def stat over every equipped item. `effective_cha` adds it
@@ -224,7 +230,11 @@ impl super::GameState {
     /// balanced against.
     pub(super) fn equipped_defense(&self, inv: &PlayerInventory) -> (i32, u32, u32) {
         self.equipped_pairs(inv)
-            .fold((0, 0, 0), |(guard, pct, flat), (item, def)| {
+            // Cosmetic slots are excluded by slot, not by their stats: a
+            // guard value that slipped into a costume row would otherwise be
+            // worn for free (IMP-3.6).
+            .filter(|(slot, _, _)| !slot.is_costume())
+            .fold((0, 0, 0), |(guard, pct, flat), (_, item, def)| {
                 (
                     guard + def.guard.unwrap_or(0) + if def.is_armor() { item.enchant } else { 0 },
                     pct + def.armor_pct.unwrap_or(0),

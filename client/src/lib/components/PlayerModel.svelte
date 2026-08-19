@@ -94,6 +94,8 @@
     /** Remote players' broadcast main-hand item def id; the local player
      *  renders from inventory instead. */
     mainHand?: string | null
+    /** Cosmetic head layer worn by a remote player (IMP-3.6). */
+    costumeHead?: string | null
     torchEffectsDisabled?: boolean
     /** Set for NPC remote players so canvas clicks can resolve this model
      *  back to its player id (read from userData by the input raycast). */
@@ -127,6 +129,7 @@
     lastGoldInfo,
     torchOn = false,
     mainHand = null,
+    costumeHead = null,
     torchEffectsDisabled = false,
     npcPlayerId,
   }: Props = $props()
@@ -399,6 +402,51 @@
 
       attachWeaponModel(gltf.scene, clonedScene, itemDefId)
       attachedWeaponItemId = itemDefId
+    })
+  })
+
+  // Cosmetic head layer (IMP-3.6). Purely visual: the server never reads it
+  // for anything, and it sits on the head bone over whatever armour is worn.
+  let costumeObject: THREE.Object3D | null = null
+  let attachedCostumeItemId: string | null = null
+  let costumeAttachGeneration = 0
+
+  function detachCostume() {
+    if (costumeObject?.parent) {
+      costumeObject.parent.remove(costumeObject)
+    }
+    costumeObject = null
+  }
+
+  const equippedCostumeHeadItemId = $derived(
+    isCurrentPlayer
+      ? ($inventoryStore.equipped.costume_head?.item_def_id ?? null)
+      : costumeHead
+  )
+
+  $effect(() => {
+    const itemDefId = equippedCostumeHeadItemId
+    const root = modelRoot
+    if (!root || !clonedScene) return
+    if (itemDefId === attachedCostumeItemId) return
+
+    detachCostume()
+    attachedCostumeItemId = null
+    if (!itemDefId) return
+
+    const itemDef = getItemDef(itemDefId)
+    if (!itemDef?.worldModel) return
+
+    const gen = ++costumeAttachGeneration
+    loadGLB(getWeaponModelPath(itemDef.worldModel)).then((gltf) => {
+      if (gen !== costumeAttachGeneration || !clonedScene) return
+      const headBone = findBoneByName(clonedScene, 'Head')
+      if (!headBone) return
+      costumeObject = gltf.scene.clone()
+      // Sits on top of the skull rather than inside it.
+      costumeObject.position.set(0, 0.12, 0)
+      headBone.add(costumeObject)
+      attachedCostumeItemId = itemDefId
     })
   })
 

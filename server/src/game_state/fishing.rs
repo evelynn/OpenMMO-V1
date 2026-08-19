@@ -746,8 +746,11 @@ impl GameState {
         // One write-lock pass steps every fight (each step is sub-microsecond
         // pure math — no awaits inside); broadcasts and endings follow
         // outside the lock.
+        // The message is boxed: `ServerMessage` is far larger than the other
+        // two variants, so an unboxed one would size every element of the
+        // per-tick vector below to it.
         enum After {
-            Beat(Position, ServerMessage),
+            Beat(Position, Box<ServerMessage>),
             Landed,
             Escaped,
         }
@@ -787,14 +790,14 @@ impl GameState {
                 let after = match outcome {
                     None => After::Beat(
                         session.bobber,
-                        ServerMessage::FishingFight {
+                        Box::new(ServerMessage::FishingFight {
                             player_id,
                             bobber: session.bobber,
                             fish_state: state.fish_state,
                             tension_pct: state.tension.round() as u32,
                             stamina_pct: (state.stamina / stamina_max(rarity) * 100.0).round()
                                 as u32,
-                        },
+                        }),
                     ),
                     Some(FightOutcome::Landed) => After::Landed,
                     Some(FightOutcome::Snapped | FightOutcome::ThrewHook) => After::Escaped,
@@ -804,7 +807,7 @@ impl GameState {
         }
         for (player_id, sid, after) in results {
             match after {
-                After::Beat(bobber, msg) => self.broadcast_fishing(&bobber, msg).await,
+                After::Beat(bobber, msg) => self.broadcast_fishing(&bobber, *msg).await,
                 After::Landed => self.finish_fishing_caught(&player_id, sid).await,
                 After::Escaped => {
                     self.end_fishing_if(&player_id, Some(sid), FishingOutcome::Escaped, ESCAPE_XP)

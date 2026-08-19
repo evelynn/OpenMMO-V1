@@ -1278,6 +1278,13 @@ pub enum ServerMessage {
         player_id: PlayerId,
         item_def_id: Option<String>,
     },
+    /// A costume layer changed. Fans out like `PlayerMainHandChanged` and for
+    /// the same reason: a cosmetic nobody can see change is half a feature
+    /// (IMP-3.6 revision).
+    PlayerCostumeChanged {
+        player_id: PlayerId,
+        costume: Option<crate::entity::Costume>,
+    },
     PlayerInteractionChanged {
         player_id: PlayerId,
         object_type: Option<String>,

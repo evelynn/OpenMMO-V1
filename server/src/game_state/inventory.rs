@@ -272,6 +272,9 @@ impl super::GameState {
     ) {
         self.set_player_main_hand(player_id, inventory.main_hand_def_id())
             .await;
+        let (costume_head, costume_back) = inventory.costume_def_ids();
+        self.set_player_costume(player_id, costume_head, costume_back)
+            .await;
         self.refresh_hunger_gear_drain(player_id, &inventory).await;
         self.send_direct_message(player_id, ServerMessage::InventoryUpdated { inventory })
             .await;

@@ -429,6 +429,7 @@ pub fn msg_name(msg: &onlinerpg_shared::ServerMessage) -> &'static str {
         ServerMessage::PlayerDead { .. } => "PlayerDead",
         ServerMessage::PlayerRespawned { .. } => "PlayerRespawned",
         ServerMessage::PlayerHealthUpdate { .. } => "PlayerHealthUpdate",
+        ServerMessage::PlayerCostumeChanged { .. } => "PlayerCostumeChanged",
         ServerMessage::SkillCastStarted { .. } => "SkillCastStarted",
         ServerMessage::SkillCastCancelled { .. } => "SkillCastCancelled",
         ServerMessage::SkillResult { .. } => "SkillResult",
