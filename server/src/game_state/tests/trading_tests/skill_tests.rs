@@ -1,6 +1,7 @@
 //! The `Trading` skill (IMP-3.4): what it moves, what it deliberately does
 //! not, and the round trip it must never make profitable.
 use super::*;
+use onlinerpg_shared::messages::BagLineItem;
 use onlinerpg_shared::skills::{SkillId, SKILL_LEVEL_CAP};
 
 async fn max_trading(game_state: &GameState, player: &str) {
@@ -148,4 +149,117 @@ async fn trading_xp_counts_trades_not_amounts() {
         .get(SkillId::Trading)
         .xp;
     assert_eq!(after_two, 2);
+}
+
+// --- High-value trade fee (IMP-3.5) ---
+
+/// The sink's defining property: the counterparty pays in full, the seller
+/// receives less, and the difference exists nowhere afterwards.
+#[tokio::test]
+async fn a_high_value_sale_burns_its_fee_out_of_the_world() {
+    let game_state = make_test_game_state("trade_fee_burn");
+    // Karl buys daggers at 120% of 2,500 = 3,000 each. Five clears the
+    // 10,000 threshold with room to spare.
+    let bag: Vec<ItemInstance> = (1..=5).map(|i| bag_item(i, "dagger", 1)).collect();
+    setup_resident_trade(&game_state, 100_000, Vec::new(), bag).await;
+
+    let before = game_state.get_player_gold(&pid("seller")).await
+        + game_state.get_player_gold(&pid("npc_karl")).await;
+    let lines: Vec<_> = (1..=5)
+        .map(|instance_id| BagLineItem {
+            instance_id,
+            qty: 1,
+        })
+        .collect();
+    game_state
+        .sell_items(&pid("seller"), &pid("npc_karl"), lines)
+        .await;
+
+    let seller = game_state.get_player_gold(&pid("seller")).await;
+    let karl = game_state.get_player_gold(&pid("npc_karl")).await;
+    assert!(seller > 0, "the fixture must actually sell something");
+    let payout = 100_000 - karl;
+    let fee = onlinerpg_shared::economy::trade_fee(payout);
+    assert!(
+        fee > 0,
+        "the fixture must clear the threshold: paid {payout}"
+    );
+    assert_eq!(
+        seller,
+        payout - fee,
+        "the seller receives the payout less the fee"
+    );
+    assert_eq!(
+        before - (seller + karl),
+        fee,
+        "the world holds exactly the fee less currency than before"
+    );
+}
+
+/// A merchant shop already keeps most of base price; taxing it too would be
+/// charging twice for the same sink.
+#[tokio::test]
+async fn a_merchant_sale_pays_no_fee() {
+    let game_state = make_test_game_state("trade_fee_merchant");
+    let (_rx, _npc) = setup_haggle(&game_state, 10, 0).await;
+    // Rica buys back at 40%; twelve plate helmets clear the threshold.
+    let bag: Vec<ItemInstance> = (1..=12).map(|i| bag_item(i, "plate_helmet", 1)).collect();
+    game_state.inventories.write().await.insert(
+        pid("buyer"),
+        PlayerInventory {
+            bag,
+            ..Default::default()
+        },
+    );
+    let lines: Vec<_> = (1..=12)
+        .map(|instance_id| BagLineItem {
+            instance_id,
+            qty: 1,
+        })
+        .collect();
+
+    game_state
+        .sell_items(&pid("buyer"), &pid("npc_rica"), lines)
+        .await;
+
+    let gold = game_state.get_player_gold(&pid("buyer")).await;
+    assert!(
+        onlinerpg_shared::economy::trade_fee(gold) > 0,
+        "the fixture must be large enough that a fee would have shown: {gold}"
+    );
+    let base = game_state
+        .item_defs
+        .get("plate_helmet")
+        .unwrap()
+        .base_price
+        .unwrap();
+    assert_eq!(
+        gold,
+        base * 40 / 100 * 12,
+        "a merchant sale pays the full rate, untaxed"
+    );
+}
+
+#[tokio::test]
+async fn an_ordinary_sale_is_untouched() {
+    let game_state = make_test_game_state("trade_fee_small");
+    setup_resident_trade(
+        &game_state,
+        100_000,
+        Vec::new(),
+        vec![bag_item(1, "dagger", 1)],
+    )
+    .await;
+
+    game_state
+        .sell_item(&pid("seller"), &pid("npc_karl"), 1)
+        .await;
+
+    let seller = game_state.get_player_gold(&pid("seller")).await;
+    let karl = game_state.get_player_gold(&pid("npc_karl")).await;
+    assert_eq!(
+        seller,
+        100_000 - karl,
+        "below the threshold the seller gets every copper the buyer paid"
+    );
 }

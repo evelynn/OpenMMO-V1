@@ -89,6 +89,13 @@ pub fn cast_timing_for(
     to_js(&timing.resolve(&attrs))
 }
 
+/// The sink charged on a high-value trade (IMP-3.5), so the client shows the
+/// number the server will actually take. f64 for JS interop.
+#[wasm_bindgen]
+pub fn trade_fee(amount: f64) -> f64 {
+    crate::economy::trade_fee(amount as i64) as f64
+}
+
 /// XP threshold for a given level, as an f64 for JS interop.
 /// Saturates at Number.MAX_SAFE_INTEGER for levels beyond safe integer range.
 #[wasm_bindgen]

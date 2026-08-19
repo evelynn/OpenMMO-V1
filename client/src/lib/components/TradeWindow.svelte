@@ -16,6 +16,7 @@
   import GoldAmount from './GoldAmount.svelte'
   import { itemTooltip } from '../actions/itemTooltip'
   import { networkManager } from '../network/socket'
+  import { trade_fee } from '../wasm/onlinerpg_shared'
   import QuantityPopup from './QuantityPopup.svelte'
   import {
     groupBagForSelection,
@@ -165,7 +166,11 @@
   /** Net gold the player must pay; negative means the player earns gold.
    *  Residents pay sells out of a finite hidden wallet — the server rejects
    *  the trade ("They cannot afford that right now") when it runs dry. */
-  const netCost = $derived(buyTotal - sellTotal)
+  /** The sink a high-value player-market sale pays (IMP-3.5). Computed from
+   *  the same shared function the server charges with, so the preview and
+   *  the receipt cannot disagree. Merchant shops are not taxed. */
+  const sellFee = $derived(isResident ? Number(trade_fee(sellTotal)) : 0)
+  const netCost = $derived(buyTotal - sellTotal + sellFee)
   const canConfirm = $derived(cart.length > 0 && netCost <= $playerGold)
 
   /** Buying a catalog item has no owned "stack" to bound quantity by, so the
@@ -527,6 +532,12 @@
           {/each}
         </div>
         <div class="cart-footer">
+          {#if sellFee > 0}
+            <div class="cart-line">
+              <span class="cart-label">Trade fee</span>
+              <span class="cart-fee">−<GoldAmount copper={sellFee} /></span>
+            </div>
+          {/if}
           <div class="cart-line">
             <span class="cart-label">Total</span>
             <span class="cart-total" class:earn={netCost < 0}>
@@ -836,6 +847,10 @@
   .cart-total {
     font-weight: 700;
     color: #ff9a8a;
+  }
+
+  .cart-fee {
+    color: #c9a227;
   }
 
   .cart-total.earn {

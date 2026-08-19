@@ -9,7 +9,7 @@
 ## 0. 현재 진행 상황 (이어서 작업할 때 먼저 읽는다)
 
 **브랜치**: `claude/project-analysis-dev-setup-9amcvt`
-**진행**: §5의 33행 중 **24행 완료**(작업 30 + 스파이크 3). **M0·M1·M2가 전부 끝났고**, 세 스파이크(SPK-1·2·3)가 모두 **go**다. M3는 4/7.
+**진행**: §5의 33행 중 **25행 완료**(작업 30 + 스파이크 3). **M0·M1·M2가 전부 끝났고**, 세 스파이크(SPK-1·2·3)가 모두 **go**다. M3는 5/7.
 
 | 항목 | 상태 | 커밋 |
 |------|------|------|
@@ -38,8 +38,7 @@
 | IMP-3.3 방어 2단 | ✅ 완료 (프로토콜 변경 없음, `items.csv` 2컬럼, 13 개정 2건) | `316db48` |
 | IMP-3.4 경제 스킬 Trading | ✅ 완료 (프로토콜 v40, **13 개정 4건 — 핵심 검증 항목이 통과 불가였다**) | `78bc922` |
 
-**다음에 집을 것**: **IMP-3.5(고액 거래 수수료)**. IMP-3.4가 가격 계산 지점을 이미
-정리해 뒀으므로 차감 지점이 분명하다.
+**다음에 집을 것**: **IMP-3.6(코스튬 레이어)**. 선행이 없다.
 
 **세 스파이크가 모두 go로 끝나면서 게이트가 전부 열렸다** — IMP-2.4(SPK-3),
 IMP-2.3(SPK-2, 완료), IMP-2.8과 IMP-4.3(SPK-1). 남은 제약은 SPK-1이 만든
@@ -389,7 +388,7 @@ Phase 번호와 1:1이다(M1 = Phase 1 …). **작업 ID는 13의 ID가 정본�
 | [x] 22 | IMP-3.2 | 전투 스킬 시스템 | IMP-3.1 | L | data/shared/server/client | `SkillId` 확장(전투 3종) + `job_xp`/`skill_points`, `data-src/skills.csv`, 메시지 10종, `skill_defs.rs` + `game_state/skill.rs`, `SkillBar`/`SkillTreePanel`, 에이전트 `use_skill`/`learn_skill`. 서버가 전부 판정하고 클라이언트는 예측하지 않는다(13 개정 6건) |
 | [x] 23 | IMP-3.3 | 방어 2단 (Hard/Soft) | IMP-3.2 | M | data/server/doc/client | **`guard`는 명중 판정(AC)으로 유지**하고 축을 하나 더 만든다 — `data-src/items.csv`에 `armorPct`/`armorFlat`, `server/src/game/combat.rs`에 `apply_defense`(비율 → 감산 → 최소 1), 두 축의 역할 분리를 [COMBAT.md](COMBAT.md)에 문서화 |
 | [x] 24 | IMP-3.4 | 경제 스킬 `SkillId::Trading` | — | M | shared/server/client | 기존 haggle(`game_state/deals.rs`의 딜 원장, 와이어 타입은 `shared/src/messages.rs:52` `ActiveDeal`)·상인 `sellRatePercent`에 곱, CHA와의 역할 분리를 [ECONOMY.md](ECONOMY.md)에 **먼저** 문서화 |
-| 25 | IMP-3.5 | 고액 거래 수수료 | IMP-0.1 | M | shared/server | `shared`에 `trade_fee(amount)`, `game_state/trading.rs:1073` `sell_item` / `:1336` `sell_items`에서 **상대가 `merchants.csv` 상인이 아닐 때만** 임계 초과분 차감, **수수료는 소각**, `TRADE_FEE_THRESHOLD`/`TRADE_FEE_PCT` 상수, [ECONOMY.md](ECONOMY.md) 갱신. IMP-3.4와 같은 PR 권장 |
+| [x] 25 | IMP-3.5 | 고액 거래 수수료 | IMP-0.1 | M | shared/server/client | `shared`에 `trade_fee(amount)`, `game_state/trading.rs:1073` `sell_item` / `:1336` `sell_items`에서 **상대가 `merchants.csv` 상인이 아닐 때만** 임계 초과분 차감, **수수료는 소각**, `TRADE_FEE_THRESHOLD`/`TRADE_FEE_PCT` 상수, [ECONOMY.md](ECONOMY.md) 갱신. IMP-3.4와 같은 PR 권장 |
 | 26 | IMP-3.6 | 코스튬 레이어 | — | M | data/shared/server/client | `EquipSlot`에 `CostumeHead`/`CostumeBack`, `shared/src/entity.rs`의 `Player`에 필드 2개 **끝에 append** + `PROTOCOL_VERSION` +1, `equipped_guard`에서 코스튬 슬롯 명시적 제외(테스트로 고정), `items.csv`에 `category=costume` 행(weight 0, guard 없음) |
 | 27 | IMP-3.7 | 업적 · 칭호 | IMP-2.1 | M | data/shared/server/client | 기존 행동 재사용(낚시 `trophyCm`, 던전 심층, 하우징, 공연, 요리), **보상은 우편**, 칭호는 채팅·이름표 표시만 |
 

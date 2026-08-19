@@ -8,6 +8,7 @@ pub mod cast;
 pub mod character;
 pub mod debuff;
 pub mod dungeon;
+pub mod economy;
 pub mod entity;
 pub mod fishing;
 pub mod furniture;
@@ -129,6 +130,7 @@ mod wasm_api;
 
 pub use cast::{CastSchedule, CastTiming};
 pub use character::{Character, CharacterAttributes, CharacterClass, Gender};
+pub use economy::trade_fee;
 pub use entity::{Monster, MonsterLifecycle, MonsterState, Player, PlayerId};
 pub use messages::{
     deserialize_client_msg, deserialize_server_msg, serialize_client_msg, serialize_server_msg,

@@ -1,6 +1,7 @@
 use crate::merchant_defs::{merchant_defs, MerchantDefinition};
 use crate::npc_defs::{npc_defs, NpcDefinition};
 use crate::types::{PlayerId, ServerMessage};
+use onlinerpg_shared::economy::trade_fee;
 use onlinerpg_shared::inventory::ItemInstance;
 use onlinerpg_shared::messages::{
     ActiveDeal, BagLineItem, BuybackEntry, DealKind, StockEntry, TradeLineItem,
@@ -577,6 +578,20 @@ impl super::GameState {
             amount
         } else {
             trade_price_with_skill(amount, level, side)
+        }
+    }
+
+    /// The sink on a high-value trade, and who pays it.
+    ///
+    /// Charged on the player market only — a resident counterparty, which is
+    /// what player-to-player commerce runs through here. A merchant shop
+    /// already keeps 60–70% of base price, so taxing that too is charging
+    /// twice for the same sink (IMP-3.5).
+    fn transaction_fee(amount: i64, is_resident: bool) -> i64 {
+        if is_resident {
+            trade_fee(amount)
+        } else {
+            0
         }
     }
 
@@ -1189,6 +1204,8 @@ impl super::GameState {
             TradeSide::Sell,
         );
 
+        let fee = Self::transaction_fee(payout, is_resident);
+
         let item_weight = self.item_defs.weight(&item_def_id);
         let npc_max_weight = self.max_carry_weight(npc_player_id).await;
         // Resident: the transferred unit's instance id. Merchant: the buyback
@@ -1300,7 +1317,10 @@ impl super::GameState {
             }
             let snapshot = inv.clone();
 
-            *gold_map.get_mut(player_id).expect("checked above") += payout;
+            // The counterparty pays in full and the seller receives less: the
+            // difference is destroyed, not moved. Paying it to anyone would
+            // make it a transfer, and would route around that NPC's wallet cap.
+            *gold_map.get_mut(player_id).expect("checked above") += payout - fee;
             if is_resident {
                 *gold_map.get_mut(npc_player_id).expect("checked above") -= payout;
             }
@@ -1343,7 +1363,11 @@ impl super::GameState {
             self.send_deal_cleared(player_id, npc_player_id, &item_def_id, DealKind::Sell)
                 .await;
         }
-        info!("{player_name} sold {item_def_id} to {npc_name} for {payout}");
+        if fee > 0 {
+            info!("{player_name} sold {item_def_id} to {npc_name} for {payout} (fee {fee} burned)");
+        } else {
+            info!("{player_name} sold {item_def_id} to {npc_name} for {payout}");
+        }
         self.credit_trading_practice(player_id).await;
         self.mark_dirty(player_id).await;
         self.mark_inventory_dirty(player_id).await;
@@ -1555,6 +1579,8 @@ impl super::GameState {
             total_payout += payout;
         }
 
+        let total_fee = Self::transaction_fee(total_payout, is_resident);
+
         if is_resident {
             let npc_gold = gold_map.get(npc_player_id).copied().unwrap_or(0);
             if npc_gold < total_payout {
@@ -1610,7 +1636,7 @@ impl super::GameState {
                 .clone()
         });
 
-        *gold_map.get_mut(player_id).expect("checked above") += total_payout;
+        *gold_map.get_mut(player_id).expect("checked above") += total_payout - total_fee;
         if is_resident {
             *gold_map.get_mut(npc_player_id).expect("checked above") -= total_payout;
         }
