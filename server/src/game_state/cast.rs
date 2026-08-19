@@ -18,6 +18,14 @@ pub(crate) type SkillCooldowns = Vec<(SkillId, u64)>;
 pub(crate) struct CastState {
     pub skill: SkillId,
     pub schedule: CastSchedule,
+    /// Which use this is. The delayed task that lands the cast carries the
+    /// same number, so a task belonging to a cancelled cast cannot land the
+    /// one that replaced it.
+    pub seq: u64,
+    pub target: String,
+    /// The level bought, read at resolution so a point spent mid-cast does
+    /// not retroactively strengthen a cast already in flight.
+    pub level: u32,
 }
 
 impl super::GameState {
@@ -33,11 +41,14 @@ impl super::GameState {
             return;
         }
         debug!(
-            "Cast of {} cancelled: player {player_id} moved {}ms before it landed",
+            "Cast of {} at {} cancelled: player {player_id} moved {}ms before it landed",
             state.skill.as_str(),
+            state.target,
             state.schedule.cast_ends_at_ms.saturating_sub(now)
         );
         casting.remove(player_id);
+        drop(casting);
+        self.announce_cast_cancelled(player_id).await;
     }
 
     /// Drop every cast deadline a player owns. Cooldowns are session state by

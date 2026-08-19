@@ -10,6 +10,7 @@
   import CharacterPanel from './CharacterPanel.svelte'
   import InventoryPanel from './InventoryPanel.svelte'
   import QuickslotBar from './QuickslotBar.svelte'
+  import SkillBar from './SkillBar.svelte'
   import HungerIndicator from './HungerIndicator.svelte'
   import TradeWindow from './TradeWindow.svelte'
   import FishingPrompt from './FishingPrompt.svelte'
@@ -145,6 +146,7 @@
     <div class="action-cluster">
       {#if selectedCharacter && !$mapEditorMode}
         <div class="quickslot-stack">
+          <SkillBar />
           <QuickslotBar characterId={selectedCharacter.id} />
         </div>
       {/if}

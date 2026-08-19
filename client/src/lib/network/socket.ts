@@ -393,6 +393,20 @@ class NetworkManager {
     this.sendMessage({ PlayerAttack: { monster_id: monsterId } })
   }
 
+  /** Ask to use a combat skill. The server judges range, cooldown, cost and
+   *  cast time and answers — nothing here is predicted (IMP-3.2). */
+  sendUseSkill(skill: string, monsterId: string | null) {
+    this.sendMessage({ UseSkill: { skill, monster_id: monsterId } })
+  }
+
+  sendCancelCast() {
+    this.sendMessage('CancelCast')
+  }
+
+  sendLearnSkill(skill: string) {
+    this.sendMessage({ LearnSkill: { skill } })
+  }
+
   sendMonsterAttack(monsterId: string, targetPlayerId: number) {
     this.sendMessage({
       MonsterAttack: {

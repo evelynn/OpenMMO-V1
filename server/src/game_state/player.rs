@@ -126,6 +126,7 @@ where
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 fn build_save_data(
     player: &Player,
     character_id: i64,
@@ -133,10 +134,13 @@ fn build_save_data(
     gold: i64,
     satiation: u32,
     save_point: Option<crate::auth::SavePoint>,
+    job: super::skill::JobProgress,
 ) -> CharacterSaveData {
     CharacterSaveData {
         character_id,
         save_point,
+        job_xp: job.xp,
+        skill_points: job.points,
         x: player.position.x,
         y: player.position.y,
         z: player.position.z,
@@ -317,6 +321,7 @@ impl super::GameState {
         self.drop_quest_progress(player_id).await;
         self.forget_whisper_partner(player_id).await;
         self.forget_player_skills(player_id).await;
+        self.forget_job_progress(player_id).await;
         self.remove_dungeon_discoveries(player_id).await;
         self.forget_hunger(player_id).await;
     }
@@ -623,6 +628,7 @@ impl super::GameState {
         let hunger = self.hunger.read().await;
         let inventories = self.inventories.read().await;
         let save_points = self.save_points.read().await;
+        let job_progress = self.job_progress.read().await;
 
         let mut characters = Vec::with_capacity(player_characters.len());
         let mut inventory_rows = Vec::with_capacity(player_characters.len());
@@ -636,6 +642,7 @@ impl super::GameState {
                     player_gold.get(player_id).copied().unwrap_or(0),
                     super::hunger::satiation_for_save(&hunger, player_id),
                     save_points.get(player_id).copied(),
+                    job_progress.get(player_id).copied().unwrap_or_default(),
                 ));
             }
             if let Some(inventory) = inventories.get(player_id) {
@@ -1870,6 +1877,7 @@ impl super::GameState {
         let gold_map = self.player_gold.read().await;
         let hunger = self.hunger.read().await;
         let save_points = self.save_points.read().await;
+        let job_progress = self.job_progress.read().await;
 
         let mut result = Vec::with_capacity(dirty_ids.len());
         for pid in &dirty_ids {
@@ -1885,6 +1893,7 @@ impl super::GameState {
                     gold,
                     satiation,
                     save_points.get(pid).copied(),
+                    job_progress.get(pid).copied().unwrap_or_default(),
                 ));
             }
         }
@@ -1911,6 +1920,12 @@ impl super::GameState {
             gold,
             satiation,
             save_points.get(player_id).copied(),
+            self.job_progress
+                .read()
+                .await
+                .get(player_id)
+                .copied()
+                .unwrap_or_default(),
         ))
     }
 

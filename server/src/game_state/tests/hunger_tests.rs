@@ -773,6 +773,8 @@ fn satiation_survives_a_save_and_reload() {
         gold: 0,
         satiation: 123,
         save_point: None,
+        job_xp: 0,
+        skill_points: 0,
     };
     auth.save_batch(&[save], &[], &[], &[], &[], None).unwrap();
 

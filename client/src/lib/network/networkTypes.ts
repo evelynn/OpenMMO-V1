@@ -269,7 +269,12 @@ export type PlayerInventory = {
 }
 
 /** Trained-skill ids (shared `SkillId` wire strings). */
-export type SkillId = 'fishing'
+export type SkillId = 'fishing' | CombatSkillId
+
+/** The subset bought with skill points rather than trained by use (IMP-3.2).
+ *  Their definitions come from `data/skills.json`, the same csv the server
+ *  judges against — nothing about a skill is authored twice. */
+export type CombatSkillId = 'power_strike' | 'cleave' | 'flame_dart'
 
 /** Shared `FishingAction` wire strings (`ClientMessage::FishingRespond`).
  *  `hook` answers a bite; the rest are held stances during the fight. */

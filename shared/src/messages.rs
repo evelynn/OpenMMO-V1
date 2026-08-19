@@ -47,6 +47,42 @@ impl std::fmt::Display for AttackRejectReason {
     }
 }
 
+/// Why the server refused a skill. Everything a skill costs is checked
+/// server-side, so every one of these is a decision the client cannot make
+/// for itself (IMP-3.2).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum SkillRejectReason {
+    NotLearned,
+    OnCooldown,
+    /// The after-cast delay of the previous skill has not run out.
+    Recovering,
+    AlreadyCasting,
+    OutOfRange,
+    InvalidTarget,
+    NotEnoughSatiation,
+    NoSkillPoints,
+    /// The unlock ladder: a prerequisite skill is not high enough.
+    Locked,
+    AlreadyMaxLevel,
+}
+
+impl std::fmt::Display for SkillRejectReason {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(match self {
+            Self::NotLearned => "not_learned",
+            Self::OnCooldown => "on_cooldown",
+            Self::Recovering => "recovering",
+            Self::AlreadyCasting => "already_casting",
+            Self::OutOfRange => "out_of_range",
+            Self::InvalidTarget => "invalid_target",
+            Self::NotEnoughSatiation => "not_enough_satiation",
+            Self::NoSkillPoints => "no_skill_points",
+            Self::Locked => "locked",
+            Self::AlreadyMaxLevel => "already_max_level",
+        })
+    }
+}
+
 /// A haggled price modifier on one item, as included in `ShopState`.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ActiveDeal {
@@ -310,6 +346,13 @@ pub struct QuestOffer {
     pub progress: Option<u16>,
 }
 
+/// One skill's remaining cooldown, as carried by `SkillCooldowns`.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+pub struct SkillCooldown {
+    pub skill: crate::skills::SkillId,
+    pub remaining_ms: u64,
+}
+
 /// One attachment row on a piece of mail. Mirrors `mail_items`.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct MailAttachment {
@@ -429,6 +472,19 @@ pub enum ClientMessage {
     },
     PlayerAttack {
         monster_id: String,
+    },
+    /// Use a combat skill. The server decides everything — cooldown, range,
+    /// cost, cast time — and the client never predicts any of it (IMP-3.2).
+    UseSkill {
+        skill: crate::skills::SkillId,
+        monster_id: Option<String>,
+    },
+    /// Give up on a cast in progress. Only the variable part can be given up
+    /// on; past it the server ignores this.
+    CancelCast,
+    /// Spend one skill point on `skill`, learning it or raising it a level.
+    LearnSkill {
+        skill: crate::skills::SkillId,
     },
     MonsterAttack {
         monster_id: String,
@@ -1031,6 +1087,47 @@ pub enum ServerMessage {
     PlayerAttackRejected {
         monster_id: String,
         reason: AttackRejectReason,
+    },
+    /// A cast began. Fans out to the caster's AOI so everyone can draw the
+    /// bar; `cast_ms` is the whole cast (variable part already shortened).
+    SkillCastStarted {
+        player_id: PlayerId,
+        skill: crate::skills::SkillId,
+        cast_ms: u32,
+    },
+    /// The cast did not finish — the caster moved, or gave up.
+    SkillCastCancelled {
+        player_id: PlayerId,
+    },
+    /// A skill landed (or missed). Carries the id only: the client already
+    /// has every skill's definition from the csv, and this is AOI fanout.
+    SkillResult {
+        player_id: PlayerId,
+        skill: crate::skills::SkillId,
+        monster_id: String,
+        hit: bool,
+        damage: u32,
+    },
+    /// Owner-only: why the skill was refused.
+    SkillRejected {
+        skill: crate::skills::SkillId,
+        reason: SkillRejectReason,
+    },
+    /// Owner-only: remaining cooldown per skill, in ms. Sent on use and on
+    /// entry; skills absent from the list are ready.
+    SkillCooldowns {
+        cooldowns: Vec<SkillCooldown>,
+    },
+    /// Owner-only: job progress toward the next skill point.
+    SkillPointsUpdate {
+        job_xp: u64,
+        skill_points: u32,
+    },
+    /// Owner-only: a point was spent and the skill is now at `level`.
+    SkillLearned {
+        skill: crate::skills::SkillId,
+        level: u32,
+        skill_points: u32,
     },
     MonsterAttackedPlayer {
         monster_id: String,

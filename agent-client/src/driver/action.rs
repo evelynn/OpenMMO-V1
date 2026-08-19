@@ -28,6 +28,23 @@ pub(super) enum AgentAction {
         )]
         monster_id: String,
     },
+    #[serde(rename = "learn_skill")]
+    LearnSkill {
+        #[serde(alias = "skillId", alias = "skill_id", alias = "name")]
+        skill: String,
+    },
+    #[serde(rename = "use_skill", alias = "skill")]
+    UseSkill {
+        #[serde(alias = "skillId", alias = "skill_id", alias = "name")]
+        skill: String,
+        #[serde(
+            alias = "targetId",
+            alias = "target_id",
+            alias = "target",
+            alias = "id"
+        )]
+        monster_id: String,
+    },
     #[serde(rename = "move")]
     Move {
         // Character name: approach them and stop a polite distance short
@@ -413,6 +430,24 @@ pub(super) const ACTION_SPECS: &[ActionSpec] = &[
   You walk into range first, then strike."#,
     },
     ActionSpec {
+        names: &["learn_skill"],
+        aliases: &[],
+        doc: r#"- Spend one skill point to learn a combat skill or raise it a level:
+  {"type": "learn_skill", "skill": "power_strike"}
+  Points come from killing monsters. Some skills stay locked until another is
+  high enough; the server says so if you try."#,
+    },
+    ActionSpec {
+        names: &["use_skill"],
+        aliases: &["skill"],
+        doc: r#"- Use a combat skill on a monster:
+  {"type": "use_skill", "skill": "power_strike", "target": "m2_1"}
+  You must have learned the skill first, be inside its range, and be off its
+  cooldown — the server judges all of that and answers a refusal with the
+  reason. A skill with a cast time lands a moment later; walking during the
+  variable part of a cast cancels it and costs nothing."#,
+    },
+    ActionSpec {
         names: &["follow"],
         aliases: &["follow_player"],
         doc: r#"- Follow a character and keep up as they move (use this when someone says
@@ -769,8 +804,10 @@ impl AgentAction {
     /// must not be able to slip past this.
     pub(super) fn takes_over_movement(&self) -> bool {
         match self {
+            Self::LearnSkill { .. } => false,
             Self::Move { .. }
             | Self::Attack { .. }
+            | Self::UseSkill { .. }
             | Self::Follow { .. }
             | Self::Pickup { .. }
             | Self::OpenChest { .. }
@@ -850,12 +887,14 @@ impl AgentAction {
             | Self::QuestBoard { .. }
             | Self::AcceptQuest { .. }
             | Self::TurnInQuest { .. } => true,
-            Self::SetSavePoint { .. }
+            Self::LearnSkill { .. }
+            | Self::SetSavePoint { .. }
             | Self::Travel { .. }
             | Self::Deposit { .. }
             | Self::Withdraw { .. }
             | Self::Move { .. }
             | Self::Attack { .. }
+            | Self::UseSkill { .. }
             | Self::Follow { .. }
             | Self::Pickup { .. }
             | Self::OpenChest { .. }
@@ -893,6 +932,8 @@ impl AgentAction {
         match self {
             Self::Say { .. } => "say",
             Self::Attack { .. } => "attack",
+            Self::UseSkill { .. } => "use_skill",
+            Self::LearnSkill { .. } => "learn_skill",
             Self::Move { .. } => "move",
             Self::Follow { .. } => "follow",
             Self::Respawn => "respawn",
@@ -1334,6 +1375,13 @@ pub(super) fn action_to_command(
         }),
         AgentAction::Attack { monster_id } => Some(ClientMessage::PlayerAttack {
             monster_id: monster_id.clone(),
+        }),
+        AgentAction::LearnSkill { skill } => Some(ClientMessage::LearnSkill {
+            skill: skill.parse().ok()?,
+        }),
+        AgentAction::UseSkill { skill, monster_id } => Some(ClientMessage::UseSkill {
+            skill: skill.parse().ok()?,
+            monster_id: Some(monster_id.clone()),
         }),
         AgentAction::Move {
             target,

@@ -1079,6 +1079,13 @@ async fn handle_client_message(
             game_state
                 .load_save_point(&id, selected_character.save_point)
                 .await;
+            game_state
+                .load_job_progress(
+                    &id,
+                    selected_character.job_xp,
+                    selected_character.skill_points,
+                )
+                .await;
             if !game_state
                 .attach_player_to_account_session(&authed_account_name, account_session_id, id)
                 .await
@@ -1160,6 +1167,12 @@ async fn handle_client_message(
             });
 
             responses.push(ServerMessage::SkillsUpdate { skills });
+
+            responses.push(ServerMessage::SkillPointsUpdate {
+                job_xp: selected_character.job_xp,
+                skill_points: selected_character.skill_points,
+            });
+            responses.push(game_state.skill_cooldowns_msg(&id).await);
 
             responses.push(ServerMessage::DungeonDiscoveries {
                 entrance_ids: discovered_dungeons,
@@ -1318,6 +1331,30 @@ async fn handle_client_message(
                     .await;
             } else {
                 warn!("Received monster move from client that is not in game");
+            }
+        }
+
+        ClientMessage::UseSkill { skill, monster_id } => {
+            if let Some(id) = &state.player_id {
+                game_state
+                    .use_skill(auth_service, id, skill, monster_id)
+                    .await;
+            } else {
+                warn!("Received skill use from client that is not in game");
+            }
+        }
+
+        ClientMessage::CancelCast => {
+            if let Some(id) = &state.player_id {
+                game_state.cancel_cast(id).await;
+            }
+        }
+
+        ClientMessage::LearnSkill { skill } => {
+            if let Some(id) = &state.player_id {
+                game_state.learn_skill(id, skill).await;
+            } else {
+                warn!("Received skill learn from client that is not in game");
             }
         }
 

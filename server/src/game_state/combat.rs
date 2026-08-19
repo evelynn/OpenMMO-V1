@@ -513,177 +513,205 @@ impl super::GameState {
         .await;
 
         if result_hit {
-            // Damage and the kill claim share one guard, so a second attacker
-            // landing at the same instant sees Dead and stops.
-            let is_dead = {
-                let mut monsters = self.monsters.write().await;
-                let mut died = false;
+            self.apply_player_damage_to_monster(
+                auth_service,
+                player_id,
+                &monster_id,
+                &monster_type,
+                monster_position,
+                monster_floor_level,
+                monster_level_override,
+                result_damage,
+            )
+            .await;
+        }
+    }
 
-                if let Some(monster) = monsters.get_mut(&monster_id) {
-                    if monster.state == MonsterState::Dead {
-                        return; // Already dead
-                    }
+    /// Land `damage` on a monster and run everything a kill implies: the
+    /// contribution ledger, loot, the party's XP and contract credit, the MVP
+    /// award and the corpse timer. Shared by the basic swing and by skills so
+    /// a skill kill pays exactly what a swing does — there is no second
+    /// reward path to keep in step (IMP-3.2).
+    #[allow(clippy::too_many_arguments)]
+    pub(super) async fn apply_player_damage_to_monster(
+        &self,
+        auth_service: &Arc<AuthService>,
+        player_id: &PlayerId,
+        monster_id: &str,
+        monster_type: &str,
+        monster_position: Position,
+        monster_floor_level: i8,
+        monster_level_override: Option<u8>,
+        damage: u32,
+    ) {
+        // Damage and the kill claim share one guard, so a second attacker
+        // landing at the same instant sees Dead and stops.
+        let is_dead = {
+            let mut monsters = self.monsters.write().await;
+            let mut died = false;
 
-                    monster.health = monster.health.saturating_sub(result_damage);
-                    debug!(
-                        "Monster {} HP: {}/{}",
-                        monster_id, monster.health, monster.max_health
-                    );
-
-                    died = monster.health == 0;
+            if let Some(monster) = monsters.get_mut(monster_id) {
+                if monster.state == MonsterState::Dead {
+                    return; // Already dead
                 }
-                if died {
-                    // Through the registry so the kill frees its spawn slot now,
-                    // not when the corpse is swept 30s later.
-                    monsters.mark_dead(&monster_id);
-                }
-                died
+
+                monster.health = monster.health.saturating_sub(damage);
+                debug!(
+                    "Monster {} HP: {}/{}",
+                    monster_id, monster.health, monster.max_health
+                );
+
+                died = monster.health == 0;
+            }
+            if died {
+                // Through the registry so the kill frees its spawn slot now,
+                // not when the corpse is swept 30s later.
+                monsters.mark_dead(monster_id);
+            }
+            died
+        };
+        // Separate lock, outside the registry guard: the ledger exists
+        // only for bosses and its vector was sized at spawn, so this
+        // neither allocates nor nests locks (IMP-2.8).
+        self.record_boss_damage(monster_id, player_id, damage).await;
+        if is_dead {
+            let dropped_weapon_item_def_id = self
+                .monster_defs
+                .get(monster_type)
+                .filter(|def| {
+                    def.weapon_drop_chance >= 1.0
+                        || rand::thread_rng().gen::<f32>() < def.weapon_drop_chance
+                })
+                .and_then(|def| def.weapon.as_deref())
+                .and_then(|weapon| self.item_defs.item_def_id_for_weapon_ref(weapon));
+
+            debug!("Monster {} died, broadcasting dead state", monster_id);
+            self.send_direct_message_to_players_within_position(
+                &monster_position,
+                monster_floor_level,
+                super::EVENT_DELIVERY_RADIUS,
+                ServerMessage::MonsterDead {
+                    monster_id: monster_id.to_string(),
+                    dropped_weapon_item_def_id: dropped_weapon_item_def_id.clone(),
+                },
+                None,
+            )
+            .await;
+
+            let weapon_drop = if let Some(item_def_id) = dropped_weapon_item_def_id {
+                let instance_id = self.next_instance_id().await;
+                // Scatter off the corpse, then clamp onto walkable dungeon
+                // floor: pickup is a pure proximity check, so an item
+                // behind a wall would be lost.
+                let drop_position = self
+                    .loot_drop_position(
+                        monster_position,
+                        monster_floor_level,
+                        dropped_weapon_position(monster_position),
+                    )
+                    .await;
+                Some(GroundItem {
+                    instance_id,
+                    item_def_id,
+                    position: drop_position,
+                    floor_level: monster_floor_level,
+                    quantity: 1,
+                    enchant: 0,
+                    dropped_by: None,
+                })
+            } else {
+                None
             };
-            // Separate lock, outside the registry guard: the ledger exists
-            // only for bosses and its vector was sized at spawn, so this
-            // neither allocates nor nests locks (IMP-2.8).
-            self.record_boss_damage(&monster_id, player_id, result_damage)
-                .await;
-            if is_dead {
-                let dropped_weapon_item_def_id = self
-                    .monster_defs
-                    .get(&monster_type)
-                    .filter(|def| {
-                        def.weapon_drop_chance >= 1.0
-                            || rand::thread_rng().gen::<f32>() < def.weapon_drop_chance
-                    })
-                    .and_then(|def| def.weapon.as_deref())
-                    .and_then(|weapon| self.item_defs.item_def_id_for_weapon_ref(weapon));
-
-                debug!("Monster {} died, broadcasting dead state", monster_id);
-                self.send_direct_message_to_players_within_position(
-                    &monster_position,
-                    monster_floor_level,
-                    super::EVENT_DELIVERY_RADIUS,
-                    ServerMessage::MonsterDead {
-                        monster_id: monster_id.clone(),
-                        dropped_weapon_item_def_id: dropped_weapon_item_def_id.clone(),
-                    },
-                    None,
-                )
-                .await;
-
-                let weapon_drop = if let Some(item_def_id) = dropped_weapon_item_def_id {
-                    let instance_id = self.next_instance_id().await;
-                    // Scatter off the corpse, then clamp onto walkable dungeon
-                    // floor: pickup is a pure proximity check, so an item
-                    // behind a wall would be lost.
-                    let drop_position = self
+            // Anything the monster looted comes back where it fell — the
+            // point of the carry cap is that this is a handful, not a
+            // hoard (IMP-1.4).
+            let mut carried_drops = Vec::new();
+            for item in self.take_monster_loot(monster_id).await {
+                carried_drops.push(GroundItem {
+                    position: self
                         .loot_drop_position(
                             monster_position,
                             monster_floor_level,
                             dropped_weapon_position(monster_position),
                         )
-                        .await;
-                    Some(GroundItem {
-                        instance_id,
-                        item_def_id,
-                        position: drop_position,
-                        floor_level: monster_floor_level,
-                        quantity: 1,
-                        enchant: 0,
-                        dropped_by: None,
-                    })
-                } else {
-                    None
-                };
-                // Anything the monster looted comes back where it fell — the
-                // point of the carry cap is that this is a handful, not a
-                // hoard (IMP-1.4).
-                let mut carried_drops = Vec::new();
-                for item in self.take_monster_loot(&monster_id).await {
-                    carried_drops.push(GroundItem {
-                        position: self
-                            .loot_drop_position(
-                                monster_position,
-                                monster_floor_level,
-                                dropped_weapon_position(monster_position),
-                            )
-                            .await,
-                        floor_level: monster_floor_level,
-                        instance_id: item.instance_id,
-                        item_def_id: item.item_def_id,
-                        quantity: item.quantity,
-                        enchant: item.enchant,
-                        dropped_by: None,
-                    });
-                }
-
-                // Weapon drop and rare bonus world drops alike wait for the
-                // blow to land.
-                self.spawn_kill_loot_after_impact(
-                    weapon_drop,
-                    carried_drops,
-                    monster_position,
-                    monster_floor_level,
-                );
-
-                // Dungeon monsters: free their spawn slot for respawn.
-                self.on_dungeon_monster_dead(&monster_id).await;
-
-                // World bosses: arm the long jittered wait (IMP-2.7).
-                self.on_world_boss_dead(&monster_id).await;
-
-                self.drain_hunger_for_kill(player_id).await;
-                if let Some(def) = self.monster_defs.get(&monster_type) {
-                    // Depth-scaled dungeon monsters yield XP for their
-                    // effective level, not the base definition level.
-                    let effective_level = monster_level_override.unwrap_or(def.level);
-                    let base_xp = xp::monster_xp(effective_level, def.guard);
-                    let sharers = self
-                        .party_members_sharing_kill(
-                            player_id,
-                            monster_position,
-                            monster_floor_level,
-                        )
-                        .await;
-                    let share = xp::party_xp_share(base_xp, sharers.len() as u32 + 1);
-                    let mut recipients = Vec::with_capacity(sharers.len() + 1);
-                    recipients.push(*player_id);
-                    recipients.extend(sharers);
-                    self.grant_monster_kill_xp(&recipients, share, effective_level)
-                        .await;
-                    // Same recipient list as the XP: a party member who shares
-                    // the kill must share the contract progress, or partying
-                    // becomes a penalty for hunters (IMP-2.5).
-                    self.credit_quest_kill(&recipients, &monster_type).await;
-                }
-
-                // The last blow is not what decides this: the ledger is read,
-                // not the killer (IMP-2.8).
-                self.award_mvp_bonus(
-                    auth_service,
-                    &monster_id,
-                    &monster_type,
-                    monster_level_override,
-                )
-                .await;
-
-                // Schedule removal after 30 seconds. Through despawn_monsters
-                // so the removal reaches the corpse's owner directly even when
-                // it has wandered out of range — the radius fanout alone left
-                // a ghost corpse on the owner's client.
-                let game_state = self.clone();
-                let id_to_remove = monster_id.clone();
-                tokio::spawn(async move {
-                    tokio::time::sleep(tokio::time::Duration::from_secs(30)).await;
-                    let still_dead = game_state
-                        .monsters
-                        .read()
-                        .await
-                        .get(&id_to_remove)
-                        .is_some_and(|monster| monster.state == MonsterState::Dead);
-                    if still_dead {
-                        debug!("Monster {} removed after 30s corpse time", id_to_remove);
-                        game_state.despawn_monsters(vec![id_to_remove]).await;
-                    }
+                        .await,
+                    floor_level: monster_floor_level,
+                    instance_id: item.instance_id,
+                    item_def_id: item.item_def_id,
+                    quantity: item.quantity,
+                    enchant: item.enchant,
+                    dropped_by: None,
                 });
             }
+
+            // Weapon drop and rare bonus world drops alike wait for the
+            // blow to land.
+            self.spawn_kill_loot_after_impact(
+                weapon_drop,
+                carried_drops,
+                monster_position,
+                monster_floor_level,
+            );
+
+            // Dungeon monsters: free their spawn slot for respawn.
+            self.on_dungeon_monster_dead(monster_id).await;
+
+            // World bosses: arm the long jittered wait (IMP-2.7).
+            self.on_world_boss_dead(monster_id).await;
+
+            self.drain_hunger_for_kill(player_id).await;
+            if let Some(def) = self.monster_defs.get(monster_type) {
+                // Depth-scaled dungeon monsters yield XP for their
+                // effective level, not the base definition level.
+                let effective_level = monster_level_override.unwrap_or(def.level);
+                let base_xp = xp::monster_xp(effective_level, def.guard);
+                let sharers = self
+                    .party_members_sharing_kill(player_id, monster_position, monster_floor_level)
+                    .await;
+                let share = xp::party_xp_share(base_xp, sharers.len() as u32 + 1);
+                let mut recipients = Vec::with_capacity(sharers.len() + 1);
+                recipients.push(*player_id);
+                recipients.extend(sharers);
+                self.grant_monster_kill_xp(&recipients, share, effective_level)
+                    .await;
+                // Same kill, same sharers, a different curve: skill points
+                // arrive at their own pace instead of tracking levels (IMP-3.2).
+                self.grant_job_xp(&recipients, u64::from(share)).await;
+                // Same recipient list as the XP: a party member who shares
+                // the kill must share the contract progress, or partying
+                // becomes a penalty for hunters (IMP-2.5).
+                self.credit_quest_kill(&recipients, monster_type).await;
+            }
+
+            // The last blow is not what decides this: the ledger is read,
+            // not the killer (IMP-2.8).
+            self.award_mvp_bonus(
+                auth_service,
+                monster_id,
+                monster_type,
+                monster_level_override,
+            )
+            .await;
+
+            // Schedule removal after 30 seconds. Through despawn_monsters
+            // so the removal reaches the corpse's owner directly even when
+            // it has wandered out of range — the radius fanout alone left
+            // a ghost corpse on the owner's client.
+            let game_state = self.clone();
+            let id_to_remove = monster_id.to_string();
+            tokio::spawn(async move {
+                tokio::time::sleep(tokio::time::Duration::from_secs(30)).await;
+                let still_dead = game_state
+                    .monsters
+                    .read()
+                    .await
+                    .get(&id_to_remove)
+                    .is_some_and(|monster| monster.state == MonsterState::Dead);
+                if still_dead {
+                    debug!("Monster {} removed after 30s corpse time", id_to_remove);
+                    game_state.despawn_monsters(vec![id_to_remove]).await;
+                }
+            });
         }
     }
 

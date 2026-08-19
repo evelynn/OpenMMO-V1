@@ -60,6 +60,13 @@ import {
 } from '../stores/fishingStore'
 import { getItemDef } from '../data/itemDefs'
 import { getMonsterDef } from '../data/monsterDefs'
+import { getSkillDef } from '../data/skillDefs'
+import {
+  activeCast,
+  applySkillCooldowns,
+  jobProgress,
+} from '../stores/combatSkillStore'
+import { applySkillLevel } from '../stores/skillsStore'
 import {
   shopSession,
   applyDealUpdate,
@@ -1386,6 +1393,73 @@ export function handleServerMessage(
           sender: 'local',
         })
       }
+      break
+    }
+
+    case 'SkillCastStarted': {
+      if (data.player_id === get(gameStore).currentPlayer?.id) {
+        activeCast.set({
+          skill: data.skill,
+          startedAt: performance.now(),
+          endsAt: performance.now() + data.cast_ms,
+        })
+      }
+      break
+    }
+
+    case 'SkillCastCancelled': {
+      if (data.player_id === get(gameStore).currentPlayer?.id) {
+        activeCast.set(null)
+      }
+      break
+    }
+
+    case 'SkillResult': {
+      const isMine = data.player_id === get(gameStore).currentPlayer?.id
+      if (isMine) activeCast.set(null)
+      const name = getSkillDef(data.skill)?.name ?? data.skill
+      if (isMine) {
+        addCombatMessage({
+          text: data.hit
+            ? `${name} hits for ${data.damage}.`
+            : `${name} misses.`,
+          sender: 'local',
+        })
+      }
+      break
+    }
+
+    case 'SkillRejected': {
+      // The server owns every one of these decisions, so it also owns the
+      // explanation — the client has nothing of its own to say here.
+      activeCast.set(null)
+      const name = getSkillDef(data.skill)?.name ?? data.skill
+      addCombatMessage({
+        text: `${name}: ${String(data.reason).replace(/_/g, ' ')}.`,
+        sender: 'local',
+      })
+      break
+    }
+
+    case 'SkillCooldowns':
+      applySkillCooldowns(data.cooldowns ?? [])
+      break
+
+    case 'SkillPointsUpdate':
+      jobProgress.set({
+        jobXp: Number(data.job_xp),
+        skillPoints: data.skill_points,
+      })
+      break
+
+    case 'SkillLearned': {
+      applySkillLevel(data.skill, data.level)
+      jobProgress.update((job) => ({ ...job, skillPoints: data.skill_points }))
+      const name = getSkillDef(data.skill)?.name ?? data.skill
+      addCombatMessage({
+        text: `${name} is now level ${data.level}.`,
+        sender: 'local',
+      })
       break
     }
 

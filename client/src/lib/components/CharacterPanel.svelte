@@ -29,6 +29,8 @@
   } from '../stores/dragStore'
   import { itemTooltip } from '../actions/itemTooltip'
   import CharacterStatusPane from './CharacterStatusPane.svelte'
+  import SkillTreePanel from './SkillTreePanel.svelte'
+  import { getSkillDef } from '../data/skillDefs'
   import {
     characterPanelTab,
     type CharacterPanelTab,
@@ -105,12 +107,14 @@
       : CLASS_LABELS[characterClass]
   )
 
-  const TABS: CharacterPanelTab[] = ['stats', 'skills', 'status']
+  const TABS: CharacterPanelTab[] = ['stats', 'skills', 'combat', 'status']
 
+  // Combat skills live in their own tab: they are bought, so an XP bar
+  // beside them would always read empty (IMP-3.2).
   const trainedSkills = $derived(
-    (Object.entries($skillsStore.map) as [SkillId, SkillProgress][]).sort(
-      ([a], [b]) => a.localeCompare(b)
-    )
+    (Object.entries($skillsStore.map) as [SkillId, SkillProgress][])
+      .filter(([id]) => !getSkillDef(id))
+      .sort(([a], [b]) => a.localeCompare(b))
   )
 
   function skillProgressPct(progress: SkillProgress): number {
@@ -387,6 +391,11 @@
             {:else}
               <div class="skills-empty">No skills trained yet</div>
             {/if}
+          </div>
+        {/if}
+        {#if $characterPanelTab === 'combat'}
+          <div class="pane-skills">
+            <SkillTreePanel />
           </div>
         {/if}
         {#if $characterPanelTab === 'status'}

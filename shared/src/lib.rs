@@ -96,7 +96,11 @@ pub const NPC_TOKEN_FILENAME: &str = "npc_token";
 ///      fixed nodes only, fares burned, dungeons excluded — IMP-2.4.
 /// v38: MVP contribution bonus (MvpBonus) — the biggest contributor to a
 ///      boss kill, which need not be the one who landed it — IMP-2.8.
-pub const PROTOCOL_VERSION: u32 = 38;
+/// v39: combat skills (UseSkill/CancelCast/LearnSkill → SkillCastStarted/
+///      SkillCastCancelled/SkillResult/SkillRejected/SkillCooldowns/
+///      SkillPointsUpdate/SkillLearned); the server judges every part of a
+///      skill use and the client predicts none of it — IMP-3.2.
+pub const PROTOCOL_VERSION: u32 = 39;
 
 /// WebSocket close code sent when the handshake is refused (wrong protocol
 /// version, or traffic before `ClientInfo`). Lives outside the serialized

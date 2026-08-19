@@ -1,6 +1,7 @@
 import type { Position } from '../utils/movementUtils'
 import { startBattleMusic, stopBattleMusic } from './bgmManager'
 import { PLAYER_ATTACK_RANGE_METERS } from '../data/combatTiming'
+import { combatTargetId } from '../stores/combatSkillStore'
 
 export interface MonsterInfo {
   state?: string
@@ -37,6 +38,7 @@ export class CombatController {
   beginCombat(monsterId: string, inRange: boolean): number {
     const wasInCombat = this._targetMonsterId !== null
     this._targetMonsterId = monsterId
+    combatTargetId.set(monsterId)
     this._attackTimer = 0
     if (inRange) {
       this._attackCounter = 1
@@ -51,6 +53,7 @@ export class CombatController {
   cancelCombat() {
     const wasInCombat = this._targetMonsterId !== null
     this._targetMonsterId = null
+    combatTargetId.set(null)
     this._attackCounter = 0
     this._attackTimer = 0
     if (wasInCombat) stopBattleMusic()

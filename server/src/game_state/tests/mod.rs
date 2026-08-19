@@ -31,6 +31,7 @@ mod persistence_tests;
 mod pickup_tests;
 mod player_tests;
 mod quest_tests;
+mod skill_tests;
 mod skills_tests;
 mod spawn_scale_tests;
 mod spawn_soak_tests;

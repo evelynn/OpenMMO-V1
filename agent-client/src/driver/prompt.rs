@@ -529,6 +529,35 @@ pub(crate) fn format_event(state: &SharedState, msg: &ServerMessage) -> Option<S
                 "[Mail] #{mail_id} not claimed — your bag cannot hold all of it. Make room and retry."
             ),
         }),
+        ServerMessage::SkillRejected { skill, reason } => Some(format!(
+            "[Skill] {} refused: {reason}",
+            skill.as_str()
+        )),
+        ServerMessage::SkillResult {
+            skill,
+            monster_id,
+            hit,
+            damage,
+            ..
+        } => Some(if *hit {
+            format!(
+                "[Skill] {} hit {monster_id} for {damage}",
+                skill.as_str()
+            )
+        } else {
+            format!("[Skill] {} missed {monster_id}", skill.as_str())
+        }),
+        ServerMessage::SkillLearned {
+            skill,
+            level,
+            skill_points,
+        } => Some(format!(
+            "[Skill] learned {} Lv.{level} ({skill_points} point(s) left)",
+            skill.as_str()
+        )),
+        ServerMessage::SkillPointsUpdate { skill_points, .. } if *skill_points > 0 => Some(format!(
+            "[Skill] {skill_points} skill point(s) unspent - learn_skill spends one"
+        )),
         ServerMessage::MvpBonus {
             monster_type,
             xp,

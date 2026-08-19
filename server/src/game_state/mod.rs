@@ -250,6 +250,7 @@ mod player;
 mod quest;
 pub(crate) use player::{restored_floor_level, MoveCommand};
 mod salary;
+mod skill;
 mod skills;
 pub(crate) use skills::skills_from_rows;
 mod stall;
@@ -447,6 +448,13 @@ pub struct GameState {
     dungeons: Arc<RwLock<HashMap<String, dungeon::DungeonRuntime>>>,
     /// monster_id → dungeon spawn slot, for respawn bookkeeping on death.
     dungeon_monsters: Arc<RwLock<HashMap<String, dungeon::DungeonMonsterRef>>>,
+    /// Job XP and unspent skill points, keyed by player (IMP-3.2). Loaded on
+    /// entry from the `characters` row and written back through the same
+    /// batch save.
+    job_progress: Arc<RwLock<HashMap<PlayerId, skill::JobProgress>>>,
+    /// Mints a number per cast so a delayed landing task can tell its own
+    /// cast from the one that replaced it.
+    next_cast_seq: Arc<std::sync::atomic::AtomicU64>,
     /// Who is mid-cast, and the four deadlines that use produced (IMP-3.1).
     /// Absent means "not casting" — the overwhelming majority — so the map
     /// is the size of the crowd currently casting, not the population.
@@ -700,6 +708,8 @@ impl GameState {
             dungeon_monsters: Arc::new(RwLock::new(HashMap::new())),
             world_bosses: Arc::new(RwLock::new(HashMap::new())),
             boss_damage: Arc::new(RwLock::new(HashMap::new())),
+            job_progress: Arc::new(RwLock::new(HashMap::new())),
+            next_cast_seq: Arc::new(std::sync::atomic::AtomicU64::new(1)),
             casting: Arc::new(RwLock::new(HashMap::new())),
             global_cast_delay_until: Arc::new(RwLock::new(HashMap::new())),
             skill_cooldowns: Arc::new(RwLock::new(HashMap::new())),

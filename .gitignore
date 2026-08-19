@@ -78,6 +78,7 @@ data/player_anim_timing.json
 data/travel_nodes.json
 data/world_drop.json
 data/world_bosses.json
+data/skills.json
 data/terrain/
 data/housing/
 server/data/game_data.db

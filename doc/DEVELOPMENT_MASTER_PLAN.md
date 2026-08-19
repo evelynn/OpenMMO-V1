@@ -9,7 +9,7 @@
 ## 0. 현재 진행 상황 (이어서 작업할 때 먼저 읽는다)
 
 **브랜치**: `claude/project-analysis-dev-setup-9amcvt`
-**진행**: 30개 항목 중 **21개 완료**. **M0·M1·M2가 전부 끝났고**, 세 스파이크(SPK-1·2·3)가 모두 **go**다. M3는 1/7.
+**진행**: 30개 항목 중 **22개 완료**. **M0·M1·M2가 전부 끝났고**, 세 스파이크(SPK-1·2·3)가 모두 **go**다. M3는 2/7.
 
 | 항목 | 상태 | 커밋 |
 |------|------|------|
@@ -34,9 +34,10 @@
 | IMP-2.7 미니보스 | ✅ 완료 (프로토콜 변경 없음, 스폰 지점 1개, 13 개정 4건) | `411cfc0` |
 | IMP-2.8 MVP 기여도 | ✅ 완료 (프로토콜 v38, 기여자 상한 16, 13 개정 4건) | `658001e` |
 | IMP-3.1 시간 4분할 | ✅ 완료 (프로토콜 변경 없음, COMBAT.md 절 신설, 13 개정 3건) | `f4a7ed7` |
+| IMP-3.2 전투 스킬 | ✅ 완료 (프로토콜 v39, `characters` 2컬럼, 13 개정 6건) | `(이 커밋)` |
 
-**다음에 집을 것**: **IMP-3.2(전투 스킬)**. 선행 IMP-3.1이 끝나 네 시간의 의미와
-저장 위치가 확정됐으니, 이제 `skills.csv`와 `UseSkill`/`SkillResult`가 그 위에 올라간다.
+**다음에 집을 것**: **IMP-3.3(방어 2단)**. 선행 IMP-3.2가 끝났고, 스킬과 평타가
+`apply_player_damage_to_monster` 한 경로를 지나므로 감산 레이어를 한 곳에만 넣으면 된다.
 
 **세 스파이크가 모두 go로 끝나면서 게이트가 전부 열렸다** — IMP-2.4(SPK-3),
 IMP-2.3(SPK-2, 완료), IMP-2.8과 IMP-4.3(SPK-1). 남은 제약은 SPK-1이 만든
@@ -65,9 +66,12 @@ M1이 끝났으므로 밸런싱 기준선이 섰다: 레벨에 안 맞는 몬스
 **아직 갚지 않은 빚**
 - **인게임 검증은 절반만 갚았다.** `tools/smoke-local.sh`(신규)가 기계가 판단할 수
   있는 부분을 덮는다 — 빈 DB에 서버가 뜨고, **부팅 assert가 전부 통과하고**,
-  IMP-2.2의 컬럼 4개와 IMP-2.3의 `character_storage`가 실제로 생기고, 같은 DB에
+  IMP-2.2의 컬럼 4개와 IMP-3.2의 컬럼 2개, IMP-2.3의 `character_storage`가 실제로
+  생기고, 같은 DB에
   다시 띄워도 마이그레이션이 멱등이고, WebSocket 업그레이드가 되고, 지형 API가
-  베이크된 타일을 준다. **이 13개 검사는 4×4 리전을 베이크한 환경에서 전부 통과했다**
+  베이크된 타일을 준다. 스크립트는 **소스보다 오래된 바이너리를 거절한다** — 낡은
+  빌드는 통과도 실패도 거짓말이기 때문이다. **이 15개 검사는 4×4 리전을 베이크한
+  환경에서 전부 통과했다**
   (베이크 587초 · 4,096타일 · 992 MB). 남은 것은 브라우저가 필요한 부분(월드 렌더링,
   실제 조작)이며, 아래 목록이 그 대상이다.
 - **인게임(브라우저) 검증 0건.** 완료한 16개 항목 모두 지형이 베이크되지 않은 컨테이너에서
@@ -77,7 +81,7 @@ M1이 끝났으므로 밸런싱 기준선이 섰다: 레벨에 안 맞는 몬스
   줍는지 → 잡아서 되찾는지 → 로그아웃으로 디스폰시켜도 아이템이 남는지 →
   반지를 끼면 시트의 CHA가 오르는지 → 쇠약 상태에서 인벤 하중 상한이 줄어 보이는지 →
   `/save` 후 멀리서 죽어 그 자리에서 부활하는지 → `/storage`로 넣고 빼고 재접속 후 잔존.
-- **프로토콜이 v29 → v37로 여덟 번 올랐다.** 서버와 클라이언트를 반드시 함께 배포한다.
+- **프로토콜이 v29 → v39로 열 번 올랐다.** 서버와 클라이언트를 반드시 함께 배포한다.
 - **여행 목적지가 2곳뿐이다.** 스폰 리전 주변에 실제로 존재하는 정착지가 수도와
   리버사이드 둘뿐이라 그렇다(`worldgen.json`의 settlements에서 확인). 월드를 더
   구우면 후보가 늘어나고, 상한은 10곳이다.
@@ -375,7 +379,7 @@ Phase 번호와 1:1이다(M1 = Phase 1 …). **작업 ID는 13의 ID가 정본�
 | 순번 | 작업 ID | 작업 | 선행 | 크기 | 영역 | 산출물 |
 |------|---------|------|------|------|------|--------|
 | [x] 21 | IMP-3.1 | 시간 4분할 (VCT / FCT / after-cast delay / cooldown) | — | L | shared/server/client | `shared/src/cast.rs`(신규) + `wasm_api::cast_timing_for`, 서버 3개 맵 + 이동 캔슬·접속 종료 정리, [COMBAT.md](COMBAT.md) 4분할 표. 평타는 그대로 애니메이션에 묶여 있다(13 개정 3건) |
-| 22 | IMP-3.2 | 전투 스킬 시스템 | IMP-3.1 | L | data/shared/server/client | `shared/src/skills.rs`의 `SkillId` 확장 + 스킬 포인트, `data-src/skills.csv`, `ClientMessage::UseSkill` / `ServerMessage::SkillResult`. **서버가 쿨다운·사거리·자원을 판정한다. 클라이언트 예측 금지** |
+| [x] 22 | IMP-3.2 | 전투 스킬 시스템 | IMP-3.1 | L | data/shared/server/client | `SkillId` 확장(전투 3종) + `job_xp`/`skill_points`, `data-src/skills.csv`, 메시지 10종, `skill_defs.rs` + `game_state/skill.rs`, `SkillBar`/`SkillTreePanel`, 에이전트 `use_skill`/`learn_skill`. 서버가 전부 판정하고 클라이언트는 예측하지 않는다(13 개정 6건) |
 | 23 | IMP-3.3 | 방어 2단 (Hard/Soft) | IMP-3.2 | M | data/server/doc | **`guard`는 명중 판정(AC)으로 유지**하고 축을 하나 더 만든다 — `data-src/items.csv`에 `armorPct`/`armorFlat`, `server/src/game/combat.rs`에 `apply_defense`(비율 → 감산 → 최소 1), 두 축의 역할 분리를 [COMBAT.md](COMBAT.md)에 문서화 |
 | 24 | IMP-3.4 | 경제 스킬 `SkillId::Trading` | — | M | shared/server/client | 기존 haggle(`game_state/deals.rs`의 딜 원장, 와이어 타입은 `shared/src/messages.rs:52` `ActiveDeal`)·상인 `sellRatePercent`에 곱, CHA와의 역할 분리를 [ECONOMY.md](ECONOMY.md)에 **먼저** 문서화 |
 | 25 | IMP-3.5 | 고액 거래 수수료 | IMP-0.1 | M | shared/server | `shared`에 `trade_fee(amount)`, `game_state/trading.rs:1073` `sell_item` / `:1336` `sell_items`에서 **상대가 `merchants.csv` 상인이 아닐 때만** 임계 초과분 차감, **수수료는 소각**, `TRADE_FEE_THRESHOLD`/`TRADE_FEE_PCT` 상수, [ECONOMY.md](ECONOMY.md) 갱신. IMP-3.4와 같은 PR 권장 |

@@ -13,19 +13,53 @@ pub const SKILL_LEVEL_CAP: u32 = 30;
 pub enum SkillId {
     #[serde(rename = "fishing")]
     Fishing,
+    #[serde(rename = "power_strike")]
+    PowerStrike,
+    #[serde(rename = "cleave")]
+    Cleave,
+    #[serde(rename = "flame_dart")]
+    FlameDart,
 }
 
 impl SkillId {
     pub fn as_str(&self) -> &'static str {
         match self {
             SkillId::Fishing => "fishing",
+            SkillId::PowerStrike => "power_strike",
+            SkillId::Cleave => "cleave",
+            SkillId::FlameDart => "flame_dart",
         }
+    }
+
+    /// Combat skills are bought with skill points and never trained by use;
+    /// everything else grows through `add_xp`. The two growth models share
+    /// one container (and one DB table), so this is what keeps a stray XP
+    /// grant from quietly raising a skill somebody paid points for.
+    pub fn is_combat(&self) -> bool {
+        match self {
+            SkillId::Fishing => false,
+            SkillId::PowerStrike | SkillId::Cleave | SkillId::FlameDart => true,
+        }
+    }
+
+    /// Every skill, for surfaces that have to enumerate them (the skill tree,
+    /// the csv boot check).
+    pub fn all() -> &'static [SkillId] {
+        &[
+            SkillId::Fishing,
+            SkillId::PowerStrike,
+            SkillId::Cleave,
+            SkillId::FlameDart,
+        ]
     }
 
     /// Player-facing name, shared so every surface capitalizes it the same way.
     pub fn display_name(&self) -> &'static str {
         match self {
             SkillId::Fishing => "Fishing",
+            SkillId::PowerStrike => "Power Strike",
+            SkillId::Cleave => "Cleave",
+            SkillId::FlameDart => "Flame Dart",
         }
     }
 }
@@ -36,6 +70,9 @@ impl std::str::FromStr for SkillId {
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s {
             "fishing" => Ok(SkillId::Fishing),
+            "power_strike" => Ok(SkillId::PowerStrike),
+            "cleave" => Ok(SkillId::Cleave),
+            "flame_dart" => Ok(SkillId::FlameDart),
             _ => Err(()),
         }
     }
@@ -98,6 +135,9 @@ impl Skills {
     /// skill stops accumulating. Returns `None` when nothing changed
     /// (already at cap), so callers can skip the persist + message.
     pub fn add_xp(&mut self, skill: SkillId, amount: u64) -> Option<SkillXpResult> {
+        if skill.is_combat() {
+            return None;
+        }
         let entry = self.map.entry(skill).or_default();
         let old_xp = entry.xp;
         let old_level = entry.level;
@@ -115,6 +155,14 @@ impl Skills {
             new_level: entry.level,
             leveled_up: entry.level > old_level,
         })
+    }
+
+    /// Raise a combat skill to `level`. Bought with skill points, so the
+    /// level moves on its own and the XP field stays at 0 — the same row
+    /// shape, a different growth model (IMP-3.2).
+    pub fn set_level(&mut self, skill: SkillId, level: u32) {
+        let entry = self.map.entry(skill).or_default();
+        entry.level = level.min(SKILL_LEVEL_CAP);
     }
 }
 

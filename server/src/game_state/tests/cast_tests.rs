@@ -21,6 +21,9 @@ async fn start_cast(game_state: &GameState, player_id: &PlayerId, timing: CastTi
         CastState {
             skill: SkillId::Fishing,
             schedule,
+            seq: 1,
+            target: "goblin1".to_string(),
+            level: 1,
         },
     );
 }

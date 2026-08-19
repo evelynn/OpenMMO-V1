@@ -27,6 +27,14 @@ if [ ! -x "$BIN" ]; then
     exit 1
 fi
 
+# A stale binary passes checks the current source would fail — and, worse,
+# fails checks it would pass. Refuse rather than report either.
+newer=$(find server/src shared/src data-src -newer "$BIN" -type f -print -quit 2>/dev/null || true)
+if [ -n "$newer" ]; then
+    echo "FAIL  $BIN is older than $newer — run: cargo build --release -p onlinerpg-server" >&2
+    exit 1
+fi
+
 # Boots the server against $STATE, waits for the listener, leaves $PID set.
 boot() {
     local log=$1
@@ -53,6 +61,8 @@ db = sqlite3.connect(sys.argv[1])
 cols = {r[1] for r in db.execute("PRAGMA table_info(characters)")}
 for c in ("save_x", "save_y", "save_z", "save_rotation"):
     print("ok" if c in cols else "FAIL", "characters.%s (IMP-2.2)" % c)
+for c in ("job_xp", "skill_points"):
+    print("ok" if c in cols else "FAIL", "characters.%s (IMP-3.2)" % c)
 tables = {r[0] for r in db.execute("SELECT name FROM sqlite_master WHERE type='table'")}
 print("ok" if "character_storage" in tables else "FAIL", "character_storage table (IMP-2.3)")
 if "character_storage" in tables:

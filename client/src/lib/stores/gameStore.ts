@@ -4,6 +4,7 @@ import type { Vector3 } from 'three'
 import type { CharacterClass, Gender } from '../network/networkTypes'
 import { resetInventoryStore } from './inventoryStore'
 import { resetSkillsStore } from './skillsStore'
+import { resetCombatSkills } from './combatSkillStore'
 import { resetPartyStores } from './partyStore'
 import { resetFriendStores } from './friendStore'
 import { resetFishingStore } from './fishingStore'
@@ -122,6 +123,7 @@ export const resetGameStore = () => {
   isAdminUser.set(false)
   resetInventoryStore()
   resetSkillsStore()
+  resetCombatSkills()
   resetFishingStore()
   resetPartyStores()
   resetFriendStores()

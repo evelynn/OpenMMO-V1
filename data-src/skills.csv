@@ -1,0 +1,4 @@
+id,name,maxLevel,vctMs,fctMs,afterCastDelayMs,cooldownMs,range,target,costSatiation,damageDice,damageBonusStat,animClip,requiresSkill,requiresSkillLevel
+power_strike,Power Strike,5,0,300,500,4000,2.0,enemy,8,2d6,str,slash2,,
+cleave,Cleave,5,400,200,800,9000,2.5,enemy,14,3d6,str,slash3,power_strike,3
+flame_dart,Flame Dart,5,700,200,600,6000,8.0,enemy,12,2d8,int,attack1,,

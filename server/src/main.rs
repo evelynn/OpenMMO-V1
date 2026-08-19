@@ -18,6 +18,7 @@ mod npc_defs;
 mod npc_schedule;
 mod quest_defs;
 mod semicolon_list;
+mod skill_defs;
 mod terrain;
 #[cfg(test)]
 mod test_util;
@@ -302,6 +303,7 @@ async fn main() -> ExitCode {
     let dungeon_defs = dungeon_defs::DungeonDefs::load(&item_defs, &monster_defs);
     travel_defs::assert_nodes_are_valid();
     world_boss_defs::assert_spawns_are_valid(&monster_defs);
+    skill_defs::assert_skills_are_valid();
     let quest_defs = quest_defs::QuestDefs::load(&monster_defs, &item_defs);
     let world_drop_defs = world_drop_defs::WorldDropDefs::load(&item_defs);
     let paths = state_paths(&args.state_dir);

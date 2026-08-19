@@ -176,6 +176,12 @@ pub struct CharacterRecord {
     /// Chosen respawn point; `None` means the world spawn, which is what every
     /// character that predates the columns keeps (IMP-2.2).
     pub save_point: Option<SavePoint>,
+    /// Job XP: the same kill events as base XP on a different curve, spending
+    /// out as skill points (IMP-3.2). Characters that predate the column start
+    /// at 0 — nothing is granted retroactively, because a retroactive grant
+    /// proportional to level would erase the balancing baseline.
+    pub job_xp: u64,
+    pub skill_points: u32,
 }
 
 /// Where a character revives, once they have chosen. Carries rotation because
@@ -202,10 +208,12 @@ pub struct CharacterSaveData {
     pub gold: i64,
     pub satiation: u32,
     pub save_point: Option<SavePoint>,
+    pub job_xp: u64,
+    pub skill_points: u32,
 }
 
 /// Column list shared between queries that return full CharacterRecord rows.
-const CHARACTER_COLUMNS: &str = "id, character_name, created_at, level, xp, max_hp, attr_str, attr_dex, attr_con, attr_int, attr_wis, attr_cha, attr_guard, class, last_x, last_y, last_z, last_rotation, health, floor_level, gender, gold, admin_role, satiation, save_x, save_y, save_z, save_rotation";
+const CHARACTER_COLUMNS: &str = "id, character_name, created_at, level, xp, max_hp, attr_str, attr_dex, attr_con, attr_int, attr_wis, attr_cha, attr_guard, class, last_x, last_y, last_z, last_rotation, health, floor_level, gender, gold, admin_role, satiation, save_x, save_y, save_z, save_rotation, job_xp, skill_points";
 
 fn character_record_from_row(row: &rusqlite::Row) -> rusqlite::Result<CharacterRecord> {
     Ok(CharacterRecord {
@@ -269,6 +277,8 @@ fn character_record_from_row(row: &rusqlite::Row) -> rusqlite::Result<CharacterR
             (Some(x), Some(y), Some(z), Some(rotation)) => Some(SavePoint { x, y, z, rotation }),
             _ => None,
         },
+        job_xp: row.get::<_, i64>(28).unwrap_or(0) as u64,
+        skill_points: row.get::<_, i64>(29).unwrap_or(0) as u32,
     })
 }
 
@@ -336,8 +346,9 @@ impl AuthService {
         let mut stmt = conn.prepare(
             "UPDATE characters SET last_x = ?1, last_y = ?2, last_z = ?3, last_rotation = ?4, \
              xp = ?5, level = ?6, max_hp = ?7, health = ?8, floor_level = ?9, gold = ?10, \
-             satiation = ?11, save_x = ?12, save_y = ?13, save_z = ?14, save_rotation = ?15 \
-             WHERE id = ?16",
+             satiation = ?11, save_x = ?12, save_y = ?13, save_z = ?14, save_rotation = ?15, \
+             job_xp = ?16, skill_points = ?17 \
+             WHERE id = ?18",
         )?;
         for d in data {
             stmt.execute(params![
@@ -356,6 +367,8 @@ impl AuthService {
                 d.save_point.map(|p| f64::from(p.y)),
                 d.save_point.map(|p| f64::from(p.z)),
                 d.save_point.map(|p| f64::from(p.rotation)),
+                d.job_xp as i64,
+                i64::from(d.skill_points),
                 d.character_id,
             ])?;
         }
@@ -514,6 +527,7 @@ impl AuthService {
         )?;
         Self::ensure_character_attribute_columns(conn)?;
         Self::ensure_character_save_point_columns(conn)?;
+        Self::ensure_character_job_columns(conn)?;
         conn.execute(
             "CREATE INDEX IF NOT EXISTS idx_characters_account_name ON characters(account_name)",
             [],
@@ -603,6 +617,23 @@ impl AuthService {
             .query_map([], |row| row.get::<_, String>(1))?
             .collect::<Result<HashSet<_>, _>>()?;
         Ok(columns)
+    }
+
+    /// Job progress, added after release. Existing characters start at 0 and
+    /// nothing is granted retroactively (IMP-3.2 migration note).
+    fn ensure_character_job_columns(conn: &Connection) -> Result<(), rusqlite::Error> {
+        let columns = Self::table_columns(conn, "characters")?;
+        for column in ["job_xp", "skill_points"] {
+            if !columns.contains(column) {
+                conn.execute(
+                    &format!(
+                        "ALTER TABLE characters ADD COLUMN {column} INTEGER NOT NULL DEFAULT 0"
+                    ),
+                    [],
+                )?;
+            }
+        }
+        Ok(())
     }
 
     /// Respawn point columns, added after release (IMP-2.2). Deliberately
@@ -1648,6 +1679,8 @@ impl AuthService {
             gold: 0,
             admin_role: 0,
             satiation: onlinerpg_shared::hunger::SATIATION_START,
+            job_xp: 0,
+            skill_points: 0,
         })
     }
 
@@ -2321,6 +2354,8 @@ mod tests {
                 gold: 0,
                 satiation: 500,
                 save_point: Some(point),
+                job_xp: 0,
+                skill_points: 0,
             }],
             &[],
             &[],
