@@ -232,6 +232,7 @@ pub(crate) fn encode_server_msg(msg: &ServerMessage) -> Option<Bytes> {
 mod achievement;
 pub(crate) mod backpressure;
 mod cast;
+mod channel;
 mod chat;
 pub(crate) use chat::{parse_admin_command, parse_notice_command};
 mod combat;
@@ -463,6 +464,13 @@ pub struct GameState {
     /// Which dungeon instance each player walks; absent means the public one
     /// (IMP-4.2). Set when a party claims an instance, dropped on logout.
     player_instances: Arc<std::sync::RwLock<HashMap<PlayerId, u64>>>,
+    /// Which copy of the world each player walks (IMP-7.1). Server-side
+    /// only: `Player` is full at msgpack's fixarray boundary, and AOI already
+    /// hides other channels, so nobody needs another player's channel.
+    player_channels:
+        Arc<std::sync::RwLock<HashMap<PlayerId, onlinerpg_shared::channel::ChannelId>>>,
+    /// How many channels this server runs.
+    channel_count: u8,
     /// NPC player id → who has them under contract, until when (IMP-4.5).
     /// Memory only: a restart ends every contract.
     companions: Arc<RwLock<companion::Contracts>>,
@@ -754,6 +762,8 @@ impl GameState {
             dungeons: Arc::new(RwLock::new(HashMap::new())),
             player_instances: Arc::new(std::sync::RwLock::new(HashMap::new())),
             companions: Arc::new(RwLock::new(HashMap::new())),
+            player_channels: Arc::new(std::sync::RwLock::new(HashMap::new())),
+            channel_count: onlinerpg_shared::channel::DEFAULT_CHANNEL_COUNT,
             dungeon_monsters: Arc::new(RwLock::new(HashMap::new())),
             world_bosses: Arc::new(RwLock::new(HashMap::new())),
             boss_damage: Arc::new(RwLock::new(HashMap::new())),

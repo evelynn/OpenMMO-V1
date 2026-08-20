@@ -25,6 +25,11 @@ import { DUNGEON_ENTRANCES } from './data/dungeonDefs'
 import { shortestWrappedDeltaX } from './terrain/world-wrap'
 import { chatChannel } from './stores/chatChannelStore'
 import { macroPanelVisible } from './stores/macroStore'
+import {
+  CHANNEL_CAPACITY,
+  channelOccupancy,
+  currentChannel,
+} from './stores/channelStore'
 import { RECIPES, getRecipe, recipeMaterials } from './data/recipeDefs'
 import { MAX_CRAFT_OPTIONS } from './data/craftConstants'
 import { partyRoster } from './stores/partyStore'
@@ -214,6 +219,30 @@ const COMMANDS: Record<string, Command> = {
         return
       }
       networkManager.sendOpenStorage(npc)
+    },
+  },
+  '/channel': {
+    desc: 'Show channels, or move to one: /channel [number]',
+    run: (args) => {
+      const wanted = args.trim()
+      if (!wanted) {
+        const mine = get(currentChannel)
+        for (const c of get(channelOccupancy)) {
+          const here = c.channel === mine ? ' (you are here)' : ''
+          addChatMessage({
+            text: `Channel ${c.channel + 1}: ${c.players}/${CHANNEL_CAPACITY}${here}`,
+            sender: 'system',
+          })
+        }
+        return
+      }
+      const number = Number(wanted)
+      if (!Number.isInteger(number) || number < 1) {
+        addChatMessage({ text: 'Which channel? /channel 2', sender: 'system' })
+        return
+      }
+      // Players count from 1; the wire counts from 0.
+      networkManager.sendSwitchChannel(number - 1)
     },
   },
   '/recipes': {

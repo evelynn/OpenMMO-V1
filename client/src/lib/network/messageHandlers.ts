@@ -23,6 +23,7 @@ import { housingManager } from '../managers/housingManager'
 import { bridgeManager } from '../managers/bridgeManager'
 import { objectManager } from '../managers/objectManager'
 import { groundItemManager } from '../managers/groundItemManager'
+import { channelOccupancy, currentChannel } from '../stores/channelStore'
 import { dungeonManager, setDungeonInstance } from '../managers/dungeonManager'
 import type { ItemInstance } from '../network/networkTypes'
 import {
@@ -1483,6 +1484,18 @@ export function handleServerMessage(
 
     case 'DungeonInstance':
       setDungeonInstance(data.entrance_id, data.party_seed)
+      break
+
+    case 'ChannelState':
+      currentChannel.set(data.yours)
+      channelOccupancy.set(data.channels)
+      break
+
+    case 'ChannelDenied':
+      addChatMessage({
+        text: `Channel switch refused: ${data.reason}`,
+        sender: 'system',
+      })
       break
 
     case 'CraftResult':

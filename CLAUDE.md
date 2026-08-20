@@ -1,6 +1,6 @@
 - Avoid comments in code where possible; only write them when truly necessary, keeping them short and concise.
 - If you find long or verbose comments in existing code, rewrite them to be short and concise, or remove them where possible.
 - When adding a new asset, record its source in the matching `doc/assets/` file, with the license (and for AI/paid tools, the tier + generation date). Mark entries that fall out of use with **[미사용]**.
-- Ensure the system is optimized to handle 5,000 simultaneous users without performance problems.
+- **Capacity is 1,000 concurrent players per channel**, and the world is split into channels to scale past that. One channel must hold 1,000 without performance problems; total capacity is channels x 1,000. (Superseded "5,000 on one server" — `tools/spike-socket-load.sh` measured 1,000 as comfortable and 5,000 as unable to stay connected.)
 - **Build to the design documents.** Before implementing anything, read its entry in [doc/ragnarok/13_IMPLEMENTATION_DIRECTION.md](doc/ragnarok/13_IMPLEMENTATION_DIRECTION.md) (the authority for *how*) and take the order and gates from [doc/DEVELOPMENT_MASTER_PLAN.md](doc/DEVELOPMENT_MASTER_PLAN.md). Implement what the entry specifies — files, schema, protocol, migration, verification. If the spec turns out to be wrong or impossible, **amend the design document first, in the same PR, with the reason**, and only then write the code that matches it. Never leave code and spec disagreeing, and never silently substitute your own design.
 - Keep responses focused, brief, and concise.

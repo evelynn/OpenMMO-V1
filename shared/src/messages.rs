@@ -525,6 +525,11 @@ pub enum ClientMessage {
     ClaimDungeonInstance {
         entrance_id: String,
     },
+    /// Move to another copy of the world. Your character, bag and storage do
+    /// not change — only who you can see does (IMP-7.1).
+    SwitchChannel {
+        channel: crate::channel::ChannelId,
+    },
     /// Craft `recipe_id`. `npc_player_id` commissions the NPC standing there
     /// — a fee, no options, and no failure. `None` is the player's own
     /// attempt at a fire: options allowed, materials lost on a bad roll
@@ -1376,6 +1381,17 @@ pub enum ServerMessage {
     DungeonInstance {
         entrance_id: String,
         party_seed: u64,
+    },
+    /// Which channel you are on and how full each one is. Sent on entry and
+    /// after every switch, and it is the only place a client learns its own
+    /// channel — `Player` deliberately does not carry one (IMP-7.1).
+    ChannelState {
+        yours: crate::channel::ChannelId,
+        channels: Vec<crate::channel::ChannelOccupancy>,
+    },
+    /// A channel switch was refused, and why.
+    ChannelDenied {
+        reason: crate::channel::ChannelDeniedReason,
     },
     /// What came of a craft. `enchant` is the level of the piece produced;
     /// on failure the materials are gone and nothing was made (IMP-4.4).

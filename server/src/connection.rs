@@ -1228,7 +1228,20 @@ async fn handle_client_message(
 
             let rejoin_floor = player.floor_level;
             let rejoin_pos = player.position;
+            // Before add_player: the join broadcast is channel-filtered, so
+            // an unassigned player would announce themselves into channel 0
+            // and then move (IMP-7.1).
+            if game_state.assign_channel(&id).await.is_none() {
+                warn!("Every channel is full; refusing {id}");
+                return Ok(vec![ServerMessage::AuthError {
+                    message: "The server is full. Try again shortly.".to_string(),
+                }]);
+            }
             responses.extend(game_state.add_player(player).await);
+            responses.push(ServerMessage::ChannelState {
+                yours: game_state.channel_of(&id),
+                channels: game_state.occupancy(),
+            });
 
             // After the snapshot on purpose: the client treats `GameState` as
             // the start of a session and clears its friend stores there.
@@ -1423,6 +1436,12 @@ async fn handle_client_message(
                 game_state
                     .transfer_guild_leadership(auth_service, id, character_id)
                     .await;
+            }
+        }
+
+        ClientMessage::SwitchChannel { channel } => {
+            if let Some(id) = &state.player_id {
+                game_state.switch_channel(id, channel).await;
             }
         }
 

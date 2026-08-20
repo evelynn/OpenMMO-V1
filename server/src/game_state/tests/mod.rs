@@ -15,6 +15,7 @@ use tokio::sync::mpsc::error::TryRecvError as MpscTryRecvError;
 mod achievement_tests;
 mod backpressure_tests;
 mod cast_tests;
+mod channel_tests;
 mod chat_tests;
 mod collision_tests;
 mod combat_scale_tests;

@@ -438,6 +438,10 @@ class NetworkManager {
     this.sendMessage({ TransferGuildLeadership: { character_id: characterId } })
   }
 
+  sendSwitchChannel(channel: number) {
+    this.sendMessage({ SwitchChannel: { channel } })
+  }
+
   sendCraftItem(recipeId: string, npcPlayerId: number | null, options: number) {
     this.sendMessage({
       CraftItem: {

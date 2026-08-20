@@ -357,6 +357,7 @@ impl super::GameState {
         self.forget_achievements(player_id).await;
         self.forget_guild_membership(player_id).await;
         self.forget_player_instance(player_id);
+        self.forget_channel(player_id);
         self.end_companion_contracts_for(player_id).await;
         self.remove_dungeon_discoveries(player_id).await;
         self.forget_hunger(player_id).await;
@@ -2383,9 +2384,39 @@ impl super::GameState {
         radius: f32,
         skip: Option<&PlayerId>,
     ) -> Vec<(PlayerId, f32)> {
+        self.players_within_position_on(position, floor_level, radius, skip, None)
+            .await
+    }
+
+    /// [`Self::players_within_position`] restricted to one channel. `None`
+    /// takes the channel from `skip`, which is the asking player on every
+    /// path that has one.
+    pub(super) async fn players_within_position_on(
+        &self,
+        position: &Position,
+        floor_level: i8,
+        radius: f32,
+        skip: Option<&PlayerId>,
+        channel: Option<onlinerpg_shared::channel::ChannelId>,
+    ) -> Vec<(PlayerId, f32)> {
         let radius_sq = radius * radius;
         let players = self.players.read().await;
         let cells = self.player_spatial_cells.read().await;
+        // The channel this query belongs to. Every position-addressed
+        // delivery funnels through here, so filtering once covers player
+        // visibility, monster events, ground items and nearby chat alike
+        // (IMP-7.1).
+        //
+        // One acquisition for the whole sweep: asking `channel_of` per
+        // candidate would take this lock once per player per query, and at a
+        // thousand players in one cell that is contention rather than a
+        // lookup (master plan D6 #3).
+        let channels = self
+            .player_channels
+            .read()
+            .unwrap_or_else(|e| e.into_inner());
+        let channel_of = |id: &PlayerId| channels.get(id).copied().unwrap_or(0);
+        let channel = channel.unwrap_or_else(|| skip.map(channel_of).unwrap_or(0));
         let mut found: HashMap<PlayerId, f32> = HashMap::new();
 
         for player_id in cells.keys_near(position, radius) {
@@ -2395,6 +2426,9 @@ impl super::GameState {
             let Some(player) = players.get(player_id) else {
                 continue;
             };
+            if channel_of(player_id) != channel {
+                continue;
+            }
 
             let dist_sq = position.dist_xz_sq(&player.position);
             if player.floor_level == floor_level && dist_sq <= radius_sq {

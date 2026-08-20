@@ -5,6 +5,7 @@
 //! type now lives.
 
 pub mod cast;
+pub mod channel;
 pub mod character;
 pub mod craft;
 pub mod debuff;
@@ -130,7 +131,10 @@ pub const NPC_TOKEN_FILENAME: &str = "npc_token";
 /// v47: dead wire removed — `PlaceHouse`/`ModifyRoom`/`RemoveHouse` (the
 ///      server refused all three; housing is a REST API) and `HousesInArea`
 ///      (never constructed). Every later variant shifts down — IMP-5.4.
-pub const PROTOCOL_VERSION: u32 = 47;
+/// v48: world channels (SwitchChannel → ChannelState/ChannelDenied). The
+///      channel is server-side state, not a `Player` field — AOI already
+///      hides other channels, and `Player` is full at 15 — IMP-7.1.
+pub const PROTOCOL_VERSION: u32 = 48;
 
 /// WebSocket close code sent when the handshake is refused (wrong protocol
 /// version, or traffic before `ClientInfo`). Lives outside the serialized

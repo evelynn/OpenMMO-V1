@@ -13,6 +13,7 @@ import { resetFishingStore } from './fishingStore'
 import { resetDiscoveredDungeons } from './dungeonStore'
 import { resetDungeonInstances } from '../managers/dungeonManager'
 import { resetMacros } from './macroStore'
+import { resetChannels } from './channelStore'
 import { resetHungerStore } from './hungerStore'
 import { resetDebuffStore } from './debuffStore'
 import { groundItemManager } from '../managers/groundItemManager'
@@ -146,6 +147,7 @@ export const resetGameStore = () => {
   resetDiscoveredDungeons()
   resetDungeonInstances()
   resetMacros()
+  resetChannels()
   resetHungerStore()
   resetDebuffStore()
   groundItemManager.reset()

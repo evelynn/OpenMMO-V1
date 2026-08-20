@@ -249,6 +249,7 @@ export type ClientMessage =
   | 'OpenGuildStorage'
   | { ClaimDungeonInstance: { entrance_id: string } }
   | { HireCompanion: { npc_player_id: number; hours: number } }
+  | { SwitchChannel: { channel: number } }
   | {
       CraftItem: {
         recipe_id: string

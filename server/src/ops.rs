@@ -33,6 +33,10 @@ pub struct Metrics {
     pub overflowed_connections: usize,
     /// False once a shutdown has begun: stop routing new players here.
     pub accepting: bool,
+    /// Players per channel (IMP-7.1). Capacity is per channel, not per
+    /// server, so a single total would hide a full channel next to an empty
+    /// one.
+    pub channels: Vec<onlinerpg_shared::channel::ChannelOccupancy>,
 }
 
 #[derive(Clone)]
@@ -91,6 +95,7 @@ async fn metrics(State(ops): State<Ops>) -> Response {
         dropped_messages,
         overflowed_connections,
         accepting: !is_draining(&ops),
+        channels: ops.game_state.occupancy(),
     })
     .into_response()
 }
