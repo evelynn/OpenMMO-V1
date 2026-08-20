@@ -13,6 +13,7 @@ use tokio::sync::broadcast::error::TryRecvError;
 use tokio::sync::mpsc::error::TryRecvError as MpscTryRecvError;
 
 mod achievement_tests;
+mod backpressure_tests;
 mod cast_tests;
 mod chat_tests;
 mod collision_tests;
@@ -134,7 +135,7 @@ async fn player_xz(game_state: &GameState, player_id: &PlayerId) -> (f32, f32) {
 
 /// Decodes `Shared` payloads back into `ServerMessage`, mirroring the
 /// receiver API so tests assert on exactly what a client would decode.
-struct DirectRx(tokio::sync::mpsc::UnboundedReceiver<DirectMessage>);
+struct DirectRx(tokio::sync::mpsc::Receiver<DirectMessage>);
 
 impl DirectRx {
     fn try_recv(&mut self) -> Result<ServerMessage, MpscTryRecvError> {

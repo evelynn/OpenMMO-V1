@@ -1303,15 +1303,13 @@ impl super::GameState {
             let channels = self.direct_channels.read().await;
             for (monster, new_owner, old_owner) in reassigned {
                 debug!("Monster {} handed to {}", monster.id, new_owner);
-                if let Some(tx) = old_owner.and_then(|id| channels.get(&id)) {
-                    let _ = tx.send(super::DirectMessage::Typed(ServerMessage::MonsterRemoved {
+                if let Some(channel) = old_owner.and_then(|id| channels.get(&id)) {
+                    channel.send_typed(ServerMessage::MonsterRemoved {
                         monster_id: monster.id.clone(),
-                    }));
+                    });
                 }
-                if let Some(tx) = channels.get(&new_owner) {
-                    let _ = tx.send(super::DirectMessage::Typed(
-                        ServerMessage::MonsterAssigned { monster },
-                    ));
+                if let Some(channel) = channels.get(&new_owner) {
+                    channel.send_typed(ServerMessage::MonsterAssigned { monster });
                 }
             }
         }

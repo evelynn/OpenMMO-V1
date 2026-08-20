@@ -152,7 +152,7 @@ struct ConnectionState {
     /// Entered character's name, kept here so disconnect-path logs can name the
     /// player after `GameState` has already dropped the record.
     character_name: Option<String>,
-    direct_rx: Option<mpsc::UnboundedReceiver<DirectMessage>>,
+    direct_rx: Option<mpsc::Receiver<DirectMessage>>,
     pending_character_attributes: Option<CharacterAttributes>,
     connected_at: std::time::Instant,
     last_heartbeat: std::time::Instant,
@@ -540,6 +540,16 @@ pub async fn handle_connection(
                         }
                     }
                     None => {}
+                }
+                // A reliable message was dropped for this player: their view
+                // of the world is now wrong and no later message repairs it.
+                // Closing sends them back through the snapshot path (IMP-5.1).
+                if game_state.connection_overflowed(&state.player_id).await {
+                    warn!(
+                        "Closing {:?}: outbound queue overflowed",
+                        state.character_name
+                    );
+                    break;
                 }
             }
         }

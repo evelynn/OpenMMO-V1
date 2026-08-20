@@ -197,22 +197,49 @@ impl super::GameState {
     pub async fn register_connection_channel(
         &self,
         player_id: &PlayerId,
-    ) -> mpsc::UnboundedReceiver<super::DirectMessage> {
-        let (tx, rx) = mpsc::unbounded_channel();
+    ) -> mpsc::Receiver<super::DirectMessage> {
+        let (channel, rx) = super::backpressure::DirectChannel::new();
         let mut channels = self.direct_channels.write().await;
-        channels.insert(*player_id, tx);
+        channels.insert(*player_id, channel);
         rx
+    }
+
+    /// Whether this player's outbound queue lost a message it could not
+    /// afford to lose. `None` (no character yet) is never overflowed.
+    pub async fn connection_overflowed(&self, player_id: &Option<PlayerId>) -> bool {
+        let Some(player_id) = player_id else {
+            return false;
+        };
+        let channels = self.direct_channels.read().await;
+        channels
+            .get(player_id)
+            .is_some_and(super::backpressure::DirectChannel::overflowed)
+    }
+
+    /// Lossy messages dropped for one player so far. The ops endpoint
+    /// (IMP-5.5) will read this; today only the tests do.
+    #[cfg(test)]
+    pub async fn dropped_messages_for(&self, player_id: &PlayerId) -> u64 {
+        let channels = self.direct_channels.read().await;
+        channels.get(player_id).map_or(0, |c| c.dropped())
     }
 
     pub async fn unregister_connection_channel(&self, player_id: &PlayerId) {
         let mut channels = self.direct_channels.write().await;
-        channels.remove(player_id);
+        // Until the ops endpoint exists (IMP-5.5), the disconnect log is the
+        // only place a lossy drop count is visible at all.
+        if let Some(channel) = channels.remove(player_id) {
+            let dropped = channel.dropped();
+            if dropped > 0 {
+                info!("Player {player_id} fell behind: {dropped} position update(s) dropped");
+            }
+        }
     }
 
     pub async fn send_direct_message(&self, player_id: &PlayerId, msg: ServerMessage) {
         let channels = self.direct_channels.read().await;
-        if let Some(tx) = channels.get(player_id) {
-            let _ = tx.send(super::DirectMessage::Typed(msg));
+        if let Some(channel) = channels.get(player_id) {
+            channel.send_typed(msg);
         }
     }
 
@@ -249,6 +276,9 @@ impl super::GameState {
         if !player_ids.iter().any(|id| !is_skipped(id)) {
             return;
         }
+        // Classified before encoding: the shared bytes carry no type, and the
+        // policy is per message, not per recipient (IMP-5.1).
+        let delivery = super::backpressure::delivery_of(&msg);
         let Some(bytes) = super::encode_server_msg(&msg) else {
             return;
         };
@@ -257,8 +287,8 @@ impl super::GameState {
             if is_skipped(player_id) {
                 continue;
             }
-            if let Some(tx) = channels.get(player_id) {
-                let _ = tx.send(super::DirectMessage::Shared(bytes.clone()));
+            if let Some(channel) = channels.get(player_id) {
+                channel.send(super::DirectMessage::Shared(bytes.clone()), delivery);
             }
         }
     }

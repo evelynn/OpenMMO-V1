@@ -348,11 +348,12 @@ async fn a_fanned_out_event_is_encoded_once_for_every_recipient() {
 }
 
 /// 13 IMP-4.3's original conditions ②③ named the broadcast channel and its
-/// `Lagged`; combat never touches it. This is the amendment in test form —
-/// the direct path takes more than the broadcast channel's whole capacity
-/// without losing a message, because its failure mode is memory instead.
+/// `Lagged`; combat never touches it. What the direct path does instead is
+/// what IMP-5.1 decided: it fills to a fixed depth and then refuses, and a
+/// refused combat event closes the connection rather than leaving the client
+/// quietly wrong.
 #[tokio::test]
-async fn the_combat_path_does_not_drop_events_under_backpressure() {
+async fn the_combat_path_bounds_its_queue_and_reports_the_overflow() {
     let game_state = make_test_game_state("crowd_no_drop");
     let spot = crowd_spot();
     let listener = pid("no_drop_listener");
@@ -362,8 +363,8 @@ async fn the_combat_path_does_not_drop_events_under_backpressure() {
     let mut rx = game_state.register_direct_channel(&listener).await;
     drain(&mut rx);
 
-    // Comfortably past the 1000-slot broadcast channel this used to be
-    // judged against.
+    // Comfortably past the queue depth, and past the 1000-slot broadcast
+    // channel this used to be judged against.
     const EVENTS: usize = 1_500;
     for _ in 0..EVENTS {
         game_state
@@ -379,7 +380,11 @@ async fn the_combat_path_does_not_drop_events_under_backpressure() {
 
     assert_eq!(
         drain(&mut rx).len(),
-        EVENTS,
-        "the direct channel is unbounded: nothing is dropped, so the cost is memory"
+        super::super::backpressure::DIRECT_QUEUE_DEPTH,
+        "the queue holds its depth and not one message more"
+    );
+    assert!(
+        game_state.connection_overflowed(&Some(listener)).await,
+        "a combat event is reliable, so losing one must close the connection"
     );
 }

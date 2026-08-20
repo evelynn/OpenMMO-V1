@@ -230,6 +230,7 @@ pub(crate) fn encode_server_msg(msg: &ServerMessage) -> Option<Bytes> {
 }
 
 mod achievement;
+pub(crate) mod backpressure;
 mod cast;
 mod chat;
 pub(crate) use chat::{parse_admin_command, parse_notice_command};
@@ -355,7 +356,7 @@ pub struct GameState {
     id_state: Arc<RwLock<IdState>>,
     account_sessions: Arc<RwLock<HashMap<String, AccountSession>>>,
     next_account_session: Arc<std::sync::atomic::AtomicU64>,
-    direct_channels: Arc<RwLock<HashMap<PlayerId, mpsc::UnboundedSender<DirectMessage>>>>,
+    direct_channels: Arc<RwLock<HashMap<PlayerId, backpressure::DirectChannel>>>,
     // player_id → (character_id, current_xp, attributes)
     #[allow(clippy::type_complexity)]
     player_characters: Arc<RwLock<HashMap<PlayerId, (i64, u64, CharacterAttributes)>>>,
