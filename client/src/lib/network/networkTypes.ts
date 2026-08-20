@@ -249,6 +249,13 @@ export type ClientMessage =
   | 'OpenGuildStorage'
   | { ClaimDungeonInstance: { entrance_id: string } }
   | { HireCompanion: { npc_player_id: number; hours: number } }
+  | {
+      CraftItem: {
+        recipe_id: string
+        npc_player_id: number | null
+        options: number
+      }
+    }
 
 /** One line of a batched `BuyItems` request: buy `qty` units of one item def. */
 export type TradeLineItem = {

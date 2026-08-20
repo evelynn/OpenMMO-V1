@@ -44,9 +44,17 @@ pub struct NpcDefinition {
     /// Copper charged per contracted hour. 0 (blank) = not for hire.
     #[serde(rename = "hireRatePerHour", default)]
     pub hire_rate_per_hour: i64,
+    /// Whether this NPC takes crafting commissions (IMP-4.4).
+    #[serde(rename = "takesCommissions", default)]
+    pub takes_commissions: bool,
 }
 
 impl NpcDefinition {
+    /// Whether this NPC will craft on commission (IMP-4.4).
+    pub fn crafts(&self) -> bool {
+        self.takes_commissions
+    }
+
     /// Whether this NPC takes companion contracts (IMP-4.5).
     pub fn hireable(&self) -> bool {
         self.hire_rate_per_hour > 0

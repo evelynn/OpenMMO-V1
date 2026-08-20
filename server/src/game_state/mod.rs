@@ -236,6 +236,7 @@ pub(crate) use chat::{parse_admin_command, parse_notice_command};
 mod combat;
 mod companion;
 mod consent;
+mod craft;
 mod deals;
 mod debuff;
 pub(crate) mod fishing;
@@ -349,6 +350,8 @@ pub struct GameState {
     item_defs: ItemDefs,
     /// Global rare bonus-drop table shared by every loot source.
     world_drop_defs: crate::world_drop_defs::WorldDropDefs,
+    /// Crafting recipes, shared by the commissioned and self-craft branches.
+    recipe_defs: crate::recipe_defs::RecipeDefs,
     id_state: Arc<RwLock<IdState>>,
     account_sessions: Arc<RwLock<HashMap<String, AccountSession>>>,
     next_account_session: Arc<std::sync::atomic::AtomicU64>,
@@ -673,6 +676,7 @@ impl GameState {
         monster_defs: MonsterDefs,
         item_defs: ItemDefs,
         world_drop_defs: crate::world_drop_defs::WorldDropDefs,
+        recipe_defs: crate::recipe_defs::RecipeDefs,
         initial_datetime: crate::types::GameDateTime,
         housing_io: Arc<HousingIO>,
         no_spawn_zones: Vec<NoSpawnZone>,
@@ -703,6 +707,7 @@ impl GameState {
             monster_defs,
             item_defs,
             world_drop_defs,
+            recipe_defs,
             id_state: Arc::new(RwLock::new(IdState::default())),
             account_sessions: Arc::new(RwLock::new(HashMap::new())),
             next_account_session: Arc::new(std::sync::atomic::AtomicU64::new(1)),

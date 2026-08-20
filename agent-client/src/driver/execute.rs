@@ -577,6 +577,43 @@ pub(super) async fn handle_response(
             continue;
         }
 
+        if let AgentAction::Craft {
+            recipe,
+            npc,
+            options,
+        } = action
+        {
+            let mut s = state.lock().await;
+            let npc_player_id = match npc.as_deref().map(str::trim).filter(|n| !n.is_empty()) {
+                Some(name) => match s.resolve_nearby_player(name) {
+                    Some((id, true)) => Some(id),
+                    Some((_, false)) => {
+                        s.push_agent_event(format!(
+                            "[Craft] {name} is a traveler, not a townsperson - only official \
+                             NPCs take commissions."
+                        ));
+                        continue;
+                    }
+                    None => {
+                        s.push_agent_event(format!(
+                            "[Craft] Nobody named '{name}' is nearby; nothing was sent."
+                        ));
+                        continue;
+                    }
+                },
+                None => None,
+            };
+            let cmd = onlinerpg_shared::ClientMessage::CraftItem {
+                recipe_id: recipe.clone(),
+                npc_player_id,
+                options: *options,
+            };
+            if let Err(e) = s.send_command(cmd).await {
+                error!("Failed to send craft: {e}");
+            }
+            continue;
+        }
+
         if let AgentAction::Hire { npc, hours } = action {
             let mut s = state.lock().await;
             let Some((npc_id, is_npc)) = s.resolve_nearby_player(npc) else {

@@ -438,6 +438,16 @@ class NetworkManager {
     this.sendMessage({ TransferGuildLeadership: { character_id: characterId } })
   }
 
+  sendCraftItem(recipeId: string, npcPlayerId: number | null, options: number) {
+    this.sendMessage({
+      CraftItem: {
+        recipe_id: recipeId,
+        npc_player_id: npcPlayerId,
+        options,
+      },
+    })
+  }
+
   sendHireCompanion(npcPlayerId: number, hours: number) {
     this.sendMessage({
       HireCompanion: { npc_player_id: npcPlayerId, hours },

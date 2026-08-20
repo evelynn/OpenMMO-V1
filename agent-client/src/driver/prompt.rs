@@ -538,6 +538,18 @@ pub(crate) fn format_event(state: &SharedState, msg: &ServerMessage) -> Option<S
             "[Guild] {from} invited you to \"{guild_name}\" - answer in chat if you want in"
         )),
         ServerMessage::GuildDenied { reason } => Some(format!("[Guild] refused: {reason}")),
+        ServerMessage::CraftResult {
+            recipe_id,
+            success,
+            item_def_id,
+            enchant,
+        } => Some(if !success {
+            format!("[Craft] {recipe_id} failed - the materials are gone")
+        } else if *enchant > 0 {
+            format!("[Craft] {recipe_id} made a {item_def_id} (+{enchant})")
+        } else {
+            format!("[Craft] {recipe_id} made a {item_def_id}")
+        }),
         ServerMessage::CompanionContract {
             npc_player_id,
             employer_id,

@@ -18,6 +18,7 @@ mod monster_defs;
 mod npc_defs;
 mod npc_schedule;
 mod quest_defs;
+mod recipe_defs;
 mod semicolon_list;
 mod skill_defs;
 mod terrain;
@@ -312,6 +313,7 @@ async fn main() -> ExitCode {
     achievement_defs::assert_achievements_are_valid(&item_defs);
     let quest_defs = quest_defs::QuestDefs::load(&monster_defs, &item_defs);
     let world_drop_defs = world_drop_defs::WorldDropDefs::load(&item_defs);
+    let recipe_defs = recipe_defs::RecipeDefs::load(&item_defs);
     let paths = state_paths(&args.state_dir);
     let auth_service = match AuthService::new(paths.db.clone()) {
         Ok(service) => Arc::new(service),
@@ -409,6 +411,7 @@ async fn main() -> ExitCode {
         monster_defs,
         item_defs,
         world_drop_defs,
+        recipe_defs,
         initial_game_time,
         Arc::clone(&housing_io),
         no_spawn_zones,

@@ -522,6 +522,7 @@ pub fn msg_name(msg: &onlinerpg_shared::ServerMessage) -> &'static str {
         ServerMessage::GrillEnded { .. } => "GrillEnded",
         ServerMessage::DungeonInstance { .. } => "DungeonInstance",
         ServerMessage::CompanionContract { .. } => "CompanionContract",
+        ServerMessage::CraftResult { .. } => "CraftResult",
     }
 }
 

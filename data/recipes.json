@@ -1,0 +1,50 @@
+{
+  "cut_belt": {
+    "id": "cut_belt",
+    "name": "Cut a Belt",
+    "output": "leather_belt",
+    "inputs": "old_boot*2",
+    "baseSuccessBp": 6000,
+    "skillId": "crafting",
+    "dexK": 150,
+    "skillM": 120,
+    "optionPenaltyBp": 1500,
+    "npcFee": 120
+  },
+  "stitch_cap": {
+    "id": "stitch_cap",
+    "name": "Stitch a Cap",
+    "output": "leather_helmet",
+    "inputs": "old_boot*3",
+    "baseSuccessBp": 4500,
+    "skillId": "crafting",
+    "dexK": 150,
+    "skillM": 120,
+    "optionPenaltyBp": 1800,
+    "npcFee": 220
+  },
+  "rebind_torch": {
+    "id": "rebind_torch",
+    "name": "Rebind a Torch",
+    "output": "torch",
+    "inputs": "worn_torch*2",
+    "baseSuccessBp": 7500,
+    "skillId": "crafting",
+    "dexK": 100,
+    "skillM": 100,
+    "optionPenaltyBp": 1200,
+    "npcFee": 40
+  },
+  "restring_mandolin": {
+    "id": "restring_mandolin",
+    "name": "Restring a Mandolin",
+    "output": "mandolin",
+    "inputs": "worn_mandolin*2",
+    "baseSuccessBp": 3500,
+    "skillId": "crafting",
+    "dexK": 200,
+    "skillM": 150,
+    "optionPenaltyBp": 2500,
+    "npcFee": 400
+  }
+}

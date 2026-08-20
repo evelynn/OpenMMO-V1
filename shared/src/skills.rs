@@ -21,6 +21,8 @@ pub enum SkillId {
     FlameDart,
     #[serde(rename = "trading")]
     Trading,
+    #[serde(rename = "crafting")]
+    Crafting,
 }
 
 impl SkillId {
@@ -31,6 +33,7 @@ impl SkillId {
             SkillId::Cleave => "cleave",
             SkillId::FlameDart => "flame_dart",
             SkillId::Trading => "trading",
+            SkillId::Crafting => "crafting",
         }
     }
 
@@ -40,7 +43,7 @@ impl SkillId {
     /// grant from quietly raising a skill somebody paid points for.
     pub fn is_combat(&self) -> bool {
         match self {
-            SkillId::Fishing | SkillId::Trading => false,
+            SkillId::Fishing | SkillId::Trading | SkillId::Crafting => false,
             SkillId::PowerStrike | SkillId::Cleave | SkillId::FlameDart => true,
         }
     }
@@ -54,6 +57,7 @@ impl SkillId {
             SkillId::Cleave,
             SkillId::FlameDart,
             SkillId::Trading,
+            SkillId::Crafting,
         ]
     }
 
@@ -65,6 +69,7 @@ impl SkillId {
             SkillId::Cleave => "Cleave",
             SkillId::FlameDart => "Flame Dart",
             SkillId::Trading => "Trading",
+            SkillId::Crafting => "Crafting",
         }
     }
 }
@@ -79,6 +84,7 @@ impl std::str::FromStr for SkillId {
             "cleave" => Ok(SkillId::Cleave),
             "flame_dart" => Ok(SkillId::FlameDart),
             "trading" => Ok(SkillId::Trading),
+            "crafting" => Ok(SkillId::Crafting),
             _ => Err(()),
         }
     }

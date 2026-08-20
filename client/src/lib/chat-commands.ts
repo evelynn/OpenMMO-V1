@@ -25,6 +25,8 @@ import { DUNGEON_ENTRANCES } from './data/dungeonDefs'
 import { shortestWrappedDeltaX } from './terrain/world-wrap'
 import { chatChannel } from './stores/chatChannelStore'
 import { macroPanelVisible } from './stores/macroStore'
+import { RECIPES, getRecipe, recipeMaterials } from './data/recipeDefs'
+import { MAX_CRAFT_OPTIONS } from './data/craftConstants'
 import { partyRoster } from './stores/partyStore'
 
 function teleportTo(x: number, y: number, z: number) {
@@ -51,6 +53,35 @@ function nearestTownsperson(): number | null {
     if (!nearest || distSq < nearest.distSq) nearest = { id, distSq }
   }
   return nearest?.id ?? null
+}
+
+/** Parse `<recipe> [+N]`, complaining in chat about anything unusable. */
+function parseCraftArgs(
+  args: string
+): { recipe: string; options: number } | null {
+  const [name, ...rest] = args.trim().split(/\s+/).filter(Boolean)
+  if (!name) {
+    addChatMessage({ text: 'Which recipe? Try /recipes.', sender: 'system' })
+    return null
+  }
+  if (!getRecipe(name)) {
+    addChatMessage({ text: `No recipe named '${name}'.`, sender: 'system' })
+    return null
+  }
+  const raw = rest[0]?.replace(/^\+/, '') ?? '0'
+  const options = Number(raw)
+  if (
+    !Number.isInteger(options) ||
+    options < 0 ||
+    options > MAX_CRAFT_OPTIONS
+  ) {
+    addChatMessage({
+      text: `Aim between +0 and +${MAX_CRAFT_OPTIONS}.`,
+      sender: 'system',
+    })
+    return null
+  }
+  return { recipe: name, options }
 }
 
 /** The dungeon entrance the player is standing at, within the same radius
@@ -183,6 +214,55 @@ const COMMANDS: Record<string, Command> = {
         return
       }
       networkManager.sendOpenStorage(npc)
+    },
+  },
+  '/recipes': {
+    desc: 'List what you can make: /recipes',
+    run: () => {
+      for (const recipe of RECIPES) {
+        const parts = recipeMaterials(recipe)
+          .map(([id, qty]) => `${qty}x ${id}`)
+          .join(' + ')
+        addChatMessage({
+          text: `${recipe.id} — ${recipe.name}: ${parts} → ${recipe.output}`,
+          sender: 'system',
+        })
+      }
+      addChatMessage({
+        text: '/craft <recipe> [+N] at a fire, or /commission <recipe> at a townsperson.',
+        sender: 'system',
+      })
+    },
+  },
+  '/craft': {
+    desc: 'Make something yourself at a lit fire: /craft <recipe> [+1..3]',
+    run: (args) => {
+      const parsed = parseCraftArgs(args)
+      if (!parsed) return
+      networkManager.sendCraftItem(parsed.recipe, null, parsed.options)
+    },
+  },
+  '/commission': {
+    desc: 'Pay the nearest townsperson to make it: /commission <recipe>',
+    run: (args) => {
+      const parsed = parseCraftArgs(args)
+      if (!parsed) return
+      if (parsed.options > 0) {
+        addChatMessage({
+          text: 'They make it their way, plain and sound — aim high yourself.',
+          sender: 'system',
+        })
+        return
+      }
+      const npc = nearestTownsperson()
+      if (npc === null) {
+        addChatMessage({
+          text: 'There is no townsperson nearby to ask.',
+          sender: 'system',
+        })
+        return
+      }
+      networkManager.sendCraftItem(parsed.recipe, npc, 0)
     },
   },
   '/macro': {

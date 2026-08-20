@@ -119,7 +119,7 @@ impl GameState {
     /// Credit an NPC's own wallet without the player-facing gold popups —
     /// the same clamp `tick_npc_salaries` uses, so a hire cannot push a
     /// wallet past its cap any more than a salary can.
-    async fn credit_npc_wallet(&self, npc_player_id: &PlayerId, amount: i64, cap: i64) {
+    pub(super) async fn credit_npc_wallet(&self, npc_player_id: &PlayerId, amount: i64, cap: i64) {
         let mut gold = self.player_gold.write().await;
         let wallet = gold.entry(*npc_player_id).or_insert(0);
         let before = *wallet;

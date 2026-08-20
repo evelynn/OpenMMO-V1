@@ -41,6 +41,17 @@ pub(super) enum AgentAction {
         #[serde(alias = "target", default)]
         name: Option<String>,
     },
+    /// Make something. With `npc` set it is a commission — a fee, no
+    /// failure, and no ambition; without, your own hands at a fire (IMP-4.4).
+    #[serde(rename = "craft", alias = "make")]
+    Craft {
+        #[serde(alias = "recipe_id", alias = "id", alias = "target")]
+        recipe: String,
+        #[serde(default)]
+        npc: Option<String>,
+        #[serde(default)]
+        options: u8,
+    },
     /// Hire an official NPC as a companion for a few hours. The fee is
     /// prepaid; the NPC decides for itself what the contract means (IMP-4.5).
     #[serde(rename = "hire", alias = "hire_companion")]
@@ -474,6 +485,17 @@ pub(super) const ACTION_SPECS: &[ActionSpec] = &[
   says so if you lack it."#,
     },
     ActionSpec {
+        names: &["craft"],
+        aliases: &["make"],
+        doc: r#"- Make something from materials in your bag:
+  {"type": "craft", "recipe": "cut_belt"}
+  {"type": "craft", "recipe": "cut_belt", "options": 2}
+  {"type": "craft", "recipe": "cut_belt", "npc": "Rica"}
+  Your own hands need a lit fire nearby, can fail, and lose the materials when
+  they do; "options" aims that many levels above plain and costs success for
+  each. Naming an NPC commissions them instead: a fee, no failure, no options."#,
+    },
+    ActionSpec {
         names: &["hire"],
         aliases: &["hire_companion"],
         doc: r#"- Hire a townsperson to keep you company for a few hours:
@@ -877,7 +899,8 @@ impl AgentAction {
             | Self::SetTitle { .. }
             | Self::Guild { .. }
             | Self::ClaimInstance { .. }
-            | Self::Hire { .. } => false,
+            | Self::Hire { .. }
+            | Self::Craft { .. } => false,
             Self::Move { .. }
             | Self::Attack { .. }
             | Self::UseSkill { .. }
@@ -965,6 +988,7 @@ impl AgentAction {
             | Self::Guild { .. }
             | Self::ClaimInstance { .. }
             | Self::Hire { .. }
+            | Self::Craft { .. }
             | Self::SetSavePoint { .. }
             | Self::Travel { .. }
             | Self::Deposit { .. }
@@ -1014,6 +1038,7 @@ impl AgentAction {
             Self::SetTitle { .. } => "set_title",
             Self::ClaimInstance { .. } => "claim_instance",
             Self::Hire { .. } => "hire",
+            Self::Craft { .. } => "craft",
             Self::Guild { .. } => "guild",
             Self::Move { .. } => "move",
             Self::Follow { .. } => "follow",
@@ -1436,6 +1461,8 @@ pub(super) fn action_to_command(
         AgentAction::Follow { .. } => None,
         // Needs the roster to turn the NPC's name into an id.
         AgentAction::Hire { .. } => None,
+        // Same, when it names one; handled together in the executor.
+        AgentAction::Craft { .. } => None,
         // Needs the roster to turn a name into an id.
         AgentAction::SetSavePoint { .. } => None,
         AgentAction::Travel { .. } => None,

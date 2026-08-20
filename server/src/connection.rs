@@ -1416,6 +1416,18 @@ async fn handle_client_message(
             }
         }
 
+        ClientMessage::CraftItem {
+            recipe_id,
+            npc_player_id,
+            options,
+        } => {
+            if let Some(id) = &state.player_id {
+                game_state
+                    .craft_item(id, &recipe_id, npc_player_id, options)
+                    .await;
+            }
+        }
+
         ClientMessage::HireCompanion {
             npc_player_id,
             hours,

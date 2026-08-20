@@ -6,6 +6,7 @@
 
 pub mod cast;
 pub mod character;
+pub mod craft;
 pub mod debuff;
 pub mod dungeon;
 pub mod economy;
@@ -123,7 +124,10 @@ pub const NPC_TOKEN_FILENAME: &str = "npc_token";
 /// v45: companion contracts (HireCompanion → CompanionContract); the NPC is
 ///      told too, because the contract is a fact its own agent acts on —
 ///      IMP-4.5.
-pub const PROTOCOL_VERSION: u32 = 45;
+/// v46: crafting (CraftItem → CraftResult) and `SkillId::Crafting`; the new
+///      skill id travels by name inside SkillsUpdate, so an older build
+///      cannot decode a crafter's skill list — IMP-4.4.
+pub const PROTOCOL_VERSION: u32 = 46;
 
 /// WebSocket close code sent when the handshake is refused (wrong protocol
 /// version, or traffic before `ClientInfo`). Lives outside the serialized

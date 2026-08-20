@@ -19,6 +19,7 @@ mod collision_tests;
 mod combat_scale_tests;
 mod combat_tests;
 mod companion_tests;
+mod craft_tests;
 mod dungeon_tests;
 mod enchant_tests;
 mod fishing_tests;
@@ -291,10 +292,12 @@ fn make_game_state_with_zones(
     let monster_defs = MonsterDefs::load();
     let dungeon_defs = crate::dungeon_defs::DungeonDefs::load(&item_defs, &monster_defs);
     let quest_defs = crate::quest_defs::QuestDefs::load(&monster_defs, &item_defs);
+    let recipe_defs = crate::recipe_defs::RecipeDefs::load(&item_defs);
     GameState::new(
         monster_defs,
         item_defs,
         world_drop_defs,
+        recipe_defs,
         GameState::default_start_datetime(),
         housing_io,
         no_spawn_zones,

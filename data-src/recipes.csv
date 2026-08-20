@@ -1,0 +1,5 @@
+id,name,output,inputs,baseSuccessBp,skillId,dexK,skillM,optionPenaltyBp,npcFee
+cut_belt,Cut a Belt,leather_belt,old_boot*2,6000,crafting,150,120,1500,120
+stitch_cap,Stitch a Cap,leather_helmet,old_boot*3,4500,crafting,150,120,1800,220
+rebind_torch,Rebind a Torch,torch,worn_torch*2,7500,crafting,100,100,1200,40
+restring_mandolin,Restring a Mandolin,mandolin,worn_mandolin*2,3500,crafting,200,150,2500,400

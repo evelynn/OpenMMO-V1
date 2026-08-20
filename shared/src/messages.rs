@@ -525,6 +525,15 @@ pub enum ClientMessage {
     ClaimDungeonInstance {
         entrance_id: String,
     },
+    /// Craft `recipe_id`. `npc_player_id` commissions the NPC standing there
+    /// — a fee, no options, and no failure. `None` is the player's own
+    /// attempt at a fire: options allowed, materials lost on a bad roll
+    /// (IMP-4.4).
+    CraftItem {
+        recipe_id: String,
+        npc_player_id: Option<PlayerId>,
+        options: u8,
+    },
     /// Hire an NPC as a companion for `hours` game-clock hours, paid up
     /// front. The contract is a fact, not a leash: what the NPC does with it
     /// is its own agent's decision (IMP-4.5).
@@ -1378,6 +1387,14 @@ pub enum ServerMessage {
     DungeonInstance {
         entrance_id: String,
         party_seed: u64,
+    },
+    /// What came of a craft. `enchant` is the level of the piece produced;
+    /// on failure the materials are gone and nothing was made (IMP-4.4).
+    CraftResult {
+        recipe_id: String,
+        success: bool,
+        item_def_id: String,
+        enchant: i32,
     },
     /// A companion contract changed. Sent to both sides: `expires_at` is a
     /// unix second, and `0` means the contract is over (expired, refused

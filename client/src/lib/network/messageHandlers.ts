@@ -1489,6 +1489,11 @@ export function handleServerMessage(
       setDungeonInstance(data.entrance_id, data.party_seed)
       break
 
+    case 'CraftResult':
+      // The server also sends a system line; this is the store-side hook for
+      // anything that wants to react to a craft (IMP-4.4).
+      break
+
     case 'CompanionContract': {
       const npc = get(gameStore).otherPlayers.get(data.npc_player_id)
       const who = npc?.name ?? 'Your companion'
