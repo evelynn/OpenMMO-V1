@@ -6,6 +6,7 @@ import { resetInventoryStore } from './inventoryStore'
 import { resetSkillsStore } from './skillsStore'
 import { resetCombatSkills } from './combatSkillStore'
 import { resetAchievements } from './achievementStore'
+import { resetGuild } from './guildStore'
 import { resetPartyStores } from './partyStore'
 import { resetFriendStores } from './friendStore'
 import { resetFishingStore } from './fishingStore'
@@ -66,7 +67,13 @@ export interface ChatBubble {
   duration: number
 }
 
-export type ChatSender = 'local' | 'remote' | 'system' | 'whisper' | 'party'
+export type ChatSender =
+  | 'local'
+  | 'remote'
+  | 'system'
+  | 'whisper'
+  | 'party'
+  | 'guild'
 
 export interface ChatEntry {
   text: string
@@ -130,6 +137,7 @@ export const resetGameStore = () => {
   resetSkillsStore()
   resetCombatSkills()
   resetAchievements()
+  resetGuild()
   resetFishingStore()
   resetPartyStores()
   resetFriendStores()

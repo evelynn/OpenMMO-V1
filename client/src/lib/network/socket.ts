@@ -408,6 +408,40 @@ class NetworkManager {
     this.sendMessage({ SetTitle: { title } })
   }
 
+  sendCreateGuild(name: string) {
+    this.sendMessage({ CreateGuild: { name } })
+  }
+
+  sendInviteToGuild(name: string) {
+    this.sendMessage({ InviteToGuild: { name } })
+  }
+
+  sendRespondGuildInvite(guildId: number, accept: boolean) {
+    this.sendMessage({ RespondGuildInvite: { guild_id: guildId, accept } })
+  }
+
+  sendKickFromGuild(characterId: number) {
+    this.sendMessage({ KickFromGuild: { character_id: characterId } })
+  }
+
+  sendLeaveGuild() {
+    this.sendMessage('LeaveGuild')
+  }
+
+  sendSetGuildRank(characterId: number, rankId: number) {
+    this.sendMessage({
+      SetGuildRank: { character_id: characterId, rank_id: rankId },
+    })
+  }
+
+  sendTransferGuildLeadership(characterId: number) {
+    this.sendMessage({ TransferGuildLeadership: { character_id: characterId } })
+  }
+
+  sendOpenGuildStorage() {
+    this.sendMessage('OpenGuildStorage')
+  }
+
   sendLearnSkill(skill: string) {
     this.sendMessage({ LearnSkill: { skill } })
   }

@@ -12,12 +12,23 @@
 
 use crate::auth::{AuthService, ItemRow};
 use crate::types::{PlayerId, ServerMessage};
+use onlinerpg_shared::guild::{perms, GuildId, GUILD_STORAGE_SLOTS};
 use onlinerpg_shared::inventory::{ItemInstance, PlayerInventory, STORAGE_SLOTS};
 
 use super::inventory::{stack_into_bag, BagInsert};
 
 /// One slot's contents after a change, for the delta messages.
 type SlotChange = (u16, Option<ItemInstance>);
+
+/// Which container a player currently has open. The deposit and withdrawal
+/// messages are the same either way — only what they land in differs, which
+/// is why a guild vault needed no new move protocol (IMP-4.1).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum OpenContainer {
+    /// The player's own, anchored to the NPC they are standing at.
+    Personal(PlayerId),
+    Guild(GuildId),
+}
 
 /// Put `quantity` units into the container: onto a matching stack if the def
 /// is stackable, otherwise one unit per free slot. Returns the slots that
@@ -128,7 +139,7 @@ impl super::GameState {
         self.open_storages
             .write()
             .await
-            .insert(*player_id, *npc_player_id);
+            .insert(*player_id, OpenContainer::Personal(*npc_player_id));
 
         let slots = self
             .storages
@@ -150,8 +161,19 @@ impl super::GameState {
     /// across the re-check and both mutations, so a second request cannot
     /// bank the same units twice.
     pub async fn storage_deposit(&self, player_id: &PlayerId, instance_id: u64, quantity: u32) {
-        if quantity == 0 || !self.storage_is_open(player_id).await {
+        let Some(container) = self.open_container(player_id).await else {
             return self.refuse_closed(player_id, quantity).await;
+        };
+        if quantity == 0 {
+            return self.refuse_closed(player_id, quantity).await;
+        }
+        if !self
+            .may_use_container(player_id, container, perms::STORAGE_DEPOSIT)
+            .await
+        {
+            return self
+                .send_system_message(player_id, "Your rank cannot put anything in")
+                .await;
         }
         // Reserved outside the locks, like every other id-minting path.
         let first_instance_id = self.reserve_instance_ids(u64::from(quantity)).await;
@@ -159,9 +181,14 @@ impl super::GameState {
         let moved = {
             let mut inventories = self.inventories.write().await;
             let mut storages = self.storages.write().await;
-            let (Some(inv), Some(slots)) =
-                (inventories.get_mut(player_id), storages.get_mut(player_id))
-            else {
+            let mut guild_storages = self.guild_storages.write().await;
+            let (Some(inv), Some(slots)) = (
+                inventories.get_mut(player_id),
+                match container {
+                    OpenContainer::Personal(_) => storages.get_mut(player_id),
+                    OpenContainer::Guild(guild_id) => guild_storages.get_mut(&guild_id),
+                },
+            ) else {
                 return;
             };
             let found = inv.bag.iter().position(|i| i.instance_id == instance_id);
@@ -192,8 +219,19 @@ impl super::GameState {
     /// Take `quantity` units out. The container has no weight of its own, so
     /// this is where carrying capacity is finally checked.
     pub async fn storage_withdraw(&self, player_id: &PlayerId, slot_index: u16, quantity: u32) {
-        if quantity == 0 || !self.storage_is_open(player_id).await {
+        let Some(container) = self.open_container(player_id).await else {
             return self.refuse_closed(player_id, quantity).await;
+        };
+        if quantity == 0 {
+            return self.refuse_closed(player_id, quantity).await;
+        }
+        if !self
+            .may_use_container(player_id, container, perms::STORAGE_WITHDRAW)
+            .await
+        {
+            return self
+                .send_system_message(player_id, "Your rank cannot take anything out")
+                .await;
         }
         // Reads player_characters and hunger, which rank below inventories —
         // take it before the write locks, never under them.
@@ -203,9 +241,14 @@ impl super::GameState {
         let moved = {
             let mut inventories = self.inventories.write().await;
             let mut storages = self.storages.write().await;
-            let (Some(inv), Some(slots)) =
-                (inventories.get_mut(player_id), storages.get_mut(player_id))
-            else {
+            let mut guild_storages = self.guild_storages.write().await;
+            let (Some(inv), Some(slots)) = (
+                inventories.get_mut(player_id),
+                match container {
+                    OpenContainer::Personal(_) => storages.get_mut(player_id),
+                    OpenContainer::Guild(guild_id) => guild_storages.get_mut(&guild_id),
+                },
+            ) else {
                 return;
             };
             let stored = slots.get(usize::from(slot_index)).cloned().flatten();
@@ -257,7 +300,15 @@ impl super::GameState {
             if sessions.is_empty() {
                 return;
             }
-            sessions.iter().map(|(a, b)| (*a, *b)).collect()
+            sessions
+                .iter()
+                .filter_map(|(player_id, container)| match container {
+                    // A guild vault is anchored to a guild, not a spot, so
+                    // nothing to walk away from.
+                    OpenContainer::Personal(npc) => Some((*player_id, *npc)),
+                    OpenContainer::Guild(_) => None,
+                })
+                .collect()
         };
         for (player_id, npc_player_id) in open {
             if self
@@ -323,8 +374,22 @@ impl super::GameState {
         self.open_storages.write().await.remove(player_id);
     }
 
-    async fn storage_is_open(&self, player_id: &PlayerId) -> bool {
-        self.open_storages.read().await.contains_key(player_id)
+    async fn open_container(&self, player_id: &PlayerId) -> Option<OpenContainer> {
+        self.open_storages.read().await.get(player_id).copied()
+    }
+
+    /// Whether this player's rank allows `permission` on the open container.
+    /// A personal container has no ranks — it is yours.
+    async fn may_use_container(
+        &self,
+        player_id: &PlayerId,
+        container: OpenContainer,
+        permission: u8,
+    ) -> bool {
+        match container {
+            OpenContainer::Personal(_) => true,
+            OpenContainer::Guild(_) => self.guild_permits(player_id, permission).await,
+        }
     }
 
     async fn refuse_closed(&self, player_id: &PlayerId, quantity: u32) {
@@ -343,6 +408,79 @@ impl super::GameState {
         self.storages.write().await.remove(player_id);
     }
 
+    /// Mark whichever container the player has open as needing a flush.
+    async fn mark_open_container_dirty(&self, player_id: &PlayerId) {
+        match self.open_container(player_id).await {
+            Some(OpenContainer::Guild(guild_id)) => {
+                self.dirty_guild_storages.write().await.insert(guild_id);
+            }
+            _ => {
+                self.dirty_storages.write().await.insert(*player_id);
+            }
+        }
+    }
+
+    /// Load a guild's vault into memory if it is not already there, sized to
+    /// `GUILD_STORAGE_SLOTS`. Resident only while somebody has it open, the
+    /// same rule personal storage follows.
+    pub(super) async fn ensure_guild_storage_loaded(
+        &self,
+        auth_service: &std::sync::Arc<AuthService>,
+        guild_id: GuildId,
+    ) -> bool {
+        if self.guild_storages.read().await.contains_key(&guild_id) {
+            return true;
+        }
+        let auth = auth_service.clone();
+        let Ok(Ok(rows)) =
+            tokio::task::spawn_blocking(move || auth.load_guild_storage(guild_id)).await
+        else {
+            tracing::error!("Guild storage load failed for guild {guild_id}");
+            return false;
+        };
+        let mut slots: Vec<Option<ItemInstance>> = vec![None; GUILD_STORAGE_SLOTS];
+        let first_id = self.reserve_instance_ids(rows.len() as u64).await;
+        for (offset, (slot_index, row)) in rows.into_iter().enumerate() {
+            let Some(slot) = slots.get_mut(usize::from(slot_index)) else {
+                tracing::warn!("guild {guild_id} has a storage row beyond GUILD_STORAGE_SLOTS");
+                continue;
+            };
+            *slot = Some(ItemInstance {
+                instance_id: first_id + offset as u64,
+                item_def_id: row.item_def_id,
+                quantity: row.quantity,
+                enchant: row.enchant,
+            });
+        }
+        self.guild_storages.write().await.insert(guild_id, slots);
+        true
+    }
+
+    /// Guild vault rows for the batch save.
+    pub(super) async fn take_dirty_guild_storages(&self) -> Vec<(GuildId, Vec<(u16, ItemRow)>)> {
+        let dirty: Vec<GuildId> = {
+            let mut set = self.dirty_guild_storages.write().await;
+            if set.is_empty() {
+                return Vec::new();
+            }
+            set.drain().collect()
+        };
+        let storages = self.guild_storages.read().await;
+        dirty
+            .into_iter()
+            .filter_map(|guild_id| {
+                let slots = storages.get(&guild_id)?;
+                Some((guild_id, storage_rows(slots)))
+            })
+            .collect()
+    }
+
+    pub(super) async fn restore_dirty_guild_storages(&self, ids: Vec<GuildId>) {
+        if !ids.is_empty() {
+            self.dirty_guild_storages.write().await.extend(ids);
+        }
+    }
+
     /// Push the bag and the changed slots, and mark both for the batch save.
     async fn finish_move(
         &self,
@@ -354,14 +492,25 @@ impl super::GameState {
             return self.send_system_message(player_id, refusal).await;
         };
         self.mark_inventory_dirty(player_id).await;
-        self.dirty_storages.write().await.insert(*player_id);
+        self.mark_open_container_dirty(player_id).await;
         self.send_inventory_snapshot(player_id, inventory).await;
+        // A guild vault is shared, so every member looking at it sees the
+        // same delta rather than a stale panel until they reopen it.
+        let watchers = match self.open_container(player_id).await {
+            Some(OpenContainer::Guild(guild_id)) => self.guild_viewers(guild_id).await,
+            _ => vec![*player_id],
+        };
         for (slot_index, item) in changed {
-            self.send_direct_message(
-                player_id,
-                ServerMessage::StorageSlotChanged { slot_index, item },
-            )
-            .await;
+            for watcher in &watchers {
+                self.send_direct_message(
+                    watcher,
+                    ServerMessage::StorageSlotChanged {
+                        slot_index,
+                        item: item.clone(),
+                    },
+                )
+                .await;
+            }
         }
     }
 

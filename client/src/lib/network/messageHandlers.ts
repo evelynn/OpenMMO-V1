@@ -72,6 +72,8 @@ import {
   applyAchievementList,
   applyUnlock,
 } from '../stores/achievementStore'
+import { guild, guildInvite } from '../stores/guildStore'
+import { guildChatEntry } from '../chat-format'
 import {
   shopSession,
   applyDealUpdate,
@@ -1478,6 +1480,29 @@ export function handleServerMessage(
       })
       break
     }
+
+    case 'GuildUpdated':
+      guild.set(data.guild ?? null)
+      break
+
+    case 'GuildInvite':
+      guildInvite.set({
+        guildId: data.guild_id,
+        guildName: data.guild_name,
+        from: data.from,
+      })
+      break
+
+    case 'GuildChatMessage':
+      addChatMessage(guildChatEntry(data.sender, data.message))
+      break
+
+    case 'GuildDenied':
+      addCombatMessage({
+        text: `Guild: ${String(data.reason).replace(/_/g, ' ')}.`,
+        sender: 'local',
+      })
+      break
 
     case 'AchievementList':
       applyAchievementList(data.unlocked ?? [], data.active_title ?? null)

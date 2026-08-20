@@ -14,6 +14,7 @@ export type CharacterPanelTab =
   | 'skills'
   | 'combat'
   | 'deeds'
+  | 'guild'
   | 'status'
 export const characterPanelTab = writable<CharacterPanelTab>('stats')
 export const debugSpeedMode = writable(false)

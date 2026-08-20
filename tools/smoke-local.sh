@@ -67,6 +67,10 @@ tables = {r[0] for r in db.execute("SELECT name FROM sqlite_master WHERE type='t
 print("ok" if "character_storage" in tables else "FAIL", "character_storage table (IMP-2.3)")
 for t in ("character_achievements", "character_counters"):
     print("ok" if t in tables else "FAIL", "%s table (IMP-3.7)" % t)
+for t in ("guilds", "guild_members", "guild_ranks", "guild_storage"):
+    print("ok" if t in tables else "FAIL", "%s table (IMP-4.1)" % t)
+idx = {r[1] for r in db.execute("PRAGMA index_list(guild_members)") if r[2]}
+print("ok" if idx else "FAIL", "guild_members has a UNIQUE index (one guild per character)")
 print("ok" if "active_title" in cols else "FAIL", "characters.active_title (IMP-3.7)")
 if "character_storage" in tables:
     scols = [r[1] for r in db.execute("PRAGMA table_info(character_storage)")]

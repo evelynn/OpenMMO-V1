@@ -12,6 +12,7 @@ pub mod economy;
 pub mod entity;
 pub mod fishing;
 pub mod furniture;
+pub mod guild;
 pub mod housing;
 pub mod hunger;
 pub mod inventory;
@@ -112,7 +113,11 @@ pub const NPC_TOKEN_FILENAME: &str = "npc_token";
 ///      AchievementList/TitleSet); `Player`'s costume field widens into
 ///      `cosmetics`, carrying the active title in the same wire slot —
 ///      IMP-3.7.
-pub const PROTOCOL_VERSION: u32 = 42;
+/// v43: guilds (CreateGuild/InviteToGuild/RespondGuildInvite/KickFromGuild/
+///      LeaveGuild/SetGuildRank/TransferGuildLeadership/OpenGuildStorage →
+///      GuildUpdated/GuildInvite/GuildChatMessage/GuildDenied); the `$`
+///      prefix routes a line to the guild — IMP-4.1.
+pub const PROTOCOL_VERSION: u32 = 43;
 
 /// WebSocket close code sent when the handshake is refused (wrong protocol
 /// version, or traffic before `ClientInfo`). Lives outside the serialized

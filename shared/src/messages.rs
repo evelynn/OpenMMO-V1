@@ -491,6 +491,39 @@ pub enum ClientMessage {
     SetTitle {
         title: Option<String>,
     },
+    /// Found a guild. The founder becomes its leader and is charged nothing:
+    /// the sink on guilds is the storage they fill, not a fee at the door.
+    CreateGuild {
+        name: String,
+    },
+    /// Invite an online character by name.
+    InviteToGuild {
+        name: String,
+    },
+    /// Answer an invite. Declining is silent to the inviter.
+    RespondGuildInvite {
+        guild_id: crate::guild::GuildId,
+        accept: bool,
+    },
+    KickFromGuild {
+        character_id: i64,
+    },
+    /// Leave. A leader with members left must hand over first.
+    LeaveGuild,
+    /// Move a member between ranks. Never onto the leader's rank — that is a
+    /// handover, which is its own message.
+    SetGuildRank {
+        character_id: i64,
+        rank_id: u8,
+    },
+    /// Hand the guild to another member and take their rank.
+    TransferGuildLeadership {
+        character_id: i64,
+    },
+    /// Open the guild's shared storage. Deposits, withdrawals and the close
+    /// are the personal-storage messages unchanged — only which container is
+    /// open differs (IMP-4.1).
+    OpenGuildStorage,
     MonsterAttack {
         monster_id: String,
         target_player_id: PlayerId,
@@ -1306,6 +1339,26 @@ pub enum ServerMessage {
     /// Owner-only: the active title after a `SetTitle`. `None` means none.
     TitleSet {
         title: Option<String>,
+    },
+    /// Owner-only: the guild's whole state, or `None` after leaving. Sent
+    /// whole on any change — thirty rows is cheaper to resend than to diff.
+    GuildUpdated {
+        guild: Option<crate::guild::GuildState>,
+    },
+    /// Owner-only: somebody asked you to join theirs.
+    GuildInvite {
+        guild_id: crate::guild::GuildId,
+        guild_name: String,
+        from: String,
+    },
+    /// One guild line, delivered to the members who are online.
+    GuildChatMessage {
+        sender: String,
+        message: String,
+    },
+    /// Owner-only: why a guild action was refused.
+    GuildDenied {
+        reason: crate::guild::GuildDeniedReason,
     },
     PlayerInteractionChanged {
         player_id: PlayerId,

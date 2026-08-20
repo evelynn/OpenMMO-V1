@@ -1974,8 +1974,10 @@ async fn a_doubled_percent_speaks_the_line_out_loud() {
     }
 }
 
+/// The `$` line is a guild line whether or not you are in one: it is never
+/// spoken aloud, and a guildless sender is told so privately (IMP-4.1).
 #[tokio::test]
-async fn the_guild_prefix_is_parsed_and_refused_for_now() {
+async fn the_guild_prefix_never_reaches_the_people_standing_next_to_you() {
     let game_state = make_test_game_state("prefix_guild");
     let auth = make_test_auth("prefix_guild");
     let mut alice_rx = add(&game_state, "alice", 0.0).await;
@@ -1988,10 +1990,10 @@ async fn the_guild_prefix_is_parsed_and_refused_for_now() {
         .await;
 
     match bob_rx.try_recv() {
-        Ok(ServerMessage::SystemMessage { message }) => {
-            assert!(message.contains("Guild chat"), "{message}")
-        }
-        other => panic!("Expected refusal, got {:?}", other),
+        Ok(ServerMessage::GuildDenied {
+            reason: onlinerpg_shared::guild::GuildDeniedReason::NotInAGuild,
+        }) => {}
+        other => panic!("Expected a private refusal, got {:?}", other),
     }
     assert!(
         matches!(alice_rx.try_recv(), Err(MpscTryRecvError::Empty)),

@@ -15,6 +15,11 @@ export function whisperChatEntry(
   }
 }
 
+/** Guild lines read like party ones; the panel tags the channel. */
+export function guildChatEntry(from: string, message: string): ChatEntry {
+  return { text: message, sender: 'guild', name: from }
+}
+
 /** Party lines carry the sender's name as-is; the panel adds the [Party] tag. */
 export function partyChatEntry(from: string, message: string): ChatEntry {
   return { text: message, sender: 'party', name: from }

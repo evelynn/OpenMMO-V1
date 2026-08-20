@@ -466,9 +466,14 @@ impl super::GameState {
                     self.send_party_chat(player_id, said).await;
                     return;
                 }
-                Some(ChatChannelHint::Guild) => {
-                    self.send_system_message(player_id, "Guild chat isn't available yet.")
+                Some(ChatChannelHint::Guild) if said.trim().is_empty() => {
+                    self.send_system_message(player_id, "Guild chat: $<message>")
                         .await;
+                    return;
+                }
+                Some(ChatChannelHint::Guild) => {
+                    let said = said.trim().to_string();
+                    self.send_guild_chat(player_id, said).await;
                     return;
                 }
                 // An escaped prefix speaks the literal text; the escape itself

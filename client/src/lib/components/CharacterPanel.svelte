@@ -31,6 +31,7 @@
   import CharacterStatusPane from './CharacterStatusPane.svelte'
   import SkillTreePanel from './SkillTreePanel.svelte'
   import AchievementPanel from './AchievementPanel.svelte'
+  import GuildPanel from './GuildPanel.svelte'
   import { getSkillDef } from '../data/skillDefs'
   import {
     characterPanelTab,
@@ -113,6 +114,7 @@
     'skills',
     'combat',
     'deeds',
+    'guild',
     'status',
   ]
 
@@ -415,6 +417,11 @@
         {#if $characterPanelTab === 'deeds'}
           <div class="pane-skills">
             <AchievementPanel />
+          </div>
+        {/if}
+        {#if $characterPanelTab === 'guild'}
+          <div class="pane-skills">
+            <GuildPanel />
           </div>
         {/if}
         {#if $characterPanelTab === 'status'}

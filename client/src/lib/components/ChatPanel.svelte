@@ -409,10 +409,13 @@
         class="message"
         class:whisper={entry.sender === 'whisper'}
         class:party={entry.sender === 'party'}
+        class:guild={entry.sender === 'guild'}
       >
         {#if entry.name}
           {#if entry.sender === 'party'}
             <span class="party-tag">[Party]</span>
+          {:else if entry.sender === 'guild'}
+            <span class="guild-tag">[Guild]</span>
           {/if}
           <span
             class="name"
@@ -701,6 +704,14 @@
      yellow, whisper purple, combat orange and system grey. */
   .message.party {
     color: #a8d1ff;
+  }
+
+  .message.guild {
+    color: #e2b93b;
+  }
+
+  .guild-tag {
+    color: #c9a227;
   }
 
   .message.party .name {

@@ -325,6 +325,7 @@ impl super::GameState {
         self.forget_player_skills(player_id).await;
         self.forget_job_progress(player_id).await;
         self.forget_achievements(player_id).await;
+        self.forget_guild_membership(player_id).await;
         self.remove_dungeon_discoveries(player_id).await;
         self.forget_hunger(player_id).await;
     }
@@ -678,6 +679,8 @@ impl super::GameState {
         let (dirty_quest_ids, dirty_quests) = self.collect_dirty_quest_states().await;
         let dirty_discoveries = self.take_pending_discovery_saves().await;
         let dirty_counter_rows = self.dirty_counters().await;
+        let dirty_guild_vaults = self.take_dirty_guild_storages().await;
+        let guild_vault_ids: Vec<_> = dirty_guild_vaults.iter().map(|(id, _)| *id).collect();
         if dirty_states.is_empty()
             && dirty_inventories.is_empty()
             && dirty_storages.is_empty()
@@ -685,6 +688,7 @@ impl super::GameState {
             && dirty_quests.is_empty()
             && dirty_discoveries.is_empty()
             && dirty_counter_rows.is_empty()
+            && dirty_guild_vaults.is_empty()
         {
             return;
         }
@@ -707,6 +711,9 @@ impl super::GameState {
                     auth.save_quest_progress(*character_id, rows)?;
                 }
                 auth.write_counters(&dirty_counter_rows)?;
+                for (guild_id, slots) in &dirty_guild_vaults {
+                    auth.replace_guild_storage(*guild_id, slots)?;
+                }
                 info!(
                     "Batch-saved {} character state(s), {} inventory/inventories",
                     character_count, inventory_count
@@ -724,6 +731,7 @@ impl super::GameState {
             self.restore_dirty_quests(dirty_quest_ids).await;
             self.restore_pending_discovery_saves(dirty_discoveries)
                 .await;
+            self.restore_dirty_guild_storages(guild_vault_ids).await;
         }
     }
 

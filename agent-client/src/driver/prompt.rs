@@ -529,6 +529,15 @@ pub(crate) fn format_event(state: &SharedState, msg: &ServerMessage) -> Option<S
                 "[Mail] #{mail_id} not claimed — your bag cannot hold all of it. Make room and retry."
             ),
         }),
+        ServerMessage::GuildChatMessage { sender, message } => {
+            Some(format!("[Guild] {sender}: {message}"))
+        }
+        ServerMessage::GuildInvite {
+            guild_name, from, ..
+        } => Some(format!(
+            "[Guild] {from} invited you to \"{guild_name}\" - answer in chat if you want in"
+        )),
+        ServerMessage::GuildDenied { reason } => Some(format!("[Guild] refused: {reason}")),
         ServerMessage::AchievementUnlocked {
             achievement_id,
             title,

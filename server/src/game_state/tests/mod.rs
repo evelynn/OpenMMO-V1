@@ -22,6 +22,7 @@ mod dungeon_tests;
 mod enchant_tests;
 mod fishing_tests;
 mod friend_tests;
+mod guild_tests;
 mod hunger_tests;
 mod inventory_tests;
 mod mail_tests;

@@ -12,6 +12,7 @@
   import QuickslotBar from './QuickslotBar.svelte'
   import SkillBar from './SkillBar.svelte'
   import AchievementToast from './AchievementToast.svelte'
+  import GuildInviteToast from './GuildInviteToast.svelte'
   import HungerIndicator from './HungerIndicator.svelte'
   import TradeWindow from './TradeWindow.svelte'
   import FishingPrompt from './FishingPrompt.svelte'
@@ -127,6 +128,7 @@
     <PartyInviteToast />
     <PartySummonToast />
     <PartyPanel />
+    <GuildInviteToast />
     <FriendRequestToast />
     <!-- Always mounted: it drives the presence poll, whose answers feed the
          online notice whether or not the list is on screen. -->

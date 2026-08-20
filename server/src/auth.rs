@@ -102,6 +102,15 @@ pub struct ItemRow {
     pub enchant: i32,
 }
 
+/// What `load_guild` returns: the guild's name and leader, its roster as
+/// `(character_id, name, rank)`, and its rank table as `(id, name, perms)`.
+pub struct GuildRows {
+    pub name: String,
+    pub leader_character_id: i64,
+    pub members: Vec<(i64, String, u8)>,
+    pub ranks: Vec<(u8, String, u8)>,
+}
+
 /// What `load_achievements` returns: the unlocked ids, and every counter with
 /// its value.
 pub type AchievementRows = (Vec<String>, Vec<(String, u64)>);
@@ -489,6 +498,7 @@ impl AuthService {
         Self::ensure_dungeon_chest_schema(&conn)?;
         Self::ensure_dungeon_discovery_schema(&conn)?;
         Self::ensure_achievement_schema(&conn)?;
+        Self::ensure_guild_schema(&conn)?;
         Self::ensure_mail_schema(&conn)?;
         Self::ensure_quest_schema(&conn)?;
         Self::ensure_storage_schema(&conn)?;
@@ -731,6 +741,60 @@ impl AuthService {
     /// Dungeon entrances each character has discovered (world-map markers).
     /// Row presence is the whole fact — losing one only means rediscovering
     /// by walking near the entrance again.
+    /// Guilds, their rosters, their rank table and their shared storage
+    /// (IMP-4.1). The UNIQUE index on `character_id` is what makes "which
+    /// guild is this character in" an O(1) lookup and enforces one guild per
+    /// character in the same stroke.
+    fn ensure_guild_schema(conn: &Connection) -> Result<(), rusqlite::Error> {
+        conn.execute(
+            "CREATE TABLE IF NOT EXISTS guilds (
+                id                  INTEGER PRIMARY KEY,
+                name                TEXT NOT NULL UNIQUE,
+                leader_character_id INTEGER NOT NULL,
+                created_at          INTEGER NOT NULL,
+                house_id            TEXT
+            )",
+            [],
+        )?;
+        conn.execute(
+            "CREATE TABLE IF NOT EXISTS guild_members (
+                guild_id     INTEGER NOT NULL REFERENCES guilds(id) ON DELETE CASCADE,
+                character_id INTEGER NOT NULL REFERENCES characters(id) ON DELETE CASCADE,
+                rank_id      INTEGER NOT NULL DEFAULT 3,
+                joined_at    INTEGER NOT NULL,
+                PRIMARY KEY (guild_id, character_id)
+            )",
+            [],
+        )?;
+        conn.execute(
+            "CREATE UNIQUE INDEX IF NOT EXISTS idx_guild_members_character \
+             ON guild_members(character_id)",
+            [],
+        )?;
+        conn.execute(
+            "CREATE TABLE IF NOT EXISTS guild_ranks (
+                guild_id  INTEGER NOT NULL REFERENCES guilds(id) ON DELETE CASCADE,
+                rank_id   INTEGER NOT NULL,
+                name      TEXT NOT NULL,
+                perm_bits INTEGER NOT NULL,
+                PRIMARY KEY (guild_id, rank_id)
+            )",
+            [],
+        )?;
+        conn.execute(
+            "CREATE TABLE IF NOT EXISTS guild_storage (
+                guild_id     INTEGER NOT NULL REFERENCES guilds(id) ON DELETE CASCADE,
+                slot_index   INTEGER NOT NULL,
+                item_def_id  TEXT NOT NULL,
+                quantity     INTEGER NOT NULL,
+                enchant      INTEGER NOT NULL DEFAULT 0,
+                PRIMARY KEY (guild_id, slot_index)
+            )",
+            [],
+        )?;
+        Ok(())
+    }
+
     /// Achievements and the counters that feed them (IMP-3.7). Two tables
     /// rather than columns on `characters`: five triggers would be five
     /// columns on the hottest row in the database, read only when something
@@ -854,6 +918,211 @@ impl AuthService {
     }
 
     /// One character's stored slots, sparse: `(slot_index, row)`.
+    /// The guild a character belongs to, with their rank. `None` when they
+    /// are in none — one indexed lookup either way.
+    pub fn guild_of(&self, character_id: i64) -> Result<Option<(i64, u8)>, AuthError> {
+        let conn = self.open_connection()?;
+        let row = conn
+            .query_row(
+                "SELECT guild_id, rank_id FROM guild_members WHERE character_id = ?1",
+                params![character_id],
+                |row| Ok((row.get::<_, i64>(0)?, row.get::<_, i64>(1)? as u8)),
+            )
+            .optional()?;
+        Ok(row)
+    }
+
+    /// Found a guild with its founder as leader and the default rank table.
+    /// Fails when the name is taken or the founder is already in one — both
+    /// enforced by the schema, so two simultaneous attempts cannot both win.
+    pub fn create_guild(&self, name: &str, leader_character_id: i64) -> Result<i64, AuthError> {
+        use onlinerpg_shared::guild::{DEFAULT_RANK_NAMES, DEFAULT_RANK_PERMS, LEADER_RANK};
+        let mut conn = self.open_connection()?;
+        let tx = conn.transaction()?;
+        tx.execute(
+            "INSERT INTO guilds (name, leader_character_id, created_at) VALUES (?1, ?2, ?3)",
+            params![name, leader_character_id, unix_now()],
+        )?;
+        let guild_id = tx.last_insert_rowid();
+        {
+            let mut stmt = tx.prepare(
+                "INSERT INTO guild_ranks (guild_id, rank_id, name, perm_bits) \
+                 VALUES (?1, ?2, ?3, ?4)",
+            )?;
+            for (rank_id, (name, perms)) in DEFAULT_RANK_NAMES
+                .iter()
+                .zip(DEFAULT_RANK_PERMS.iter())
+                .enumerate()
+            {
+                stmt.execute(params![guild_id, rank_id as i64, name, i64::from(*perms)])?;
+            }
+        }
+        tx.execute(
+            "INSERT INTO guild_members (guild_id, character_id, rank_id, joined_at) \
+             VALUES (?1, ?2, ?3, ?4)",
+            params![
+                guild_id,
+                leader_character_id,
+                i64::from(LEADER_RANK),
+                unix_now()
+            ],
+        )?;
+        tx.commit()?;
+        Ok(guild_id)
+    }
+
+    pub fn add_guild_member(
+        &self,
+        guild_id: i64,
+        character_id: i64,
+        rank_id: u8,
+    ) -> Result<(), AuthError> {
+        let conn = self.open_connection()?;
+        conn.execute(
+            "INSERT INTO guild_members (guild_id, character_id, rank_id, joined_at) \
+             VALUES (?1, ?2, ?3, ?4)",
+            params![guild_id, character_id, i64::from(rank_id), unix_now()],
+        )?;
+        Ok(())
+    }
+
+    pub fn remove_guild_member(&self, character_id: i64) -> Result<(), AuthError> {
+        let conn = self.open_connection()?;
+        conn.execute(
+            "DELETE FROM guild_members WHERE character_id = ?1",
+            params![character_id],
+        )?;
+        Ok(())
+    }
+
+    pub fn set_guild_member_rank(&self, character_id: i64, rank_id: u8) -> Result<(), AuthError> {
+        let conn = self.open_connection()?;
+        conn.execute(
+            "UPDATE guild_members SET rank_id = ?1 WHERE character_id = ?2",
+            params![i64::from(rank_id), character_id],
+        )?;
+        Ok(())
+    }
+
+    pub fn set_guild_leader(&self, guild_id: i64, character_id: i64) -> Result<(), AuthError> {
+        let conn = self.open_connection()?;
+        conn.execute(
+            "UPDATE guilds SET leader_character_id = ?1 WHERE id = ?2",
+            params![character_id, guild_id],
+        )?;
+        Ok(())
+    }
+
+    /// Everything a guild panel needs: name, leader, roster and rank table.
+    pub fn load_guild(&self, guild_id: i64) -> Result<Option<GuildRows>, AuthError> {
+        let conn = self.open_connection()?;
+        let Some((name, leader)) = conn
+            .query_row(
+                "SELECT name, leader_character_id FROM guilds WHERE id = ?1",
+                params![guild_id],
+                |row| Ok((row.get::<_, String>(0)?, row.get::<_, i64>(1)?)),
+            )
+            .optional()?
+        else {
+            return Ok(None);
+        };
+        let mut stmt = conn.prepare(
+            "SELECT m.character_id, c.character_name, m.rank_id FROM guild_members m \
+             JOIN characters c ON c.id = m.character_id \
+             WHERE m.guild_id = ?1 ORDER BY m.rank_id, c.character_name",
+        )?;
+        let members = stmt
+            .query_map(params![guild_id], |row| {
+                Ok((
+                    row.get::<_, i64>(0)?,
+                    row.get::<_, String>(1)?,
+                    row.get::<_, i64>(2)? as u8,
+                ))
+            })?
+            .collect::<Result<Vec<_>, _>>()?;
+        let mut stmt = conn.prepare(
+            "SELECT rank_id, name, perm_bits FROM guild_ranks WHERE guild_id = ?1 ORDER BY rank_id",
+        )?;
+        let ranks = stmt
+            .query_map(params![guild_id], |row| {
+                Ok((
+                    row.get::<_, i64>(0)? as u8,
+                    row.get::<_, String>(1)?,
+                    row.get::<_, i64>(2)? as u8,
+                ))
+            })?
+            .collect::<Result<Vec<_>, _>>()?;
+        Ok(Some(GuildRows {
+            name,
+            leader_character_id: leader,
+            members,
+            ranks,
+        }))
+    }
+
+    /// Delete a guild outright; the cascades take its members, ranks and
+    /// storage with it.
+    pub fn delete_guild(&self, guild_id: i64) -> Result<(), AuthError> {
+        let conn = self.open_connection()?;
+        conn.execute("DELETE FROM guilds WHERE id = ?1", params![guild_id])?;
+        Ok(())
+    }
+
+    pub fn load_guild_storage(&self, guild_id: i64) -> Result<Vec<(u16, ItemRow)>, AuthError> {
+        let conn = self.open_connection()?;
+        let mut stmt = conn.prepare(
+            "SELECT slot_index, item_def_id, quantity, enchant FROM guild_storage \
+             WHERE guild_id = ?1 ORDER BY slot_index",
+        )?;
+        let rows = stmt
+            .query_map(params![guild_id], |row| {
+                Ok((
+                    row.get::<_, i64>(0)? as u16,
+                    ItemRow {
+                        item_def_id: row.get(1)?,
+                        quantity: row.get(2)?,
+                        equip_slot: None,
+                        enchant: row.get(3)?,
+                    },
+                ))
+            })?
+            .collect::<Result<Vec<_>, _>>()?;
+        Ok(rows)
+    }
+
+    /// Whole-container replacement, mirroring `replace_storages`: a guild
+    /// vault is small and the delete-then-insert keeps vacated slots from
+    /// surviving as ghosts.
+    pub fn replace_guild_storage(
+        &self,
+        guild_id: i64,
+        slots: &[(u16, ItemRow)],
+    ) -> Result<(), AuthError> {
+        let mut conn = self.open_connection()?;
+        let tx = conn.transaction()?;
+        tx.execute(
+            "DELETE FROM guild_storage WHERE guild_id = ?1",
+            params![guild_id],
+        )?;
+        {
+            let mut stmt = tx.prepare(
+                "INSERT INTO guild_storage (guild_id, slot_index, item_def_id, quantity, enchant) \
+                 VALUES (?1, ?2, ?3, ?4, ?5)",
+            )?;
+            for (slot, row) in slots {
+                stmt.execute(params![
+                    guild_id,
+                    i64::from(*slot),
+                    row.item_def_id,
+                    row.quantity,
+                    row.enchant
+                ])?;
+            }
+        }
+        tx.commit()?;
+        Ok(())
+    }
+
     pub fn load_storage(&self, character_id: i64) -> Result<Vec<(u16, ItemRow)>, AuthError> {
         let conn = self.open_connection()?;
         let mut stmt = conn.prepare(

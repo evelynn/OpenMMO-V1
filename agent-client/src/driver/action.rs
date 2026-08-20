@@ -28,6 +28,13 @@ pub(super) enum AgentAction {
         )]
         monster_id: String,
     },
+    #[serde(rename = "guild")]
+    Guild {
+        /// `create` / `invite` / `accept` / `decline` / `leave` / `vault`.
+        action: String,
+        #[serde(alias = "target", default)]
+        name: Option<String>,
+    },
     #[serde(rename = "set_title")]
     SetTitle {
         #[serde(alias = "name", default)]
@@ -435,6 +442,18 @@ pub(super) const ACTION_SPECS: &[ActionSpec] = &[
   You walk into range first, then strike."#,
     },
     ActionSpec {
+        names: &["guild"],
+        aliases: &[],
+        doc: r#"- Guild membership. One action per call:
+  {"type": "guild", "action": "create", "name": "The Iron Circle"}
+  {"type": "guild", "action": "invite", "name": "PlayerName"}
+  {"type": "guild", "action": "leave"}
+  {"type": "guild", "action": "vault"}
+  A character belongs to one guild at a time. Start a guild line in chat with
+  "$" to speak to your guild only. Inviting needs the right rank; the server
+  says so if you lack it."#,
+    },
+    ActionSpec {
         names: &["set_title"],
         aliases: &[],
         doc: r#"- Show a title you have unlocked beside your name (omit it to show none):
@@ -817,7 +836,7 @@ impl AgentAction {
     /// must not be able to slip past this.
     pub(super) fn takes_over_movement(&self) -> bool {
         match self {
-            Self::LearnSkill { .. } | Self::SetTitle { .. } => false,
+            Self::LearnSkill { .. } | Self::SetTitle { .. } | Self::Guild { .. } => false,
             Self::Move { .. }
             | Self::Attack { .. }
             | Self::UseSkill { .. }
@@ -902,6 +921,7 @@ impl AgentAction {
             | Self::TurnInQuest { .. } => true,
             Self::LearnSkill { .. }
             | Self::SetTitle { .. }
+            | Self::Guild { .. }
             | Self::SetSavePoint { .. }
             | Self::Travel { .. }
             | Self::Deposit { .. }
@@ -949,6 +969,7 @@ impl AgentAction {
             Self::UseSkill { .. } => "use_skill",
             Self::LearnSkill { .. } => "learn_skill",
             Self::SetTitle { .. } => "set_title",
+            Self::Guild { .. } => "guild",
             Self::Move { .. } => "move",
             Self::Follow { .. } => "follow",
             Self::Respawn => "respawn",
@@ -1391,6 +1412,18 @@ pub(super) fn action_to_command(
         AgentAction::Attack { monster_id } => Some(ClientMessage::PlayerAttack {
             monster_id: monster_id.clone(),
         }),
+        AgentAction::Guild { action, name } => match action.as_str() {
+            "create" => Some(ClientMessage::CreateGuild {
+                name: name.clone()?,
+            }),
+            "invite" => Some(ClientMessage::InviteToGuild {
+                name: name.clone()?,
+            }),
+            "leave" => Some(ClientMessage::LeaveGuild),
+            "vault" => Some(ClientMessage::OpenGuildStorage),
+            // accept/decline need the invite's id, which lives in the driver.
+            _ => None,
+        },
         AgentAction::SetTitle { title } => Some(ClientMessage::SetTitle {
             title: title.clone(),
         }),

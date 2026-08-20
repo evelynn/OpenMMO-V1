@@ -241,6 +241,7 @@ pub(crate) mod fishing;
 pub(crate) use deals::band_invariant_holds;
 mod dungeon;
 mod friends;
+mod guild;
 pub(crate) mod hunger;
 mod inventory;
 mod mail;
@@ -420,7 +421,7 @@ pub struct GameState {
     /// Storages whose contents changed since the last flush.
     dirty_storages: Arc<RwLock<HashSet<PlayerId>>>,
     /// Who each open storage is anchored to, so walking away closes it.
-    open_storages: Arc<RwLock<HashMap<PlayerId, PlayerId>>>,
+    open_storages: Arc<RwLock<HashMap<PlayerId, storage::OpenContainer>>>,
     /// Chosen respawn points, keyed by player. Absent means the world spawn,
     /// which is every character that has not set one (IMP-2.2). Loaded on
     /// entry and written back through the existing batch save.
@@ -449,6 +450,22 @@ pub struct GameState {
     dungeons: Arc<RwLock<HashMap<String, dungeon::DungeonRuntime>>>,
     /// monster_id → dungeon spawn slot, for respawn bookkeeping on death.
     dungeon_monsters: Arc<RwLock<HashMap<String, dungeon::DungeonMonsterRef>>>,
+    /// Which guild each online player belongs to, and at what rank (IMP-4.1).
+    /// Mirrors the one indexed row per character so a permission check is a
+    /// hash lookup rather than a query.
+    guild_of: Arc<RwLock<HashMap<PlayerId, guild::GuildMembership>>>,
+    /// guild id → its rank table, cached alongside the roster push.
+    #[allow(clippy::type_complexity)]
+    guild_ranks: Arc<RwLock<HashMap<onlinerpg_shared::guild::GuildId, Vec<(u8, String, u8)>>>>,
+    /// Pending invites, one per invited player. In-memory: an invite that
+    /// does not survive a restart is a feature.
+    guild_invites: Arc<RwLock<HashMap<PlayerId, onlinerpg_shared::guild::GuildId>>>,
+    /// Guild vaults, resident only while somebody has one open — the same
+    /// rule personal storage follows.
+    #[allow(clippy::type_complexity)]
+    guild_storages:
+        Arc<RwLock<HashMap<onlinerpg_shared::guild::GuildId, Vec<Option<ItemInstance>>>>>,
+    dirty_guild_storages: Arc<RwLock<HashSet<onlinerpg_shared::guild::GuildId>>>,
     /// Achievement unlocks, counters and the active title, keyed by player
     /// (IMP-3.7). Loaded at entry, written back through the batch save.
     achievements: Arc<RwLock<HashMap<PlayerId, achievement::AchievementState>>>,
@@ -717,6 +734,11 @@ impl GameState {
             dungeon_monsters: Arc::new(RwLock::new(HashMap::new())),
             world_bosses: Arc::new(RwLock::new(HashMap::new())),
             boss_damage: Arc::new(RwLock::new(HashMap::new())),
+            guild_of: Arc::new(RwLock::new(HashMap::new())),
+            guild_ranks: Arc::new(RwLock::new(HashMap::new())),
+            guild_invites: Arc::new(RwLock::new(HashMap::new())),
+            guild_storages: Arc::new(RwLock::new(HashMap::new())),
+            dirty_guild_storages: Arc::new(RwLock::new(HashSet::new())),
             achievements: Arc::new(RwLock::new(HashMap::new())),
             dirty_counters: Arc::new(RwLock::new(HashSet::new())),
             pending_unlocks: Arc::new(RwLock::new(Vec::new())),

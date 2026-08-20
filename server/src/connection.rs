@@ -1086,6 +1086,10 @@ async fn handle_client_message(
                     selected_character.skill_points,
                 )
                 .await;
+            game_state
+                .load_guild_membership(auth_service, &id, selected_character.id)
+                .await;
+
             let (unlocked, counters) = auth_service
                 .load_achievements(selected_character.id)
                 .unwrap_or_else(|e| {
@@ -1356,6 +1360,65 @@ async fn handle_client_message(
                     .await;
             } else {
                 warn!("Received skill use from client that is not in game");
+            }
+        }
+
+        ClientMessage::CreateGuild { name } => {
+            if let Some(id) = &state.player_id {
+                game_state.create_guild(auth_service, id, name).await;
+            }
+        }
+
+        ClientMessage::InviteToGuild { name } => {
+            if let Some(id) = &state.player_id {
+                game_state.invite_to_guild(auth_service, id, name).await;
+            }
+        }
+
+        ClientMessage::RespondGuildInvite { guild_id, accept } => {
+            if let Some(id) = &state.player_id {
+                game_state
+                    .respond_guild_invite(auth_service, id, guild_id, accept)
+                    .await;
+            }
+        }
+
+        ClientMessage::KickFromGuild { character_id } => {
+            if let Some(id) = &state.player_id {
+                game_state
+                    .kick_from_guild(auth_service, id, character_id)
+                    .await;
+            }
+        }
+
+        ClientMessage::LeaveGuild => {
+            if let Some(id) = &state.player_id {
+                game_state.leave_guild(auth_service, id).await;
+            }
+        }
+
+        ClientMessage::SetGuildRank {
+            character_id,
+            rank_id,
+        } => {
+            if let Some(id) = &state.player_id {
+                game_state
+                    .set_guild_rank(auth_service, id, character_id, rank_id)
+                    .await;
+            }
+        }
+
+        ClientMessage::TransferGuildLeadership { character_id } => {
+            if let Some(id) = &state.player_id {
+                game_state
+                    .transfer_guild_leadership(auth_service, id, character_id)
+                    .await;
+            }
+        }
+
+        ClientMessage::OpenGuildStorage => {
+            if let Some(id) = &state.player_id {
+                game_state.open_guild_storage(auth_service, id).await;
             }
         }
 
