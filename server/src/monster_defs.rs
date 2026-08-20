@@ -172,6 +172,19 @@ impl MonsterDefs {
             if let Some(debuff) = &def.hit_debuff {
                 crate::debuff_defs::assert_debuff_exists(debuff, &format!("monster '{id}'"));
             }
+            // A monster with a swing clip but no measured length holds its
+            // attack for 0ms, so it drops out of the swing the moment the
+            // target steps back and the animation thrashes. The map is keyed
+            // by monster id, so adding a monster without re-running the
+            // measure tool is easy to do and silent — hence a boot failure.
+            assert!(
+                def.anim_attack.is_empty()
+                    || onlinerpg_shared::monster_ai::attack_clip_ms(id) > 0.0,
+                "monster '{id}' has attack clip '{}' but no entry in \
+                 data/monster_attack_clips.json — run \
+                 `node tools/measure-monster-attack-clips.mjs --force`",
+                def.anim_attack
+            );
             info!(
                 "  {} - level:{} HP:{} guard:{} attackBonus:{} walkSpeed:{} runSpeed:{} attackRange:{} chaseRange:{} cooldown:{}ms damage:{}",
                 id, def.level, def.max_health(), def.guard, def.attack_bonus(), def.walk_speed, def.run_speed,

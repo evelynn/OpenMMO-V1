@@ -1,15 +1,27 @@
 {
   "bugbear": 1533,
+  "bugbear_stalker": 1533,
+  "deep_stalker": 4067,
   "gnoll": 1433,
+  "gnoll_matriarch": 1433,
+  "gnoll_packlord": 1433,
   "goblin": 1500,
   "goblin_boss": 1500,
+  "goblin_raider": 1500,
   "hobgoblin": 1533,
+  "hobgoblin_captain": 1533,
   "kobold": 1500,
+  "kobold_warren_king": 1500,
   "ogre": 1533,
   "ogre_boss": 1533,
+  "ogre_brute": 1533,
   "orc": 1500,
   "orc_boss": 1500,
   "orc_female": 1500,
+  "orc_matron": 1500,
+  "orc_veteran": 1500,
   "scp939": 4067,
-  "troll": 1433
+  "troll": 1433,
+  "troll_elder": 1433,
+  "troll_king": 1433
 }
