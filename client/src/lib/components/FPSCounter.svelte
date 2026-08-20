@@ -64,17 +64,28 @@
   import { isAdminUser } from '../stores/gameStore'
   import { closeTopOverlay } from '../stores/overlayStack'
   import { friendPanelVisible } from '../stores/friendStore'
+  import { get } from 'svelte/store'
   import { emoteStopRequest } from '../stores/emoteStore'
+  import {
+    macroPanelVisible,
+    macroSlotForKey,
+    macros,
+    runMacro,
+  } from '../stores/macroStore'
 
   function toDegrees(radians: number) {
     const degrees = (radians * 180) / Math.PI
     return ((degrees % 360) + 360) % 360
   }
 
+  function inTextField(): boolean {
+    const tag = (document.activeElement?.tagName ?? '').toLowerCase()
+    return tag === 'input' || tag === 'textarea'
+  }
+
   function isGameKey(event: KeyboardEvent): boolean {
     if (event.ctrlKey || event.altKey || event.metaKey) return false
-    const tag = (document.activeElement?.tagName ?? '').toLowerCase()
-    return tag !== 'input' && tag !== 'textarea'
+    return !inTextField()
   }
 
   function handleKeydown(event: KeyboardEvent) {
@@ -115,6 +126,20 @@
     if ((event.key === 'f' || event.key === 'F') && isGameKey(event)) {
       event.preventDefault()
       friendPanelVisible.update((v) => !v)
+    }
+    // ALT+1..0 fires a macro slot, ALT+M opens the editor. `isGameKey` refuses
+    // every modifier, so these are checked on their own (IMP-4.6).
+    if (event.altKey && !event.ctrlKey && !event.metaKey && !inTextField()) {
+      if (event.key === 'm' || event.key === 'M') {
+        event.preventDefault()
+        macroPanelVisible.update((v) => !v)
+        return
+      }
+      const slot = macroSlotForKey(event.key)
+      if (slot !== null) {
+        event.preventDefault()
+        runMacro(get(macros)[slot])
+      }
     }
   }
 

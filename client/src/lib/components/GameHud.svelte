@@ -22,6 +22,7 @@
   import PartyPanel from './PartyPanel.svelte'
   import FriendRequestToast from './FriendRequestToast.svelte'
   import FriendPanel from './FriendPanel.svelte'
+  import MacroPanel from './MacroPanel.svelte'
   import MailPanel from './MailPanel.svelte'
   import StoragePanel from './StoragePanel.svelte'
   import TravelPanel from './TravelPanel.svelte'
@@ -133,6 +134,7 @@
     <!-- Always mounted: it drives the presence poll, whose answers feed the
          online notice whether or not the list is on screen. -->
     <FriendPanel />
+    <MacroPanel characterId={selectedCharacter.id} />
     <MailPanel />
     <StoragePanel />
     <TravelPanel />

@@ -42,9 +42,9 @@
 | IMP-3.7 업적 · 칭호 | ✅ 완료 (프로토콜 v42, 테이블 2개 + `active_title`, 13 개정 5건) | `10b431c` |
 | IMP-4.1 길드 | ✅ 완료 (프로토콜 v43, 테이블 4개, **13 개정 4건 — 길드 하우스는 하우징에 소유권이 없어 보류**) | `3d9dc4b` |
 | IMP-4.2 인스턴스 던전 | ✅ 완료 (프로토콜 v44, `character_instance_cooldowns`, **13 개정 5건 — 전역 통로 캐시에 인스턴스를 넣을 수 없었다**) | `f13f78e` |
+| IMP-4.6 제한형 매크로 | ✅ 완료 (서버 변경 0, localStorage만, 13 개정 4건) | `PENDING` |
 
-**다음에 집을 것**: **IMP-4.6(제한형 매크로)** → IMP-4.5(에이전트 동반자) →
-IMP-4.4(제작). **IMP-4.3(거점 점유)은 보류 확정**이고,
+**다음에 집을 것**: **IMP-4.5(에이전트 동반자)** → IMP-4.4(제작). **IMP-4.3(거점 점유)은 보류 확정**이고,
 **IMP-4.4(제작)는 도입 확정**이다(NPC 제작 + 대장간 자가 제작 두 갈래).
 
 **세 스파이크가 모두 go로 끝나면서 게이트가 전부 열렸다** — IMP-2.4(SPK-3),
@@ -422,7 +422,7 @@ Phase 번호와 1:1이다(M1 = Phase 1 …). **작업 ID는 13의 ID가 정본�
 |------|---------|------|------|------|------|--------|
 | [x] 28 | IMP-4.1 | 길드 (명단 + 길드 창고, **하우스는 별도 과제**) | IMP-2.3, IMP-1.7 | L | shared/server/client | 길드 테이블 + **인덱스 필수**(조회가 접속자 전체 순회가 되면 안 됨), 창고는 IMP-2.3 컨테이너 재사용, 하우스는 기존 하우징 재사용, `$` 길드 채팅 접두사 |
 | [x] 29 | IMP-4.2 | 인스턴스 던전 (파티 시드) | IMP-0.1 | M | shared/server | **`dungeon_seed`(`shared/src/dungeon/mod.rs:368`)는 손대지 않고** `dungeon_seed_with(entrance_id, party_seed)`를 추가한다 — `dungeon_seed(id) == dungeon_seed_with(id, 0)` 보장, 골든 해시 테스트는 **갱신 없이 그대로 통과**해야 한다. wasm `DUNGEON_LAYOUTS` 캐시에 LRU 상한. **쿨다운은 처음부터 개인 단위**. 인스턴스 통로는 전역 `PassabilityCache`가 아니라 인스턴스별 오버레이로 간다(13 IMP-4.2 개정 ①) |
-| 30 | IMP-4.6 | 제한형 매크로 | — | S | client | 이모트·문구·UI 열기까지만. **전투 행동 자동화는 매크로 밖에 둔다** ([12_UX_SERVICES](ragnarok/12_UX_SERVICES.md) §3) |
+| [x] 30 | IMP-4.6 | 제한형 매크로 | — | S | client | 이모트·문구·UI 열기까지만. **전투 행동 자동화는 매크로 밖에 둔다** ([12_UX_SERVICES](ragnarok/12_UX_SERVICES.md) §3) |
 | 31 | IMP-4.5 | 에이전트 NPC 동반자 계약 | — | L | server/agent-client | 펫이 아니라 **에이전트 NPC 고용** — 유지비는 기존 급여(`game_state/salary.rs`), 시간 제한은 LLM 비용 상한 |
 | 32 | IMP-4.3 | 거점 점유 (공성전 대체) — **보류** | SPK-1 **go**, IMP-4.1 | L | shared/server/client | 설계 문서 먼저. SPK-1이 no-go면 착수하지 않는다 |
 | 33 | IMP-4.4 | 제작 (단조 · 조제) — **조건부** | 제작 콘텐츠 도입 결정 | L | data/shared/server/client | 성공률 공식은 인챈트와 같은 "투자 − 욕심" 철학 ([ENCHANT.md](ENCHANT.md)) |

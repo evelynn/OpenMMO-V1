@@ -1,6 +1,7 @@
 import { get, writable, type Readable } from 'svelte/store'
 import { characterPanelVisible, inventoryVisible } from './debugStore'
 import { friendPanelVisible } from './friendStore'
+import { macroPanelVisible } from './macroStore'
 import { mailPanelVisible } from './mailStore'
 import { questBoardVisible } from './questStore'
 import { shopSession } from './tradeStore'
@@ -23,6 +24,7 @@ export type OverlayId =
   | 'respawn'
   | 'tipHat'
   | 'chatChannelMenu'
+  | 'macros'
 
 /** `layer` is paint order, not raw z-index: `.game-hud`'s z-index:1 stacking
  *  context traps the panels' 40/45 below the root-level dialogs (each 30,
@@ -33,6 +35,7 @@ const OVERLAYS: Record<OverlayId, { layer: number; close?: () => void }> = {
   character: { layer: 0, close: () => characterPanelVisible.set(false) },
   inventory: { layer: 0, close: () => inventoryVisible.set(false) },
   friends: { layer: 0, close: () => friendPanelVisible.set(false) },
+  macros: { layer: 0, close: () => macroPanelVisible.set(false) },
   mail: { layer: 0, close: () => mailPanelVisible.set(false) },
   questBoard: { layer: 0, close: () => questBoardVisible.set(false) },
   trade: { layer: 1, close: () => shopSession.set(null) },
@@ -66,6 +69,7 @@ function track(id: OverlayId, open: boolean) {
 characterPanelVisible.subscribe((open) => track('character', open))
 inventoryVisible.subscribe((open) => track('inventory', open))
 friendPanelVisible.subscribe((open) => track('friends', open))
+macroPanelVisible.subscribe((open) => track('macros', open))
 shopSession.subscribe((session) => track('trade', session !== null))
 
 const overlayClosers: Partial<Record<OverlayId, () => void>> = {}

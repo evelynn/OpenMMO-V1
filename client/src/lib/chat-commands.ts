@@ -24,6 +24,7 @@ import { dungeonManager } from './managers/dungeonManager'
 import { DUNGEON_ENTRANCES } from './data/dungeonDefs'
 import { shortestWrappedDeltaX } from './terrain/world-wrap'
 import { chatChannel } from './stores/chatChannelStore'
+import { macroPanelVisible } from './stores/macroStore'
 import { partyRoster } from './stores/partyStore'
 
 function teleportTo(x: number, y: number, z: number) {
@@ -183,6 +184,10 @@ const COMMANDS: Record<string, Command> = {
       }
       networkManager.sendOpenStorage(npc)
     },
+  },
+  '/macro': {
+    desc: 'Open the macro bar editor (also ALT+M): /macro',
+    run: () => macroPanelVisible.update((v) => !v),
   },
   '/instance': {
     desc: 'Claim your own copy of the dungeon you are standing at: /instance',
