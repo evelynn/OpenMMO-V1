@@ -107,3 +107,18 @@ Meshy/Tripo 내보내기가 노멀·metallicRoughness 맵을 2048² RGBA PNG로 
   (36.5MB → 2.4MB). 런타임이 안 읽는 데이터라 크기·성능 목적 — [animation.md](./animation.md) 참조.
 
 출처: [Meshy 취소 시 라이센스](https://help.meshy.ai/en/articles/9992023-if-i-cancel-my-subscription-will-all-my-models-revert-to-a-cc-by-4-0-license), [Tripo 약관](https://www.tripo3d.ai/terms), [Tripo 라이센스 가이드](https://www.tripo3d.ai/game-development/3d-assets-license-game-development), [Mixamo FAQ](https://helpx.adobe.com/creative-cloud/faq/mixamo-faq.html), [jibMixZIT](https://civitai.com/models/2231351/jib-mix-zit), [Z-Image Turbo](https://huggingface.co/Tongyi-MAI/Z-Image-Turbo)
+
+## 없는 애셋 — 전직이 남긴 후속 과제 (2026-08-20, IMP-8.1)
+
+전직 시스템은 들어갔지만 **두 자리의 외형이 비어 있다.** 코드가 아니라 애셋
+문제이고, 지금 있는 것으로 임시로 메워 두었다.
+
+| 필요한 것 | 지금 무엇을 쓰는가 | 왜 |
+|---|---|---|
+| **노비스 메시** (male/female) | `rogue.glb` / `female_rogue.glb`를 그대로 빌려 씀 (`modelPaths.ts`) | 가진 10종 중 가장 특징 없는 가죽 차림. 원래는 RO의 노비스처럼 **무장하지 않은 평상복**이어야 한다 |
+| **2차 전직 각성 외형** | 없음 — 머리 위 `Awakened` 칭호(IMP-3.7)만 | 각성 메시는 클래스당 1종이라 8종이 필요하고, 값싼 대안인 망토는 `costume_back`을 그리는 코드가 아직 없다(`PlayerModel`은 `costume_head`만 렌더한다) |
+
+**둘 중 싼 쪽은 2차다.** 클래스당 메시를 새로 만드는 대신 `costume_back` 렌더를
+붙이고 각성 망토 1~2종만 만들면 8종이 한 번에 해결된다. 노비스는 메시 1쌍이
+필요하니 기존 AI 워크플로우(원화 → A포즈 → Meshy → Mixamo → Blender)를 그대로
+한 번 더 돌리면 된다.

@@ -1,5 +1,6 @@
 use crate::types::{CharacterAttributes, GameDateTime};
 use crate::world_config::world_config;
+use onlinerpg_shared::character::JobTier;
 use onlinerpg_shared::messages::{MailAttachment, MailSummary};
 use onlinerpg_shared::{CharacterClass, Gender};
 use r2d2_sqlite::SqliteConnectionManager;
@@ -46,7 +47,7 @@ const STARTER_ITEMS: &[(&str, u32, Option<&str>)] = &[
 ];
 
 /// Class additions to the starter kit, under the same no-basePrice rule.
-fn class_starter_items(
+pub(crate) fn class_starter_items(
     class: &CharacterClass,
 ) -> &'static [(&'static str, u32, Option<&'static str>)] {
     match class {
@@ -197,6 +198,10 @@ pub struct CharacterRecord {
     pub skill_points: u32,
     /// Title the character is showing, if any (IMP-3.7).
     pub active_title: Option<String>,
+    /// How far along the job ladder (IMP-8.1). Characters that predate the
+    /// column read as `First`: they already chose a class, and demoting them
+    /// to Novice would take away a look somebody picked.
+    pub job_tier: JobTier,
 }
 
 /// Where a character revives, once they have chosen. Carries rotation because
@@ -229,7 +234,7 @@ pub struct CharacterSaveData {
 }
 
 /// Column list shared between queries that return full CharacterRecord rows.
-const CHARACTER_COLUMNS: &str = "id, character_name, created_at, level, xp, max_hp, attr_str, attr_dex, attr_con, attr_int, attr_wis, attr_cha, attr_guard, class, last_x, last_y, last_z, last_rotation, health, floor_level, gender, gold, admin_role, satiation, save_x, save_y, save_z, save_rotation, job_xp, skill_points, active_title";
+const CHARACTER_COLUMNS: &str = "id, character_name, created_at, level, xp, max_hp, attr_str, attr_dex, attr_con, attr_int, attr_wis, attr_cha, attr_guard, class, last_x, last_y, last_z, last_rotation, health, floor_level, gender, gold, admin_role, satiation, save_x, save_y, save_z, save_rotation, job_xp, skill_points, active_title, job_tier";
 
 fn character_record_from_row(row: &rusqlite::Row) -> rusqlite::Result<CharacterRecord> {
     Ok(CharacterRecord {
@@ -296,6 +301,7 @@ fn character_record_from_row(row: &rusqlite::Row) -> rusqlite::Result<CharacterR
         job_xp: row.get::<_, i64>(28).unwrap_or(0) as u64,
         skill_points: row.get::<_, i64>(29).unwrap_or(0) as u32,
         active_title: row.get::<_, Option<String>>(30).ok().flatten(),
+        job_tier: JobTier::from_u8(row.get::<_, i64>(31).unwrap_or(1) as u8),
     })
 }
 
@@ -656,6 +662,15 @@ impl AuthService {
                     [],
                 )?;
             }
+        }
+        // The default is 1, not 0: every character that predates this column
+        // picked a class at creation, which is what the first advancement now
+        // does. Creation sets 0 explicitly (IMP-8.1).
+        if !Self::table_columns(conn, "characters")?.contains("job_tier") {
+            conn.execute(
+                "ALTER TABLE characters ADD COLUMN job_tier INTEGER NOT NULL DEFAULT 1",
+                [],
+            )?;
         }
         Ok(())
     }
@@ -1042,6 +1057,30 @@ impl AuthService {
         conn.execute(
             "DELETE FROM guild_members WHERE character_id = ?1",
             params![character_id],
+        )?;
+        Ok(())
+    }
+
+    /// Persist a job advancement in one write (IMP-8.1). Class, tier and the
+    /// new max HP go together: the periodic save carries max HP but knows
+    /// nothing about the other two, and a crash between them would leave a
+    /// character whose look and hit die disagree.
+    pub fn advance_character_job(
+        &self,
+        character_id: i64,
+        class: CharacterClass,
+        tier: JobTier,
+        max_hp: u32,
+    ) -> Result<(), AuthError> {
+        let conn = self.open_connection()?;
+        conn.execute(
+            "UPDATE characters SET class = ?1, job_tier = ?2, max_hp = ?3 WHERE id = ?4",
+            params![
+                class.as_str(),
+                i64::from(tier.as_u8()),
+                i64::from(max_hp),
+                character_id
+            ],
         )?;
         Ok(())
     }
@@ -2074,8 +2113,9 @@ impl AuthService {
                 last_y,
                 last_z,
                 last_rotation,
-                gold
-            ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, 0)",
+                gold,
+                job_tier
+            ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, 0, ?18)",
             params![
                 account_name,
                 character_name,
@@ -2094,6 +2134,16 @@ impl AuthService {
                 f64::from(world_config().spawn_position.y),
                 f64::from(world_config().spawn_position.z),
                 f64::from(world_config().spawn_position.rotation),
+                // A novice starts at the bottom of the ladder; anybody made
+                // straight into a class (registry NPCs) is already past it.
+                i64::from(
+                    if class == CharacterClass::Novice {
+                        JobTier::Novice
+                    } else {
+                        JobTier::First
+                    }
+                    .as_u8(),
+                ),
             ],
         )?;
 
@@ -2146,6 +2196,11 @@ impl AuthService {
             job_xp: 0,
             skill_points: 0,
             active_title: None,
+            job_tier: if class == CharacterClass::Novice {
+                JobTier::Novice
+            } else {
+                JobTier::First
+            },
         })
     }
 

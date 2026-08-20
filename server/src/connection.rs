@@ -248,6 +248,18 @@ impl ConnectionState {
     /// simply does not offer them, so this catches hand-rolled clients —
     /// agent-clients included, which is the point.
     fn require_selectable_class(&self, class: &CharacterClass) -> Result<(), Vec<ServerMessage>> {
+        // Everybody starts a novice and picks a job by playing (IMP-8.1).
+        // Registry NPCs are made as their class outright: they never advance,
+        // and a keeper who had to grind to job 10 would be absurd.
+        if !self.is_official_npc && *class != CharacterClass::Novice {
+            warn!(
+                "Rejected {:?} character for account {:?}: characters start as novices",
+                class, self.account_name
+            );
+            return Err(vec![ServerMessage::CharacterError {
+                message: "Characters start as novices and take a job later".to_string(),
+            }]);
+        }
         if self.is_official_npc || class.is_player_selectable() {
             return Ok(());
         }
@@ -899,7 +911,7 @@ async fn handle_client_message(
                 &character_name,
                 &rolled_attributes,
                 max_hp,
-                character_class.clone(),
+                character_class,
                 gender,
             ) {
                 Ok(character) => {
@@ -1064,7 +1076,7 @@ async fn handle_client_message(
                 selected_character.name.clone(),
                 selected_character.level,
                 max_hp,
-                selected_character.class.clone(),
+                selected_character.class,
                 selected_character.gender,
                 Position {
                     x: selected_character.last_x,
@@ -1120,6 +1132,9 @@ async fn handle_client_message(
                 .await;
             game_state
                 .load_save_point(&id, selected_character.save_point)
+                .await;
+            game_state
+                .load_job_tier(&id, selected_character.job_tier)
                 .await;
             game_state
                 .load_job_progress(
@@ -1632,6 +1647,19 @@ async fn handle_client_message(
         ClientMessage::CloseStorage => {
             if let Some(id) = &state.player_id {
                 game_state.close_storage(id).await;
+            }
+        }
+
+        ClientMessage::AdvanceJob {
+            npc_player_id,
+            character_class,
+        } => {
+            if let Some(id) = &state.player_id {
+                game_state
+                    .advance_job(auth_service, id, &npc_player_id, character_class)
+                    .await;
+            } else {
+                warn!("Received job advancement from client that is not in game");
             }
         }
 
@@ -2337,22 +2365,28 @@ mod tests {
     }
 
     #[test]
-    fn operator_only_classes_are_refused_for_players() {
+    fn players_create_novices_and_operators_create_anything() {
         let mut state = ConnectionState::new(Ipv4Addr::LOCALHOST.into());
+        // A class is something you advance into, not something you are made
+        // as (IMP-8.1) — even a class that used to be selectable.
+        assert!(state
+            .require_selectable_class(&CharacterClass::Ranger)
+            .is_err());
         assert!(state
             .require_selectable_class(&CharacterClass::Merchant)
             .is_err());
         assert!(state
-            .require_selectable_class(&CharacterClass::Guard)
-            .is_err());
-        assert!(state
-            .require_selectable_class(&CharacterClass::Ranger)
+            .require_selectable_class(&CharacterClass::Novice)
             .is_ok());
 
-        // Operator NPCs are exactly who those classes exist for.
+        // Registry NPCs are made as their class outright; the operator-only
+        // classes are exactly who that path exists for.
         state.is_official_npc = true;
         assert!(state
             .require_selectable_class(&CharacterClass::Merchant)
+            .is_ok());
+        assert!(state
+            .require_selectable_class(&CharacterClass::Ranger)
             .is_ok());
     }
 

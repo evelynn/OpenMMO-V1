@@ -991,7 +991,7 @@ impl super::GameState {
                         name: p.name.clone(),
                         hp: p.health,
                         max_hp: p.max_health,
-                        class: p.class.clone(),
+                        class: p.class,
                     })
                 })
                 .collect()

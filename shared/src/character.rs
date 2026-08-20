@@ -16,8 +16,12 @@ pub enum Gender {
     Female,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum CharacterClass {
+    /// Where every new character starts (IMP-8.1). Not a job — the point of
+    /// the tier is to let the class decision wait until the player has played.
+    #[serde(rename = "novice")]
+    Novice,
     #[serde(rename = "knight")]
     Knight,
     #[serde(rename = "barbarian")]
@@ -55,6 +59,7 @@ pub enum CharacterClass {
 impl CharacterClass {
     pub fn as_str(&self) -> &'static str {
         match self {
+            CharacterClass::Novice => "novice",
             CharacterClass::Knight => "knight",
             CharacterClass::Barbarian => "barbarian",
             CharacterClass::Caveman => "caveman",
@@ -83,6 +88,24 @@ impl CharacterClass {
         !matches!(self, CharacterClass::Merchant | CharacterClass::Guard)
     }
 
+    /// What a first job advancement may pick (IMP-8.1). Selectable classes
+    /// minus Novice — and minus the ones with no mesh, because a class the
+    /// client cannot draw is a class nobody can wear.
+    pub const FIRST_JOBS: &'static [CharacterClass] = &[
+        CharacterClass::Knight,
+        CharacterClass::Barbarian,
+        CharacterClass::Caveman,
+        CharacterClass::Valkyrie,
+        CharacterClass::Ranger,
+        CharacterClass::Priest,
+        CharacterClass::Rogue,
+        CharacterClass::Bard,
+    ];
+
+    pub fn is_first_job(&self) -> bool {
+        Self::FIRST_JOBS.contains(self)
+    }
+
     pub fn hit_die(&self) -> u8 {
         match self {
             CharacterClass::Knight
@@ -100,6 +123,8 @@ impl CharacterClass {
             | CharacterClass::Bard => 6,
             CharacterClass::Tourist | CharacterClass::Merchant => 4,
             CharacterClass::Guard => 10,
+            // A novice is nobody yet; the job is what raises this.
+            CharacterClass::Novice => 6,
         }
     }
 
@@ -127,6 +152,61 @@ impl CharacterClass {
             (CharacterClass::Bard, _) => [-2, 2, -1, 0, -1, 2],
             (CharacterClass::Merchant, _) => [-2, 0, -1, 1, -1, 3],
             (CharacterClass::Guard, _) => [2, 0, 2, -2, -1, -1],
+            // A novice has no leaning yet — that is the whole point of the
+            // tier. The 4d6 roll stands unadjusted.
+            (CharacterClass::Novice, _) => [0, 0, 0, 0, 0, 0],
+        }
+    }
+}
+
+/// How far along the job ladder a character is (IMP-8.1). Not a second level:
+/// it is the count of advancements taken, and it never resets.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Default, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum JobTier {
+    #[default]
+    Novice,
+    First,
+    Second,
+}
+
+/// Job level required for the first advancement.
+pub const FIRST_JOB_LEVEL: u32 = 10;
+/// Job level required for the second.
+pub const SECOND_JOB_LEVEL: u32 = 20;
+
+impl JobTier {
+    pub fn from_u8(value: u8) -> Self {
+        match value {
+            0 => Self::Novice,
+            1 => Self::First,
+            _ => Self::Second,
+        }
+    }
+
+    pub fn as_u8(self) -> u8 {
+        match self {
+            Self::Novice => 0,
+            Self::First => 1,
+            Self::Second => 2,
+        }
+    }
+
+    /// The tier this one advances into, or `None` at the top.
+    pub fn next(self) -> Option<Self> {
+        match self {
+            Self::Novice => Some(Self::First),
+            Self::First => Some(Self::Second),
+            Self::Second => None,
+        }
+    }
+
+    /// Job level the advancement out of this tier costs.
+    pub fn required_job_level(self) -> Option<u32> {
+        match self {
+            Self::Novice => Some(FIRST_JOB_LEVEL),
+            Self::First => Some(SECOND_JOB_LEVEL),
+            Self::Second => None,
         }
     }
 }
@@ -136,6 +216,7 @@ impl std::str::FromStr for CharacterClass {
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s {
+            "novice" => Ok(CharacterClass::Novice),
             "knight" => Ok(CharacterClass::Knight),
             "barbarian" => Ok(CharacterClass::Barbarian),
             "caveman" => Ok(CharacterClass::Caveman),

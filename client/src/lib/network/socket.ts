@@ -514,6 +514,15 @@ class NetworkManager {
     this.sendAndSerialize('CloseStorage')
   }
 
+  sendAdvanceJob(npcPlayerId: number, characterClass: CharacterClass) {
+    this.sendMessage({
+      AdvanceJob: {
+        npc_player_id: npcPlayerId,
+        character_class: characterClass,
+      },
+    })
+  }
+
   sendSetSavePoint(npcPlayerId: number) {
     this.sendMessage({ SetSavePoint: { npc_player_id: npcPlayerId } })
   }

@@ -46,6 +46,13 @@ export function getObjectModelPath(model: string): string {
 const CLASS_GENDER_MODELS: Partial<
   Record<CharacterClass, Partial<Record<Gender, string>>>
 > = {
+  // Placeholder: a novice has no mesh of its own yet, so it borrows the
+  // rogue's plain leather — the least specialised look available. Recorded
+  // as an asset follow-up in doc/assets/characters.md (IMP-8.1).
+  novice: {
+    male: ROGUE_CHARACTER_MODEL_PATH,
+    female: FEMALE_ROGUE_CHARACTER_MODEL_PATH,
+  },
   knight: {
     male: KNIGHT_CHARACTER_MODEL_PATH,
     female: FEMALE_KNIGHT_CHARACTER_MODEL_PATH,

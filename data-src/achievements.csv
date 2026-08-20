@@ -9,3 +9,5 @@ abyss_walker,Abyss Walker,Reach dungeon depth 10.,dungeon_depth,,10,Abyss Walker
 first_song,Busker,Play your first song.,song_played,,1,Busker,busker_hat,0
 troubadour,Troubadour,Play fifty songs.,song_played,,50,Troubadour,,2500
 cook,Camp Cook,Grill twenty five catches.,cook,,25,Camp Cook,,1500
+first_job,Adventurer,Take your first job.,job_tier,,1,Adventurer,,1000
+second_job,Awakened,Awaken into the job you chose.,job_tier,,2,Awakened,,5000

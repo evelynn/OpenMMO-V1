@@ -9,6 +9,7 @@ export type Position = {
 }
 
 export type CharacterClass =
+  | 'novice'
   | 'knight'
   | 'barbarian'
   | 'rogue'
@@ -21,6 +22,27 @@ export type CharacterClass =
   | 'guard'
 
 export type Gender = 'male' | 'female'
+
+/** How far along the job ladder a character is (IMP-8.1). */
+export type JobTier = 0 | 1 | 2
+
+/** Job level the first and second advancements cost. Mirrors
+ *  `shared/src/character.rs`. */
+export const FIRST_JOB_LEVEL = 10
+export const SECOND_JOB_LEVEL = 20
+
+/** What a first advancement may pick — the classes with a mesh. Mirrors
+ *  `CharacterClass::FIRST_JOBS`. */
+export const FIRST_JOBS: CharacterClass[] = [
+  'knight',
+  'barbarian',
+  'caveman',
+  'valkyrie',
+  'ranger',
+  'priest',
+  'rogue',
+  'bard',
+]
 
 export type ServerPlayer = {
   id: number
@@ -250,6 +272,9 @@ export type ClientMessage =
   | { ClaimDungeonInstance: { entrance_id: string } }
   | { HireCompanion: { npc_player_id: number; hours: number } }
   | { SwitchChannel: { channel: number } }
+  | {
+      AdvanceJob: { npc_player_id: number; character_class: CharacterClass }
+    }
   | { AuthenticateGuest: { account_name: string } }
   | {
       CraftItem: {

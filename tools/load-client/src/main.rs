@@ -182,7 +182,7 @@ async fn one_client(
             send(
                 &mut ws,
                 &ClientMessage::RollCharacterStats {
-                    character_class: onlinerpg_shared::CharacterClass::Knight,
+                    character_class: onlinerpg_shared::CharacterClass::Novice,
                     gender: onlinerpg_shared::Gender::Male,
                 },
             )
@@ -200,7 +200,7 @@ async fn one_client(
                 &mut ws,
                 &ClientMessage::CreateCharacter {
                     character_name: format!("Load{tag}{index}"),
-                    character_class: onlinerpg_shared::CharacterClass::Knight,
+                    character_class: onlinerpg_shared::CharacterClass::Novice,
                     gender: onlinerpg_shared::Gender::Male,
                 },
             )

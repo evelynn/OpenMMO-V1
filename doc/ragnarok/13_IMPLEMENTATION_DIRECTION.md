@@ -2939,6 +2939,91 @@ IMP-6.4를 두 항목으로 쪼갠다. 원래 한 줄("콘텐츠 확충, L, 제�
 
 ---
 
+### IMP-8.1. 전직 (노비스 → 1차 → 2차)
+
+| | |
+|---|---|
+| 결정 | 채택 (유지보수자, 2026-08-20). 09 #28 **재판정** |
+| 난이도 | 대 |
+| 프로토콜 변경 | **v51** — `AdvanceJob` / `JobAdvanced` / `JobAdvanceDenied`, `CharacterClass::Novice` |
+
+**손댈 파일** — `shared/src/character.rs`, `shared/src/messages.rs`, `shared/src/lib.rs`,
+`server/src/auth.rs`, `server/src/connection.rs`, `server/src/achievement_defs.rs`,
+`server/src/game_state/job.rs`(신규), `server/src/game_state/player.rs`,
+`data-src/achievements.csv`, `agent-client/src/driver/action.rs`,
+`agent-client/src/driver/execute.rs`, `client/src/lib/network/networkTypes.ts`,
+`client/src/lib/network/socket.ts`, `client/src/lib/network/messageHandlers.ts`,
+`client/src/lib/chat-commands.ts`, `client/src/lib/utils/modelPaths.ts`,
+`client/src/lib/components/CharacterCreateScreen.svelte`,
+`client/src/lib/components/game-scene/GameScenePlayersLayer.svelte`.
+
+**왜 지금 되는가** — 09 #28의 기각 사유는 "Base 99 / Job 50 같은 RO의 레벨 대역이
+안 맞는다"였다. 그 사이 IMP-3.2가 **Job XP와 스킬 포인트를 실제로 넣었고**
+(`characters.job_xp`, `grant_job_xp`), Job 레벨은 `skill_level_from_xp(job_xp)`로
+상한 30까지 나온다. **게이트를 Base가 아니라 Job에 걸면 대역 문제가 사라진다.**
+
+이게 IMP-8.2의 한계를 정확히 메운다. 베이스 곡선은 배로 늘어 16 근처에서 멎지만
+Job 곡선은 `100·n(n+1)(2n+1)/6`으로 다항이라 계속 지급된다 — 1차(Job 10, 누적
+38,500)가 대략 캐릭터 12~13, 2차(Job 20, 누적 287,000)가 16~17에 걸린다.
+**베이스가 멈추는 자리에 두 번째 축이 도착한다.**
+
+**세 단계**
+
+| 단계 | 게이트 | 얻는 것 |
+|---|---|---|
+| 노비스 | 생성 (선택지 없음) | d6. 능력치 보정 0 — 아직 아무것도 아닌 것이 요점이다 |
+| 1차 | Job 10 | 클래스 확정 → **모습이 바뀐다**. 히트 다이스 차이만큼 최대 HP, 클래스 시작 장비(우편), `Adventurer` 칭호 |
+| 2차 | Job 20 · 같은 클래스 | 히트 다이스만큼 최대 HP, `Awakened` 칭호 |
+
+**모습 변경이 공짜인 이유** — 클라이언트가 GLB 경로를 `class`+`gender`로 고르고
+(`modelPaths.ts`), `class`는 이미 `Player`에 실려 모두에게 브로드캐스트된다. 즉
+서버가 클래스를 바꾸면 **본인과 주변 사람 모두의 화면에서 모델이 바뀐다.** 새 필드가
+필요 없다 — `Player`의 msgpack fixarray 15칸은 그대로다(IMP-3.6·3.7의 제약).
+`PlayerModel`이 초기화 때 경로를 한 번만 잡으므로 `{#key characterClass}`로 다시
+마운트한다.
+
+**RO와 다르게 하는 것 넷**
+1. **Job 레벨을 리셋하지 않는다.** 여기서 Job XP는 스킬 포인트의 지급 곡선 자체라
+   (`grant_job_xp`), 리셋하면 이미 쓴 포인트와 앞뒤가 맞지 않는다.
+2. **갈래는 1차 한 번뿐이다.** 2차 두 갈래는 클래스 수를 2배로 만들고 그만큼 캐릭터
+   메시가 필요하다. 2차는 **같은 클래스의 각성**이고, 서버가 다른 클래스를 거절한다
+   (`ClassMismatch`).
+3. **스탯은 건드리지 않는다.** 제약 (a)의 4d6 + 총합 72 그대로. 전직이 주는 것은
+   히트 다이스·해금·외형이다.
+4. **지난 레벨을 다시 굴리지 않는다.** 히트 다이스는 **앞으로**를 정하고, 전직은
+   차액만 한 번 준다(노비스 d6 → 레인저 d8 = +2).
+
+**누가 전직시키는가** — IMP-2.2·2.3과 같은 문지기다: 살아 있는 official NPC가
+같은 층 6m 안에. 전용 NPC를 따로 세우지 않는 이유도 같다 — 그 사람이 접속 중이
+아닐 때 전직이 닫히는 서버가 된다.
+
+> **개정 (착수 시) — 2차의 "발전된 모습"은 지금 칭호까지다.** 1차의 모습 변경은
+> 기존 메시로 실제로 동작하지만, 2차는 **각성 메시도 망토 애셋도 없다.** 코스튬
+> 레이어(IMP-3.6)는 `costume_head`만 렌더하고 `costume_back`을 그리는 코드가 아직
+> 없으며, 이 컨테이너에는 모델 파일 자체가 없어 새 외형을 만들 수도 검증할 수도
+> 없다. 그래서 2차의 가시적 변화는 **머리 위에 뜨는 `Awakened` 칭호**(IMP-3.7이
+> 이미 렌더한다)이고, 각성 메시/망토는 애셋 후속 과제로 남긴다
+> (`doc/assets/characters.md`). 없는 것을 있는 척하지 않는다.
+>
+> **노비스 메시도 없다.** 임시로 rogue/female_rogue를 빌려 쓴다 — 가진 것 중 가장
+> 특징 없는 가죽 차림이다. 이것도 같은 문서에 후속 과제로 적었다.
+
+**기존 캐릭터** — `job_tier` 컬럼의 **기본값이 1**이다. 이미 클래스를 고른 캐릭터를
+노비스로 되돌리면 사람이 고른 모습을 서버가 빼앗는 일이 된다. 생성 경로만 0을
+명시적으로 쓴다. 레지스트리 NPC(Mira·Rica·Karl)는 클래스로 바로 만들어지므로
+1로 들어간다 — 창고지기가 Job 10까지 사냥해야 한다면 우스운 일이다.
+
+**에이전트 동등성** — `advance_job` 액션을 `ACTION_SPECS`에 넣는다. 봇도 사람과
+같은 메시지로 전직한다.
+
+**검증** — 단위 5건: Job 레벨 미달 거절, 1차가 실제로 `Player.class`와 최대 HP를
+바꾸는지, 1차가 직업 아닌 클래스를 거절하는지, 2차가 다른 클래스를 거절하고 같은
+클래스는 통과하는지, 그리고 official NPC가 아니면 거절되는지. 마이그레이션은
+기존 DB를 실제로 띄워 `job_tier = 1`이 들어가는 것을 확인했고, 손님 2명이
+`novice`·tier 0으로 생성되는 것도 실소켓으로 확인했다.
+
+---
+
 ### IMP-8.2. 상위 몬스터와 종족 축
 
 | | |

@@ -219,6 +219,14 @@ pub(super) enum AgentAction {
         #[serde(alias = "target", alias = "player", alias = "player_name")]
         npc: String,
     },
+    /// Ask a nearby townsperson for the next job (IMP-8.1).
+    #[serde(rename = "advance_job", alias = "job", alias = "change_job")]
+    AdvanceJob {
+        #[serde(alias = "target", alias = "player", alias = "player_name")]
+        npc: String,
+        #[serde(alias = "job", alias = "class_name")]
+        class: String,
+    },
     /// Invite a player to your party by name. Works at any distance, like a
     /// whisper.
     #[serde(rename = "party_invite", alias = "invite_party", alias = "invite")]
@@ -795,6 +803,15 @@ pub(super) const ACTION_SPECS: &[ActionSpec] = &[
   {"type": "set_save_point", "npc": "Mira"}"#,
     },
     ActionSpec {
+        names: &["advance_job"],
+        aliases: &["job", "change_job"],
+        doc: r#"- Ask a townsperson standing next to you for your next job. The first
+  needs job level 10 and picks a class (knight, barbarian, caveman, valkyrie,
+  ranger, priest, rogue, bard); the second needs job level 20 and must name
+  the class you already hold:
+  {"type": "advance_job", "npc": "Mira", "class": "ranger"}"#,
+    },
+    ActionSpec {
         names: &["open_trade"],
         aliases: &["trade"],
         doc: r#"- (merchants only) Open your trade window on a nearby player's screen —
@@ -945,6 +962,7 @@ impl AgentAction {
             | Self::Fish { .. }
             | Self::Respawn => true,
             Self::SetSavePoint { .. }
+            | Self::AdvanceJob { .. }
             | Self::Travel { .. }
             | Self::Deposit { .. }
             | Self::Withdraw { .. }
@@ -1022,6 +1040,7 @@ impl AgentAction {
             | Self::Hire { .. }
             | Self::Craft { .. }
             | Self::SetSavePoint { .. }
+            | Self::AdvanceJob { .. }
             | Self::Travel { .. }
             | Self::Deposit { .. }
             | Self::Withdraw { .. }
@@ -1086,6 +1105,7 @@ impl AgentAction {
             Self::OfferDeal { .. } => "offer_deal",
             Self::OpenTrade { .. } => "open_trade",
             Self::SetSavePoint { .. } => "set_save_point",
+            Self::AdvanceJob { .. } => "advance_job",
             Self::Travel { .. } => "travel",
             Self::Deposit { .. } => "deposit",
             Self::Withdraw { .. } => "withdraw",
@@ -1498,6 +1518,8 @@ pub(super) fn action_to_command(
         AgentAction::Craft { .. } => None,
         // Needs the roster to turn a name into an id.
         AgentAction::SetSavePoint { .. } => None,
+        // Needs the roster to turn a name into an id.
+        AgentAction::AdvanceJob { .. } => None,
         AgentAction::Travel { .. } => None,
         AgentAction::Deposit {
             instance_id,

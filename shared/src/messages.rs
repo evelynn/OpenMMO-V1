@@ -47,6 +47,34 @@ impl std::fmt::Display for AttackRejectReason {
     }
 }
 
+/// Why an advancement was refused (IMP-8.1).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum JobAdvanceDeniedReason {
+    /// Nobody there, not a townsperson, another floor, or too far.
+    NoOneToAsk,
+    /// Job level is below what the tier costs.
+    JobLevelTooLow,
+    /// Already at the top of the ladder.
+    AlreadyAdvanced,
+    /// The first advancement was handed a class outside `FIRST_JOBS`.
+    NotAFirstJob,
+    /// The second advancement was handed a different class. It awakens the
+    /// job you have; it does not let you change your mind.
+    ClassMismatch,
+}
+
+impl std::fmt::Display for JobAdvanceDeniedReason {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(match self {
+            Self::NoOneToAsk => "no_one_to_ask",
+            Self::JobLevelTooLow => "job_level_too_low",
+            Self::AlreadyAdvanced => "already_advanced",
+            Self::NotAFirstJob => "not_a_first_job",
+            Self::ClassMismatch => "class_mismatch",
+        })
+    }
+}
+
 /// Why the server refused a skill. Everything a skill costs is checked
 /// server-side, so every one of these is a decision the client cannot make
 /// for itself (IMP-3.2).
@@ -532,6 +560,15 @@ pub enum ClientMessage {
     /// login enabled accept this; everywhere else it is refused (IMP-5.6).
     AuthenticateGuest {
         account_name: String,
+    },
+    /// Take the next job (IMP-8.1). `character_class` is the class being
+    /// picked at the first advancement; at the second it must be the class
+    /// already held, because the second is an awakening rather than a fork.
+    /// `npc_player_id` is who is being asked — the same townsfolk gate as
+    /// saving and storage.
+    AdvanceJob {
+        npc_player_id: PlayerId,
+        character_class: CharacterClass,
     },
     /// Move to another copy of the world. Your character, bag and storage do
     /// not change — only who you can see does (IMP-7.1).
@@ -1389,6 +1426,18 @@ pub enum ServerMessage {
     DungeonInstance {
         entrance_id: String,
         party_seed: u64,
+    },
+    /// The job ladder moved (IMP-8.1). Carries the new class because the
+    /// first advancement changes what the character looks like.
+    JobAdvanced {
+        character_class: CharacterClass,
+        job_tier: u8,
+        max_hp: u32,
+    },
+    /// Why an advancement did not happen. A reason rather than silence: the
+    /// player is standing in front of somebody and pressed a button.
+    JobAdvanceDenied {
+        reason: JobAdvanceDeniedReason,
     },
     /// Which ways in this server accepts, answered as soon as the client
     /// announces itself so the login screen shows only what will work.

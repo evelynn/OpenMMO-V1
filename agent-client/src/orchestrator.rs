@@ -655,7 +655,7 @@ async fn roll_stats_with_agent(
         ws::send(
             ws_tx,
             &ClientMessage::RollCharacterStats {
-                character_class: class.clone(),
+                character_class: *class,
                 gender,
             },
         )

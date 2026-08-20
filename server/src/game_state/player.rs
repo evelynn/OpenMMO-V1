@@ -343,6 +343,7 @@ impl super::GameState {
             map.remove(player_id);
         }
         self.save_points.write().await.remove(player_id);
+        self.job_tiers.write().await.remove(player_id);
         self.forget_storage(player_id).await;
         {
             let mut gold_map = self.player_gold.write().await;
@@ -1738,6 +1739,15 @@ impl super::GameState {
         if let Some(point) = save_point {
             self.save_points.write().await.insert(*player_id, point);
         }
+    }
+
+    /// Put a character's job tier into memory on entry (IMP-8.1).
+    pub async fn load_job_tier(
+        &self,
+        player_id: &PlayerId,
+        tier: onlinerpg_shared::character::JobTier,
+    ) {
+        self.job_tiers.write().await.insert(*player_id, tier);
     }
 
     /// Where this player comes back: their save point, or the world spawn

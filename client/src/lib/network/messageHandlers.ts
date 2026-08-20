@@ -146,8 +146,10 @@ import {
 import { whisperChatEntry, partyChatEntry } from '../chat-format'
 import { fishing_cast_ms } from '../wasm/onlinerpg_shared'
 import type { NetworkEvent } from './networkEvents'
+import { FIRST_JOBS } from './networkTypes'
 import type {
   AccountCharacter,
+  CharacterClass,
   AuthSuccessPayload,
   CharacterAttributes,
   CharacterRollResult,
@@ -156,6 +158,23 @@ import type {
   ServerMonster,
   ServerPlayer,
 } from './networkTypes'
+
+/** Server `JobAdvanceDeniedReason`, phrased for a person standing in front of
+ *  a townsperson who just said no (IMP-8.1). */
+function jobDenialText(reason: string): string {
+  switch (reason) {
+    case 'JobLevelTooLow':
+      return 'Come back when you have done more of the work.'
+    case 'AlreadyAdvanced':
+      return 'There is nothing further they can teach you.'
+    case 'NotAFirstJob':
+      return `Pick a job they can teach: ${FIRST_JOBS.join(', ')}.`
+    case 'ClassMismatch':
+      return 'They can only deepen the job you already hold.'
+    default:
+      return 'Nobody here can do that for you.'
+  }
+}
 
 function mapBuyback(
   entries:
@@ -590,6 +609,32 @@ export function handleServerMessage(
     case 'SavePointSet':
       addChatMessage({
         text: 'This is where you will return.',
+        sender: 'system',
+      })
+      break
+
+    case 'JobAdvanced': {
+      const me = get(gameStore).currentPlayer
+      if (me) {
+        updatePlayer(me.id, {
+          characterClass: data.character_class as CharacterClass,
+          maxHealth: Number(data.max_hp),
+          health: Number(data.max_hp),
+        })
+      }
+      addChatMessage({
+        text:
+          Number(data.job_tier) === 1
+            ? `You are a ${data.character_class} now.`
+            : `Your ${data.character_class} training is complete.`,
+        sender: 'system',
+      })
+      break
+    }
+
+    case 'JobAdvanceDenied':
+      addChatMessage({
+        text: jobDenialText(String(data.reason)),
         sender: 'system',
       })
       break

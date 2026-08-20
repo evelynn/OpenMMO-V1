@@ -29,6 +29,7 @@ mod friend_tests;
 mod guild_tests;
 mod hunger_tests;
 mod inventory_tests;
+mod job_tests;
 mod mail_tests;
 mod movement_tests;
 mod mvp_tests;

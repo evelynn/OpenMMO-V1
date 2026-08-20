@@ -64,7 +64,7 @@
   let kickedMessage = $state('')
 
   // Character create screen state
-  let createSelectedClass = $state<CharacterClass>('knight')
+  let createSelectedClass = $state<CharacterClass>('novice')
   let createSelectedGender = $state<Gender>('male')
 
   // First launch on this browser: measure the GPU while the login screen is

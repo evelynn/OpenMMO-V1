@@ -91,6 +91,7 @@
     shownAttributes[key] - attributes[key]
 
   const CLASS_LABELS: Record<CharacterClass, string> = {
+    novice: 'Novice',
     knight: 'Knight',
     barbarian: 'Barbarian',
     rogue: 'Rogue',

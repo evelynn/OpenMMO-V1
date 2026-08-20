@@ -642,6 +642,39 @@ pub(super) async fn handle_response(
             continue;
         }
 
+        if let AgentAction::AdvanceJob { npc, class } = action {
+            let mut s = state.lock().await;
+            let Ok(wanted) = class.parse::<onlinerpg_shared::CharacterClass>() else {
+                s.push_agent_event(format!("[AdvanceJob] '{class}' is not a class."));
+                continue;
+            };
+            let Some((npc_id, is_npc)) = s.resolve_nearby_player(npc) else {
+                s.push_agent_event(format!(
+                    "[AdvanceJob] Nobody named '{npc}' is nearby; nothing was sent."
+                ));
+                continue;
+            };
+            if !is_npc {
+                s.push_agent_event(format!(
+                    "[AdvanceJob] {npc} is a traveler, not a townsperson — only \
+                     official NPCs hand out jobs."
+                ));
+                continue;
+            }
+            let cmd = onlinerpg_shared::ClientMessage::AdvanceJob {
+                npc_player_id: npc_id,
+                character_class: wanted,
+            };
+            if let Err(e) = s.send_command(cmd).await {
+                error!("Failed to send advance_job: {e}");
+            } else {
+                s.push_agent_event(format!(
+                    "[AdvanceJob] You asked {npc} to make you a {class}."
+                ));
+            }
+            continue;
+        }
+
         if let AgentAction::SetSavePoint { npc } = action {
             let mut s = state.lock().await;
             let Some((npc_id, is_npc)) = s.resolve_nearby_player(npc) else {

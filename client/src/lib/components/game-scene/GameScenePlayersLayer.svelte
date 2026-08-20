@@ -478,41 +478,45 @@
 {/if}
 
 {#if currentPlayer && cameraInitialized && camera}
-  <PlayerModel
-    bind:this={currentPlayerModel}
-    position={currentPlayer.position}
-    name={currentPlayer.name}
-    isCurrentPlayer={true}
-    playerState={effectivePlayerState}
-    interactionAnim={effectiveInteractionAnim}
-    interactOffsetY={currentPlayerState.interactOffsetY}
-    attackCounter={currentPlayerState.attackCounter}
-    speed={currentPlayerState.speed}
-    rotation={currentPlayerState.rotation}
-    movementMode={currentPlayerState.movementMode}
-    {camera}
-    chatBubble={chatBubbles.get(currentPlayer.id)?.message}
-    characterClass={currentPlayer.characterClass}
-    gender={currentPlayer.gender}
-    health={currentPlayer.health}
-    maxHealth={currentPlayer.maxHealth}
-    {onAttackDuration}
-    onDyingFinished={onCurrentPlayerDyingFinished}
-    onInteractionFinished={() => {
-      // The finished cast hands over to the looping fishing idle; the event
-      // still goes to the FSM, which ignores anims it didn't start.
-      if (fishingOverrideActive) fishingCastDone = true
-      onPlayerControlEvent?.({ type: 'anim_interaction_finished' })
-    }}
-    onPickupGrab={() => {
-      onPlayerControlEvent?.({ type: 'anim_pickup_grab' })
-    }}
-    bind:isLoading={isCurrentPlayerLoading}
-    lastDamageInfo={currentPlayer.lastDamageInfo}
-    lastRegenInfo={currentPlayer.lastRegenInfo}
-    lastGoldInfo={currentPlayer.lastGoldInfo}
-    {torchEffectsDisabled}
-  />
+  <!-- Keyed on the class: PlayerModel resolves its GLB once at init, so a job
+       advancement has to remount it to be seen (IMP-8.1). -->
+  {#key currentPlayer.characterClass}
+    <PlayerModel
+      bind:this={currentPlayerModel}
+      position={currentPlayer.position}
+      name={currentPlayer.name}
+      isCurrentPlayer={true}
+      playerState={effectivePlayerState}
+      interactionAnim={effectiveInteractionAnim}
+      interactOffsetY={currentPlayerState.interactOffsetY}
+      attackCounter={currentPlayerState.attackCounter}
+      speed={currentPlayerState.speed}
+      rotation={currentPlayerState.rotation}
+      movementMode={currentPlayerState.movementMode}
+      {camera}
+      chatBubble={chatBubbles.get(currentPlayer.id)?.message}
+      characterClass={currentPlayer.characterClass}
+      gender={currentPlayer.gender}
+      health={currentPlayer.health}
+      maxHealth={currentPlayer.maxHealth}
+      {onAttackDuration}
+      onDyingFinished={onCurrentPlayerDyingFinished}
+      onInteractionFinished={() => {
+        // The finished cast hands over to the looping fishing idle; the event
+        // still goes to the FSM, which ignores anims it didn't start.
+        if (fishingOverrideActive) fishingCastDone = true
+        onPlayerControlEvent?.({ type: 'anim_interaction_finished' })
+      }}
+      onPickupGrab={() => {
+        onPlayerControlEvent?.({ type: 'anim_pickup_grab' })
+      }}
+      bind:isLoading={isCurrentPlayerLoading}
+      lastDamageInfo={currentPlayer.lastDamageInfo}
+      lastRegenInfo={currentPlayer.lastRegenInfo}
+      lastGoldInfo={currentPlayer.lastGoldInfo}
+      {torchEffectsDisabled}
+    />
+  {/key}
 {/if}
 
 {#if cameraInitialized && camera}
@@ -525,37 +529,40 @@
         : remotePlayer.position.x}
       <!-- position.y is ground-resampled per tick by remotePlayerManager -->
       {@const baseY = remotePlayer.position.y}
-      <PlayerModel
-        bind:this={otherPlayerModels[index]}
-        position={new THREE.Vector3(
-          displayX,
-          visible ? baseY : OFFSCREEN_Y,
-          remotePlayer.position.z
-        )}
-        name={player.name}
-        isCurrentPlayer={false}
-        playerState={remotePlayer.state}
-        interactionAnim={remotePlayer.interactionAnim}
-        interactOffsetY={remotePlayer.interactOffsetY}
-        attackCounter={remotePlayer.attackCounter}
-        speed={remotePlayer.speed}
-        rotation={remotePlayer.rotation}
-        movementMode={remotePlayer.movementMode}
-        {camera}
-        chatBubble={chatBubbles.get(player.id)?.message}
-        characterClass={player.characterClass}
-        gender={player.gender}
-        health={player.health}
-        maxHealth={player.maxHealth}
-        torchOn={player.torchOn}
-        mainHand={player.mainHand}
-        costumeHead={player.costumeHead}
-        title={player.title}
-        {torchEffectsDisabled}
-        npcPlayerId={player.isOfficialNpc ? player.id : undefined}
-        onInteractionFinished={() =>
-          remotePlayerManager.handleInteractionFinished(player.id)}
-      />
+      <!-- Same reason as the local model: a job advancement changes the GLB. -->
+      {#key player.characterClass}
+        <PlayerModel
+          bind:this={otherPlayerModels[index]}
+          position={new THREE.Vector3(
+            displayX,
+            visible ? baseY : OFFSCREEN_Y,
+            remotePlayer.position.z
+          )}
+          name={player.name}
+          isCurrentPlayer={false}
+          playerState={remotePlayer.state}
+          interactionAnim={remotePlayer.interactionAnim}
+          interactOffsetY={remotePlayer.interactOffsetY}
+          attackCounter={remotePlayer.attackCounter}
+          speed={remotePlayer.speed}
+          rotation={remotePlayer.rotation}
+          movementMode={remotePlayer.movementMode}
+          {camera}
+          chatBubble={chatBubbles.get(player.id)?.message}
+          characterClass={player.characterClass}
+          gender={player.gender}
+          health={player.health}
+          maxHealth={player.maxHealth}
+          torchOn={player.torchOn}
+          mainHand={player.mainHand}
+          costumeHead={player.costumeHead}
+          title={player.title}
+          {torchEffectsDisabled}
+          npcPlayerId={player.isOfficialNpc ? player.id : undefined}
+          onInteractionFinished={() =>
+            remotePlayerManager.handleInteractionFinished(player.id)}
+        />
+      {/key}
     {/if}
   {/each}
 

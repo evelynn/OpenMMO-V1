@@ -248,6 +248,7 @@ mod friends;
 mod guild;
 pub(crate) mod hunger;
 mod inventory;
+mod job;
 mod mail;
 mod monster;
 mod party;
@@ -439,6 +440,10 @@ pub struct GameState {
     /// which is every character that has not set one (IMP-2.2). Loaded on
     /// entry and written back through the existing batch save.
     save_points: Arc<RwLock<HashMap<PlayerId, crate::auth::SavePoint>>>,
+    /// How far up the job ladder each online character is (IMP-8.1). Loaded
+    /// on entry; the tier itself is written the moment it changes, so nothing
+    /// here rides the batch save.
+    job_tiers: Arc<RwLock<HashMap<PlayerId, onlinerpg_shared::character::JobTier>>>,
     /// Items dropped on the ground, keyed by instance_id.
     ground_items: Arc<RwLock<HashMap<u64, ServerGroundItem>>>,
     /// What each looter monster is carrying, keyed by monster id. Memory
@@ -748,6 +753,7 @@ impl GameState {
             no_spawn_zones,
             inventories: Arc::new(RwLock::new(HashMap::new())),
             storages: Arc::new(RwLock::new(HashMap::new())),
+            job_tiers: Arc::new(RwLock::new(HashMap::new())),
             dirty_storages: Arc::new(RwLock::new(HashSet::new())),
             open_storages: Arc::new(RwLock::new(HashMap::new())),
             save_points: Arc::new(RwLock::new(HashMap::new())),

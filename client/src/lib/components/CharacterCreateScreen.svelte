@@ -7,6 +7,7 @@
     RollCharacterStatsResult,
   } from '../network/socket'
   import { getAvailableGenders } from '../utils/modelPaths'
+  import { FIRST_JOBS, FIRST_JOB_LEVEL } from '../network/networkTypes'
 
   const MAX_CHARACTER_SLOTS = 3
 
@@ -62,14 +63,11 @@
     return characters.length >= MAX_CHARACTER_SLOTS
   }
 
-  function selectClass(cls: CharacterClass) {
-    onClassChange(cls)
-    const genders = getAvailableGenders(cls)
-    if (!genders.includes(selectedGender)) {
-      onGenderChange(genders[0])
-    }
-    rolledStats = null
-  }
+  // A character is created as a novice and picks a job by playing (IMP-8.1),
+  // so there is nothing to choose here any more.
+  $effect(() => {
+    if (selectedClass !== 'novice') onClassChange('novice')
+  })
 
   function selectGender(g: Gender) {
     onGenderChange(g)
@@ -150,78 +148,15 @@
   <form class="create-form" onsubmit={submitCreateCharacter}>
     <div class="class-column">
       <span class="field-label">Class</span>
-      <button
-        type="button"
-        class="class-btn"
-        class:class-selected={selectedClass === 'knight'}
-        disabled={isBusy()}
-        onclick={() => selectClass('knight')}
-      >
-        Knight
-      </button>
-      <button
-        type="button"
-        class="class-btn"
-        class:class-selected={selectedClass === 'barbarian'}
-        disabled={isBusy()}
-        onclick={() => selectClass('barbarian')}
-      >
-        Barbarian
-      </button>
-      <button
-        type="button"
-        class="class-btn"
-        class:class-selected={selectedClass === 'rogue'}
-        disabled={isBusy()}
-        onclick={() => selectClass('rogue')}
-      >
-        Rogue
-      </button>
-      <button
-        type="button"
-        class="class-btn"
-        class:class-selected={selectedClass === 'caveman'}
-        disabled={isBusy()}
-        onclick={() => selectClass('caveman')}
-      >
-        {selectedGender === 'female' ? 'Cavewoman' : 'Caveman'}
-      </button>
-      <button
-        type="button"
-        class="class-btn"
-        class:class-selected={selectedClass === 'valkyrie'}
-        disabled={isBusy()}
-        onclick={() => selectClass('valkyrie')}
-      >
-        Valkyrie
-      </button>
-      <button
-        type="button"
-        class="class-btn"
-        class:class-selected={selectedClass === 'ranger'}
-        disabled={isBusy()}
-        onclick={() => selectClass('ranger')}
-      >
-        Ranger
-      </button>
-      <button
-        type="button"
-        class="class-btn"
-        class:class-selected={selectedClass === 'priest'}
-        disabled={isBusy()}
-        onclick={() => selectClass('priest')}
-      >
-        Priest
-      </button>
-      <button
-        type="button"
-        class="class-btn"
-        class:class-selected={selectedClass === 'bard'}
-        disabled={isBusy()}
-        onclick={() => selectClass('bard')}
-      >
-        Bard
-      </button>
+      <p class="novice-note">
+        Everyone starts a novice. Reach job level {FIRST_JOB_LEVEL} and ask a townsperson
+        for the job you want — that is when your look changes.
+      </p>
+      <ul class="job-preview">
+        {#each FIRST_JOBS as job (job)}
+          <li>{job}</li>
+        {/each}
+      </ul>
     </div>
 
     <div class="bottom-bar">
@@ -407,6 +342,31 @@
   .gender-buttons .class-btn {
     height: 34px;
     padding: 6px 12px;
+  }
+
+  .novice-note {
+    margin: 0;
+    color: #a0aec0;
+    font-size: 13px;
+    line-height: 1.5;
+  }
+
+  .job-preview {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .job-preview li {
+    padding: 4px 10px;
+    border: 1px solid #4a5568;
+    border-radius: 999px;
+    color: #cbd5e0;
+    font-size: 12px;
+    text-transform: capitalize;
   }
 
   .class-btn {

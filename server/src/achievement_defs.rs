@@ -23,6 +23,9 @@ pub enum Trigger {
     /// Reserved by the schema; the event lives in the housing HTTP routes,
     /// not in `game_state`, so nothing bumps it yet (doc 13 IMP-3.7 revision).
     HouseRoom,
+    /// Job advancement (IMP-8.1). High-water: the tier is a position on a
+    /// ladder, not something that accumulates.
+    JobTier,
 }
 
 impl Trigger {
@@ -34,13 +37,17 @@ impl Trigger {
             Trigger::SongPlayed => "song_played",
             Trigger::Cook => "cook",
             Trigger::HouseRoom => "house_room",
+            Trigger::JobTier => "job_tier",
         }
     }
 
     /// Whether the counter keeps a running total or the best seen. A depth is
     /// not something you accumulate — reaching floor 3 twice is still floor 3.
     pub fn is_high_water(&self) -> bool {
-        matches!(self, Trigger::DungeonDepth | Trigger::HouseRoom)
+        matches!(
+            self,
+            Trigger::DungeonDepth | Trigger::HouseRoom | Trigger::JobTier
+        )
     }
 
     /// Whether anything in the game actually bumps this trigger today.

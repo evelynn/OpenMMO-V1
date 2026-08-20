@@ -3,6 +3,7 @@ import { get } from 'svelte/store'
 import { gameStore, addChatMessage, isAdminUser } from './stores/gameStore'
 import { worldToTileCell } from './components/game-scene/terrain-utils'
 import { networkManager } from './network/socket'
+import { FIRST_JOBS, type CharacterClass } from './network/networkTypes'
 import { travelAgentId } from './stores/travelStore'
 import { remotePlayerManager } from './managers/remotePlayerManager'
 import {
@@ -190,6 +191,41 @@ const COMMANDS: Record<string, Command> = {
         return
       }
       networkManager.sendSetSavePoint(npc)
+    },
+  },
+  '/job': {
+    desc: 'Take your next job from a nearby townsperson: /job ranger',
+    run: (args) => {
+      const wanted = args.trim().toLowerCase()
+      const npc = nearestTownsperson()
+      if (npc === null) {
+        addChatMessage({
+          text: 'Nobody is nearby to ask. Mira keeps the town services.',
+          sender: 'system',
+        })
+        return
+      }
+      const me = get(gameStore).currentPlayer
+      // The second advancement awakens the job you hold, so the class is only
+      // a question the first time. The server checks it either way.
+      const target =
+        wanted ||
+        (me && me.characterClass !== 'novice' ? me.characterClass : '')
+      if (!target) {
+        addChatMessage({
+          text: `Name the job you want: ${FIRST_JOBS.join(', ')}.`,
+          sender: 'system',
+        })
+        return
+      }
+      if (!FIRST_JOBS.includes(target as CharacterClass)) {
+        addChatMessage({
+          text: `'${target}' is not a job. Pick one of: ${FIRST_JOBS.join(', ')}.`,
+          sender: 'system',
+        })
+        return
+      }
+      networkManager.sendAdvanceJob(npc, target as CharacterClass)
     },
   },
   '/travel': {

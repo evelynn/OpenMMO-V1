@@ -139,7 +139,10 @@ pub const NPC_TOKEN_FILENAME: &str = "npc_token";
 ///      operator turns it on — IMP-5.6.
 /// v50: `QuestOffer.monster_id` became `target`, because a hunting contract
 ///      can now name a race instead of one monster — IMP-8.2.
-pub const PROTOCOL_VERSION: u32 = 50;
+/// v51: job advancement — `AdvanceJob`, `JobAdvanced`, `JobAdvanceDenied`,
+///      and `CharacterClass::Novice`, which every new character now starts
+///      as — IMP-8.1.
+pub const PROTOCOL_VERSION: u32 = 51;
 
 /// WebSocket close code sent when the handshake is refused (wrong protocol
 /// version, or traffic before `ClientInfo`). Lives outside the serialized
