@@ -508,7 +508,7 @@ pub(super) const ACTION_SPECS: &[ActionSpec] = &[
         names: &["storage"],
         aliases: &[],
         doc: r#"- Open or close the storage a townsperson keeps for you:
-  {"type": "storage", "action": "open", "npc": "Rica"}
+  {"type": "storage", "action": "open", "npc": "Mira"}
   {"type": "storage", "action": "close"}
   Deposits and withdrawals only work while it is open, and it closes on its
   own if you walk away from the townsperson."#,
@@ -792,7 +792,7 @@ pub(super) const ACTION_SPECS: &[ActionSpec] = &[
         doc: r#"- Ask a townsperson standing next to you to mark where you come back
   after dying. The return scroll lands there too. Must be an official NPC,
   within about 6m, on the surface, and away from a dungeon mouth:
-  {"type": "set_save_point", "npc": "Rica"}"#,
+  {"type": "set_save_point", "npc": "Mira"}"#,
     },
     ActionSpec {
         names: &["open_trade"],

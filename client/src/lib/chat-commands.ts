@@ -174,7 +174,7 @@ const COMMANDS: Record<string, Command> = {
     },
   },
   '/save': {
-    desc: 'Ask the nearest townsperson to mark your respawn point: /save',
+    desc: 'Ask Mira (or any townsperson) to mark your respawn point: /save',
     run: () => {
       const state = get(gameStore)
       const me = state.currentPlayer
@@ -184,7 +184,7 @@ const COMMANDS: Record<string, Command> = {
       const npc = nearestTownsperson()
       if (npc === null) {
         addChatMessage({
-          text: 'There is no townsperson nearby to ask.',
+          text: 'Nobody is nearby to ask. Mira keeps the town services.',
           sender: 'system',
         })
         return
@@ -193,12 +193,12 @@ const COMMANDS: Record<string, Command> = {
     },
   },
   '/travel': {
-    desc: 'Ask the nearest townsperson where you can travel: /travel',
+    desc: 'Ask Mira (or any townsperson) where you can travel: /travel',
     run: () => {
       const npc = nearestTownsperson()
       if (npc === null) {
         addChatMessage({
-          text: 'There is no townsperson nearby to ask.',
+          text: 'Nobody is nearby to ask. Mira keeps the town services.',
           sender: 'system',
         })
         return
@@ -208,12 +208,12 @@ const COMMANDS: Record<string, Command> = {
     },
   },
   '/storage': {
-    desc: 'Open the storage the nearest townsperson keeps for you: /storage',
+    desc: 'Open the storage Mira keeps for you: /storage',
     run: () => {
       const npc = nearestTownsperson()
       if (npc === null) {
         addChatMessage({
-          text: 'There is no townsperson nearby to ask.',
+          text: 'Nobody is nearby to ask. Mira keeps the town services.',
           sender: 'system',
         })
         return
