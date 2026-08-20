@@ -138,6 +138,30 @@ impl SharedState {
                 request.requester_name
             ));
         }
+        if let Some(invite) = self.pending_guild_invite.as_ref() {
+            lines.push(format!(
+                "{} invited you to the guild \"{}\" — answer with guild accept or guild decline",
+                invite.from, invite.guild_name
+            ));
+        }
+        if let Some(guild) = self.guild.as_ref() {
+            let names: Vec<String> = guild
+                .members
+                .iter()
+                .map(|m| {
+                    if m.character_id == guild.leader_character_id {
+                        format!("{} (leader)", m.name)
+                    } else {
+                        m.name.clone()
+                    }
+                })
+                .collect();
+            lines.push(format!(
+                "Your guild: {} — {}. Speak to it by starting a line with \"$\".",
+                guild.name,
+                names.join(", ")
+            ));
+        }
         if !self.friends.is_empty() {
             let names: Vec<&str> = self.friends.iter().map(|f| f.name.as_str()).collect();
             lines.push(format!("Your friends: {}", names.join(", ")));

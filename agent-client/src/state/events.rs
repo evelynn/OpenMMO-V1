@@ -709,6 +709,25 @@ impl SharedState {
                     });
                 }
             }
+            ServerMessage::GuildInvite {
+                guild_id,
+                ref guild_name,
+                ref from,
+            } => {
+                // One at a time, newest wins — the server keeps exactly one
+                // pending invite per player (IMP-5.3).
+                self.pending_guild_invite = Some(PendingGuildInvite {
+                    guild_id: *guild_id,
+                    guild_name: guild_name.clone(),
+                    from: from.clone(),
+                });
+            }
+            ServerMessage::GuildUpdated { ref guild } => {
+                // Whatever the answer was, the invite is settled once the
+                // roster arrives.
+                self.pending_guild_invite = None;
+                self.guild = guild.clone();
+            }
             ServerMessage::FriendList { ref friends } => {
                 // Answering a request settles it; the roster names the verdict.
                 self.pending_friend_requests

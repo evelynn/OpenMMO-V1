@@ -14,6 +14,15 @@ pub struct PendingPartySummon {
     pub expires_at: std::time::Instant,
 }
 
+/// A guild invite the agent hasn't answered yet. No expiry, because the
+/// server keeps exactly one pending invite per invited player and a newer one
+/// simply replaces it — mirroring that is the honest model (IMP-5.3).
+pub struct PendingGuildInvite {
+    pub guild_id: onlinerpg_shared::guild::GuildId,
+    pub guild_name: String,
+    pub from: String,
+}
+
 /// A friend request the agent hasn't answered yet.
 pub struct PendingFriendRequest {
     pub requester_id: PlayerId,

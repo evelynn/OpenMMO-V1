@@ -689,6 +689,116 @@ pub(super) async fn handle_response(
             continue;
         }
 
+        // Guild answers and administration need ids the roster holds, which
+        // is why `to_client_message` cannot build them (IMP-5.3).
+        if let AgentAction::Guild { action, name, rank } = action {
+            let verb = action.as_str();
+            if matches!(verb, "accept" | "decline") {
+                let mut s = state.lock().await;
+                let Some(invite) = s.pending_guild_invite.take() else {
+                    s.push_agent_event("[Guild] No pending guild invite to answer.".to_string());
+                    continue;
+                };
+                let accept = verb == "accept";
+                let cmd = onlinerpg_shared::ClientMessage::RespondGuildInvite {
+                    guild_id: invite.guild_id,
+                    accept,
+                };
+                if let Err(e) = s.send_command(cmd).await {
+                    error!("Failed to send guild response: {e}");
+                } else if !accept {
+                    s.push_agent_event(format!(
+                        "[Guild] You declined {}'s invite to \"{}\".",
+                        invite.from, invite.guild_name
+                    ));
+                }
+                continue;
+            }
+            if matches!(verb, "kick" | "rank" | "transfer") {
+                let mut s = state.lock().await;
+                let Some(wanted) = name.as_deref().map(str::trim).filter(|n| !n.is_empty()) else {
+                    s.push_agent_event(format!("[Guild] Which member should I {verb}?"));
+                    continue;
+                };
+                let member = s.guild.as_ref().and_then(|g| {
+                    g.members
+                        .iter()
+                        .find(|m| m.name.eq_ignore_ascii_case(wanted))
+                        .map(|m| m.character_id)
+                });
+                let Some(character_id) = member else {
+                    s.push_agent_event(format!(
+                        "[Guild] Nobody called '{wanted}' is in your guild."
+                    ));
+                    continue;
+                };
+                let cmd = match verb {
+                    "kick" => onlinerpg_shared::ClientMessage::KickFromGuild { character_id },
+                    "transfer" => {
+                        onlinerpg_shared::ClientMessage::TransferGuildLeadership { character_id }
+                    }
+                    _ => match rank {
+                        Some(rank_id) => onlinerpg_shared::ClientMessage::SetGuildRank {
+                            character_id,
+                            rank_id: *rank_id,
+                        },
+                        None => {
+                            s.push_agent_event(
+                                "[Guild] Which rank? Pass \"rank\": 0-4.".to_string(),
+                            );
+                            continue;
+                        }
+                    },
+                };
+                if let Err(e) = s.send_command(cmd).await {
+                    error!("Failed to send guild {verb}: {e}");
+                }
+                continue;
+            }
+        }
+
+        // Storage has to be opened before a deposit or withdrawal lands;
+        // standing near the townsperson is not enough (IMP-5.3).
+        if let AgentAction::Storage { action, npc } = action {
+            let mut s = state.lock().await;
+            if action.as_str() == "close" {
+                if let Err(e) = s
+                    .send_command(onlinerpg_shared::ClientMessage::CloseStorage)
+                    .await
+                {
+                    error!("Failed to send storage close: {e}");
+                }
+                continue;
+            }
+            let Some(wanted) = npc.as_deref().map(str::trim).filter(|n| !n.is_empty()) else {
+                s.push_agent_event(
+                    "[Storage] Whose storage? Name the townsperson you are standing by."
+                        .to_string(),
+                );
+                continue;
+            };
+            let Some((npc_id, is_npc)) = s.resolve_nearby_player(wanted) else {
+                s.push_agent_event(format!(
+                    "[Storage] Nobody named '{wanted}' is nearby; nothing was sent."
+                ));
+                continue;
+            };
+            if !is_npc {
+                s.push_agent_event(format!(
+                    "[Storage] {wanted} is a traveler, not a townsperson — only official \
+                     NPCs keep storage."
+                ));
+                continue;
+            }
+            let cmd = onlinerpg_shared::ClientMessage::OpenStorage {
+                npc_player_id: npc_id,
+            };
+            if let Err(e) = s.send_command(cmd).await {
+                error!("Failed to send storage open: {e}");
+            }
+            continue;
+        }
+
         // Party answers need the stored invite: the inviter may be outside
         // the AOI, where name resolution finds nobody.
         if let AgentAction::PartyAccept { player } | AgentAction::PartyDecline { player } = action {

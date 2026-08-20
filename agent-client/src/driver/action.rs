@@ -36,10 +36,23 @@ pub(super) enum AgentAction {
     },
     #[serde(rename = "guild")]
     Guild {
-        /// `create` / `invite` / `accept` / `decline` / `leave` / `vault`.
+        /// `create` / `invite` / `accept` / `decline` / `leave` / `vault` /
+        /// `kick` / `rank` / `transfer`.
         action: String,
         #[serde(alias = "target", default)]
         name: Option<String>,
+        /// Which rank `rank` moves the member to.
+        #[serde(default)]
+        rank: Option<u8>,
+    },
+    /// Open or close the storage a townsperson keeps for you. Deposits and
+    /// withdrawals only work while it is open (IMP-5.3).
+    #[serde(rename = "storage")]
+    Storage {
+        /// `open` or `close`.
+        action: String,
+        #[serde(alias = "target", alias = "name", default)]
+        npc: Option<String>,
     },
     /// Make something. With `npc` set it is a commission — a fee, no
     /// failure, and no ambition; without, your own hands at a fire (IMP-4.4).
@@ -478,11 +491,27 @@ pub(super) const ACTION_SPECS: &[ActionSpec] = &[
         doc: r#"- Guild membership. One action per call:
   {"type": "guild", "action": "create", "name": "The Iron Circle"}
   {"type": "guild", "action": "invite", "name": "PlayerName"}
+  {"type": "guild", "action": "accept"}
+  {"type": "guild", "action": "decline"}
   {"type": "guild", "action": "leave"}
   {"type": "guild", "action": "vault"}
+  {"type": "guild", "action": "kick", "name": "MemberName"}
+  {"type": "guild", "action": "rank", "name": "MemberName", "rank": 1}
+  {"type": "guild", "action": "transfer", "name": "MemberName"}
   A character belongs to one guild at a time. Start a guild line in chat with
-  "$" to speak to your guild only. Inviting needs the right rank; the server
-  says so if you lack it."#,
+  "$" to speak to your guild only. Inviting, kicking and ranking need the
+  right rank; the server says so if you lack it. "transfer" hands the guild
+  over and drops you to their rank — a leader must do this before leaving a
+  guild that still has members."#,
+    },
+    ActionSpec {
+        names: &["storage"],
+        aliases: &[],
+        doc: r#"- Open or close the storage a townsperson keeps for you:
+  {"type": "storage", "action": "open", "npc": "Rica"}
+  {"type": "storage", "action": "close"}
+  Deposits and withdrawals only work while it is open, and it closes on its
+  own if you walk away from the townsperson."#,
     },
     ActionSpec {
         names: &["craft"],
@@ -744,16 +773,17 @@ pub(super) const ACTION_SPECS: &[ActionSpec] = &[
     ActionSpec {
         names: &["deposit"],
         aliases: &["store_item"],
-        doc: r#"- Put something in storage. Open it first by standing next to a
-  townsperson; storage holds 120 slots and has no weight limit, so it is
-  where heavy things live between trips:
+        doc: r#"- Put something in storage. Open it first with the "storage" action;
+  storage holds 120 slots and has no weight limit, so it is where heavy things
+  live between trips:
   {"type": "deposit", "instance_id": 42, "quantity": 5}"#,
     },
     ActionSpec {
         names: &["withdraw"],
         aliases: &["take_item"],
-        doc: r#"- Take something back out of storage by its slot number. You must be
-  able to carry it — storage has no weight limit but your bag does:
+        doc: r#"- Take something back out of storage by its slot number. Open it
+  first with the "storage" action, and you must be able to carry what you take
+  — storage has no weight limit but your bag does:
   {"type": "withdraw", "slot_index": 3, "quantity": 1}"#,
     },
     ActionSpec {
@@ -898,6 +928,7 @@ impl AgentAction {
             Self::LearnSkill { .. }
             | Self::SetTitle { .. }
             | Self::Guild { .. }
+            | Self::Storage { .. }
             | Self::ClaimInstance { .. }
             | Self::Hire { .. }
             | Self::Craft { .. } => false,
@@ -986,6 +1017,7 @@ impl AgentAction {
             Self::LearnSkill { .. }
             | Self::SetTitle { .. }
             | Self::Guild { .. }
+            | Self::Storage { .. }
             | Self::ClaimInstance { .. }
             | Self::Hire { .. }
             | Self::Craft { .. }
@@ -1040,6 +1072,7 @@ impl AgentAction {
             Self::Hire { .. } => "hire",
             Self::Craft { .. } => "craft",
             Self::Guild { .. } => "guild",
+            Self::Storage { .. } => "storage",
             Self::Move { .. } => "move",
             Self::Follow { .. } => "follow",
             Self::Respawn => "respawn",
@@ -1486,7 +1519,7 @@ pub(super) fn action_to_command(
         AgentAction::Attack { monster_id } => Some(ClientMessage::PlayerAttack {
             monster_id: monster_id.clone(),
         }),
-        AgentAction::Guild { action, name } => match action.as_str() {
+        AgentAction::Guild { action, name, .. } => match action.as_str() {
             "create" => Some(ClientMessage::CreateGuild {
                 name: name.clone()?,
             }),
@@ -1495,9 +1528,11 @@ pub(super) fn action_to_command(
             }),
             "leave" => Some(ClientMessage::LeaveGuild),
             "vault" => Some(ClientMessage::OpenGuildStorage),
-            // accept/decline need the invite's id, which lives in the driver.
+            // accept/decline/kick/rank/transfer need ids the driver holds.
             _ => None,
         },
+        // Needs the roster to turn the NPC's name into an id.
+        AgentAction::Storage { .. } => None,
         AgentAction::ClaimInstance { entrance_id } => Some(ClientMessage::ClaimDungeonInstance {
             entrance_id: entrance_id.clone(),
         }),
@@ -2075,6 +2110,36 @@ mod tests {
             };
             assert_eq!(prop_id, 3, "for {json}");
         }
+    }
+
+    /// The two commands that had no way to be sent at all: an agent could be
+    /// invited to a guild and never answer, and could never open the storage
+    /// its own deposit action told it to open (IMP-5.3).
+    #[test]
+    fn guild_answers_and_storage_parse() {
+        let AgentAction::Guild { action, .. } =
+            parse_single_action(r#"{"actions": [{"type": "guild", "action": "accept"}]}"#)
+        else {
+            panic!("expected Guild");
+        };
+        assert_eq!(action, "accept");
+
+        let AgentAction::Guild { action, name, rank } = parse_single_action(
+            r#"{"actions": [{"type": "guild", "action": "rank", "name": "Ada", "rank": 1}]}"#,
+        ) else {
+            panic!("expected Guild");
+        };
+        assert_eq!(
+            (action.as_str(), name.as_deref(), rank),
+            ("rank", Some("Ada"), Some(1))
+        );
+
+        let AgentAction::Storage { action, npc } = parse_single_action(
+            r#"{"actions": [{"type": "storage", "action": "open", "npc": "Rica"}]}"#,
+        ) else {
+            panic!("expected Storage");
+        };
+        assert_eq!((action.as_str(), npc.as_deref()), ("open", Some("Rica")));
     }
 
     /// A sell/buy that names only one thing means the goods: its "target"

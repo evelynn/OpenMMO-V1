@@ -124,7 +124,9 @@ pub use commands::ActionProgress;
 pub use events::EventUrgency;
 pub use inventory::{Carried, CarriedBagCopies};
 pub use movement::{MoveTarget, MoveTargetError};
-pub use social::{PendingFriendRequest, PendingPartyInvite, PendingPartySummon, PushedTrade};
+pub use social::{
+    PendingFriendRequest, PendingGuildInvite, PendingPartyInvite, PendingPartySummon, PushedTrade,
+};
 pub use world_cache::WorldCache;
 
 /// Shared state between WebSocket reader and Claude driver tasks.
@@ -191,6 +193,12 @@ pub struct SharedState {
     pub pending_party_summons: Vec<PendingPartySummon>,
     /// Unanswered friend requests, same queue discipline as invites.
     pub pending_friend_requests: Vec<PendingFriendRequest>,
+    /// The guild we belong to, from `GuildUpdated`. `None` = guildless.
+    /// Carries the roster, so member names resolve to the character ids the
+    /// guild commands take (IMP-5.3).
+    pub guild: Option<onlinerpg_shared::guild::GuildState>,
+    /// An unanswered guild invite; the server keeps one at a time.
+    pub pending_guild_invite: Option<PendingGuildInvite>,
     /// Friend roster from `FriendList`, re-sent by the server on any change.
     /// Maps the character ids in `FriendsOnline` back to names.
     pub friends: Vec<onlinerpg_shared::messages::FriendEntry>,
@@ -346,6 +354,8 @@ impl SharedState {
             pending_party_invites: Vec::new(),
             pending_party_summons: Vec::new(),
             pending_friend_requests: Vec::new(),
+            guild: None,
+            pending_guild_invite: None,
             friends: Vec::new(),
             tip_hats: HashMap::new(),
             pushed_trade: None,
