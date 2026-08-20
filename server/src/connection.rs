@@ -36,6 +36,10 @@ pub struct AuthContext {
     /// None when the server was started without a Google client id; browser
     /// logins are rejected until it is configured.
     pub google: Option<GoogleAuthVerifier>,
+    /// Whether anyone may sign in with a name and no credential. Off unless
+    /// the operator asked for it: with it on, whoever reaches the server can
+    /// claim any unused name (IMP-5.6).
+    pub allow_guest_login: bool,
     pub npc_token: String,
     /// Google account emails allowed to call REST write endpoints.
     pub admin_emails: Vec<String>,
@@ -688,6 +692,7 @@ const CLIENT_UPDATE_HINT: &str =
 fn handle_handshake(
     client_msg: &ClientMessage,
     state: &mut ConnectionState,
+    auth_ctx: &AuthContext,
 ) -> Option<Vec<ServerMessage>> {
     if let ClientMessage::ClientInfo {
         protocol_version,
@@ -724,7 +729,12 @@ fn handle_handshake(
             state.client_ip
         );
         state.client_kind = Some(kind);
-        return Some(vec![]);
+        // Answer with the ways in, so the login screen offers only what this
+        // server will actually accept (IMP-5.6).
+        return Some(vec![ServerMessage::LoginOptions {
+            google: auth_ctx.google.is_some(),
+            guest: auth_ctx.allow_guest_login,
+        }]);
     }
 
     if state.client_kind.is_none() {
@@ -749,7 +759,7 @@ async fn handle_client_message(
 ) -> Result<Vec<ServerMessage>, Box<dyn std::error::Error + Send + Sync>> {
     let client_msg: ClientMessage = deserialize_client_msg(message)?;
 
-    if let Some(responses) = handle_handshake(&client_msg, state) {
+    if let Some(responses) = handle_handshake(&client_msg, state, auth_ctx) {
         return Ok(responses);
     }
 
@@ -808,6 +818,28 @@ async fn handle_client_message(
             info!("Google sub '{}' -> account '{}'", claims.sub, account_name);
 
             state.admin_eligible = auth_ctx.is_admin(&claims);
+            return Ok(finish_auth(game_state, auth_service, state, account_name, false).await);
+        }
+
+        ClientMessage::AuthenticateGuest { account_name } => {
+            if !auth_ctx.allow_guest_login {
+                warn!("Guest login attempted but the server does not allow it");
+                return Ok(vec![ServerMessage::AuthError {
+                    message: "This server requires a sign-in".to_string(),
+                }]);
+            }
+            let account_name = match auth_service.login_guest(&account_name) {
+                Ok(name) => name,
+                Err(err) => {
+                    warn!("Guest login failed for {:?}: {}", account_name, err);
+                    return Ok(vec![ServerMessage::AuthError {
+                        message: err.client_message().to_string(),
+                    }]);
+                }
+            };
+            info!("Guest '{}' signed in", account_name);
+            // A guest is a player, not a townsperson: ambient monsters follow
+            // them and the class list is the player one.
             return Ok(finish_auth(game_state, auth_service, state, account_name, false).await);
         }
 
@@ -2221,19 +2253,33 @@ mod tests {
         )
     }
 
+    fn test_auth_ctx() -> AuthContext {
+        AuthContext {
+            google: None,
+            allow_guest_login: false,
+            npc_token: "test-token".to_string(),
+            admin_emails: Vec::new(),
+        }
+    }
+
     #[test]
     fn handshake_accepts_matching_protocol_version() {
         let mut state = ConnectionState::new(Ipv4Addr::LOCALHOST.into());
         let responses = handle_handshake(
             &client_info(onlinerpg_shared::PROTOCOL_VERSION, "cli"),
             &mut state,
+            &test_auth_ctx(),
         );
 
-        assert!(responses.is_some_and(|r| r.is_empty()));
+        // The handshake answers with the ways in, not with silence.
+        assert!(responses
+            .is_some_and(|r| { matches!(r.as_slice(), [ServerMessage::LoginOptions { .. }]) }));
         assert_eq!(state.client_kind, Some(ClientKind::Cli));
         assert!(!state.must_close);
         // Later messages pass through once the handshake is done.
-        assert!(handle_handshake(&ClientMessage::Heartbeat, &mut state).is_none());
+        assert!(
+            handle_handshake(&ClientMessage::Heartbeat, &mut state, &test_auth_ctx()).is_none()
+        );
     }
 
     #[test]
@@ -2243,7 +2289,8 @@ mod tests {
             onlinerpg_shared::PROTOCOL_VERSION + 1,
         ] {
             let mut state = ConnectionState::new(Ipv4Addr::LOCALHOST.into());
-            let responses = handle_handshake(&client_info(version, "cli"), &mut state);
+            let responses =
+                handle_handshake(&client_info(version, "cli"), &mut state, &test_auth_ctx());
 
             assert!(is_auth_error(&responses), "v{version} should be refused");
             assert!(state.must_close);
@@ -2260,6 +2307,7 @@ mod tests {
                 npc_token: "t".into(),
             },
             &mut state,
+            &test_auth_ctx(),
         );
 
         assert!(is_auth_error(&responses));
@@ -2282,6 +2330,7 @@ mod tests {
         handle_handshake(
             &client_info(onlinerpg_shared::PROTOCOL_VERSION, "totally-made-up"),
             &mut state,
+            &test_auth_ctx(),
         );
 
         assert_eq!(state.client_kind, Some(ClientKind::Other));

@@ -10,14 +10,36 @@
       serverUrl: string,
       googleIdToken: string
     ) => Promise<{ ok: boolean; message?: string }>
+    /** Sign in with a name alone. Servers without guest login refuse it and
+     *  their reason is what gets shown (IMP-5.6). */
+    onGuestLogin: (
+      serverUrl: string,
+      name: string
+    ) => Promise<{ ok: boolean; message?: string }>
     kickedMessage?: string
   }
 
-  let { onLogin, kickedMessage }: Props = $props()
+  let { onLogin, onGuestLogin, kickedMessage }: Props = $props()
 
   let isConnecting = $state(false)
   let errorMessage = $state('')
   let buttonContainer = $state<HTMLDivElement | null>(null)
+  let guestName = $state('')
+
+  async function signInAsGuest() {
+    const name = guestName.trim()
+    if (!name || isConnecting) return
+    isConnecting = true
+    errorMessage = ''
+    try {
+      const result = await onGuestLogin(getDefaultServerUrl(), name)
+      if (!result.ok) errorMessage = result.message ?? 'Sign-in failed'
+    } catch (e) {
+      errorMessage = e instanceof Error ? e.message : 'Sign-in failed'
+    } finally {
+      isConnecting = false
+    }
+  }
 
   function loadGsiScript(): Promise<void> {
     if (window.google?.accounts?.id) return Promise.resolve()
@@ -159,6 +181,26 @@
           <div class="connecting-label">Connecting...</div>
         {/if}
       </div>
+
+      <div class="guest-signin">
+        <div class="divider">or</div>
+        <input
+          class="guest-name"
+          bind:value={guestName}
+          placeholder="Pick a name"
+          maxlength="24"
+          disabled={isConnecting}
+          onkeydown={(e) => e.key === 'Enter' && signInAsGuest()}
+        />
+        <button
+          class="guest-button"
+          disabled={isConnecting || guestName.trim().length === 0}
+          onclick={signInAsGuest}>Play as guest</button
+        >
+        <div class="guest-hint">
+          No password. Come back to the same name to find your character.
+        </div>
+      </div>
     </div>
 
     <AnnouncementsPanel />
@@ -166,6 +208,46 @@
 </div>
 
 <style>
+  .guest-signin {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-top: 16px;
+    width: 100%;
+    align-items: stretch;
+  }
+
+  .divider {
+    text-align: center;
+    color: rgba(255, 255, 255, 0.45);
+    font-size: 12px;
+  }
+
+  .guest-name,
+  .guest-button {
+    padding: 8px 10px;
+    border-radius: 6px;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    background: rgba(255, 255, 255, 0.08);
+    color: #e6edf3;
+    font: inherit;
+  }
+
+  .guest-button {
+    cursor: pointer;
+  }
+
+  .guest-button:disabled {
+    opacity: 0.5;
+    cursor: default;
+  }
+
+  .guest-hint {
+    color: rgba(255, 255, 255, 0.45);
+    font-size: 11px;
+    text-align: center;
+  }
+
   .login-container {
     position: fixed;
     inset: 0;

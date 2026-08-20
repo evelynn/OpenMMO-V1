@@ -250,6 +250,7 @@ export type ClientMessage =
   | { ClaimDungeonInstance: { entrance_id: string } }
   | { HireCompanion: { npc_player_id: number; hours: number } }
   | { SwitchChannel: { channel: number } }
+  | { AuthenticateGuest: { account_name: string } }
   | {
       CraftItem: {
         recipe_id: string

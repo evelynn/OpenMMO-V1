@@ -115,15 +115,36 @@
     }
   })
 
+  async function handleGuestLogin(
+    url: string,
+    name: string
+  ): Promise<{ ok: boolean; message?: string }> {
+    return enterAccount(url, () =>
+      networkManager.requestGuestAuthentication(url, name)
+    )
+  }
+
   async function handleLogin(
     url: string,
     googleIdToken: string
   ): Promise<{ ok: boolean; message?: string }> {
-    kickedMessage = ''
-    const result = await networkManager.requestAuthentication(
-      url,
-      googleIdToken
+    return enterAccount(url, () =>
+      networkManager.requestAuthentication(url, googleIdToken)
     )
+  }
+
+  /// The half of signing in that is the same however you signed in.
+  async function enterAccount(
+    url: string,
+    authenticate: () => Promise<{
+      ok: boolean
+      message?: string
+      accountName?: string
+      characters?: AccountCharacter[]
+    }>
+  ): Promise<{ ok: boolean; message?: string }> {
+    kickedMessage = ''
+    const result = await authenticate()
 
     if (result.ok) {
       const characters = result.characters ?? []
@@ -393,7 +414,11 @@
       onCancel={handleCancelCreateCharacter}
     />
   {:else}
-    <LoginScreen onLogin={handleLogin} {kickedMessage} />
+    <LoginScreen
+      onLogin={handleLogin}
+      onGuestLogin={handleGuestLogin}
+      {kickedMessage}
+    />
   {/if}
 
   {#if screen !== 'game'}

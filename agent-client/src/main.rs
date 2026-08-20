@@ -526,6 +526,7 @@ pub fn msg_name(msg: &onlinerpg_shared::ServerMessage) -> &'static str {
         ServerMessage::DungeonInstance { .. } => "DungeonInstance",
         ServerMessage::CompanionContract { .. } => "CompanionContract",
         ServerMessage::CraftResult { .. } => "CraftResult",
+        ServerMessage::LoginOptions { .. } => "LoginOptions",
         ServerMessage::ChannelState { .. } => "ChannelState",
         ServerMessage::ChannelDenied { .. } => "ChannelDenied",
     }

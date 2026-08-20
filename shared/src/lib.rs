@@ -134,7 +134,10 @@ pub const NPC_TOKEN_FILENAME: &str = "npc_token";
 /// v48: world channels (SwitchChannel → ChannelState/ChannelDenied). The
 ///      channel is server-side state, not a `Player` field — AOI already
 ///      hides other channels, and `Player` is full at 15 — IMP-7.1.
-pub const PROTOCOL_VERSION: u32 = 48;
+/// v49: guest login (AuthenticateGuest) and `LoginOptions`, so a server can
+///      be stood up and played without a Google client id — off unless the
+///      operator turns it on — IMP-5.6.
+pub const PROTOCOL_VERSION: u32 = 49;
 
 /// WebSocket close code sent when the handshake is refused (wrong protocol
 /// version, or traffic before `ClientInfo`). Lives outside the serialized

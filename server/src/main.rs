@@ -225,6 +225,11 @@ struct Args {
     npc_data_dir: PathBuf,
 
     /// Google OAuth client ID used to verify browser sign-in tokens
+    /// Let anyone sign in with a name and no credential. Off by default:
+    /// with it on, whoever reaches the server can claim any unused name.
+    #[arg(long, env = "ALLOW_GUEST_LOGIN", default_value_t = false)]
+    allow_guest_login: bool,
+
     #[arg(long, env = "GOOGLE_CLIENT_ID")]
     google_client_id: Option<String>,
 
@@ -365,8 +370,15 @@ async fn main() -> ExitCode {
     if admin_emails.is_empty() {
         warn!("No --admin-emails / ADMIN_EMAILS set: REST writes require the NPC token");
     }
+    if args.allow_guest_login {
+        warn!(
+            "Guest login is ON: anyone who can reach this server may claim any unused name. \
+             Intended for development and open beta, not for a server with accounts worth stealing."
+        );
+    }
     let auth_ctx = Arc::new(AuthContext {
         google,
+        allow_guest_login: args.allow_guest_login,
         npc_token,
         admin_emails,
     });

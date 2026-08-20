@@ -272,7 +272,7 @@ class NetworkManager {
       if (googleIdToken && this.lastCharacterId) {
         const opened = await this.waitForSocketOpen(5000)
         if (opened) {
-          this.authenticateWithGoogle(googleIdToken)
+          this.reauthenticate(googleIdToken)
           let unsubSuccess = () => {}
           let unsubError = () => {}
           const cleanup = () => {
@@ -906,12 +906,48 @@ class NetworkManager {
   /// Call on logout/kick, not on transient disconnects (which must reconnect).
   clearSession() {
     this.lastCharacterId = null
+    this.guestName = null
     setApiAuthToken(null)
   }
 
+  /** Remembered for the session only, never stored: a guest has no token to
+   *  replay, so without this a dropped connection would log them out. */
+  private guestName: string | null = null
+
+  /** Sign in again on a reconnect with whatever this session used. A guest
+   *  has no stored token, so their name is what gets replayed. */
+  private reauthenticate(googleIdToken: string): boolean {
+    if (this.guestName) return this.authenticateAsGuest(this.guestName)
+    return this.authenticateWithGoogle(googleIdToken)
+  }
+
+  private authenticateAsGuest(accountName: string): boolean {
+    this.guestName = accountName
+    // No API token — a guest holds no credential the REST side accepts, so
+    // admin writes stay closed to them.
+    setApiAuthToken(null)
+    return this.sendAndSerialize({
+      AuthenticateGuest: { account_name: accountName },
+    })
+  }
+
+  /** Sign in with a name and no credential. A server not started with guest
+   *  login refuses this and says so (IMP-5.6). */
+  async requestGuestAuthentication(
+    serverUrl: string,
+    accountName: string
+  ): Promise<{
+    ok: boolean
+    message?: string
+    accountName?: string
+    characters?: AccountCharacter[]
+  }> {
+    return this.requestAuthentication(serverUrl, '', accountName)
+  }
   async requestAuthentication(
     serverUrl: string,
-    googleIdToken: string
+    googleIdToken: string,
+    guestName?: string
   ): Promise<{
     ok: boolean
     message?: string
@@ -944,7 +980,10 @@ class NetworkManager {
           })
         )
         return {
-          send: () => this.authenticateWithGoogle(googleIdToken),
+          send: () =>
+            guestName
+              ? this.authenticateAsGuest(guestName)
+              : this.reauthenticate(googleIdToken),
           notSentResult: { ok: false, message: 'Socket is not connected' },
         }
       }
@@ -1182,7 +1221,7 @@ class NetworkManager {
           })
         )
         return {
-          send: () => this.authenticateWithGoogle(googleIdToken),
+          send: () => this.reauthenticate(googleIdToken),
           notSentResult: { ok: false, message: 'Socket is not connected' },
         }
       }
@@ -1229,7 +1268,7 @@ class NetworkManager {
           })
         )
         return {
-          send: () => this.authenticateWithGoogle(googleIdToken),
+          send: () => this.reauthenticate(googleIdToken),
           notSentResult: { ok: false, message: 'Socket is not connected' },
         }
       }

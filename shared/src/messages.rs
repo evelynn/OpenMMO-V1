@@ -525,6 +525,11 @@ pub enum ClientMessage {
     ClaimDungeonInstance {
         entrance_id: String,
     },
+    /// Sign in with nothing but a name. Only servers started with guest
+    /// login enabled accept this; everywhere else it is refused (IMP-5.6).
+    AuthenticateGuest {
+        account_name: String,
+    },
     /// Move to another copy of the world. Your character, bag and storage do
     /// not change — only who you can see does (IMP-7.1).
     SwitchChannel {
@@ -1381,6 +1386,12 @@ pub enum ServerMessage {
     DungeonInstance {
         entrance_id: String,
         party_seed: u64,
+    },
+    /// Which ways in this server accepts, answered as soon as the client
+    /// announces itself so the login screen shows only what will work.
+    LoginOptions {
+        google: bool,
+        guest: bool,
     },
     /// Which channel you are on and how full each one is. Sent on entry and
     /// after every switch, and it is the only place a client learns its own

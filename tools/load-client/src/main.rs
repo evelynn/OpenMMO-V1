@@ -43,6 +43,19 @@ struct Args {
     /// Distinguishes accounts between runs against the same database.
     #[arg(long, default_value = "load")]
     tag: String,
+    /// Sign in as a guest instead of with the NPC token, exercising the path
+    /// a browser player takes (IMP-5.6).
+    #[arg(long, default_value_t = false)]
+    guest: bool,
+}
+
+/// What every client in a run shares.
+struct Run {
+    url: String,
+    token: String,
+    tag: String,
+    hold: Duration,
+    guest: bool,
 }
 
 #[derive(Default)]
@@ -59,19 +72,26 @@ async fn main() -> anyhow::Result<()> {
     let tally = Arc::new(Tally::default());
     let started = Instant::now();
 
+    let run = Arc::new(Run {
+        url: args.url.clone(),
+        token: args.token.clone(),
+        tag: args.tag.clone(),
+        hold: Duration::from_secs(args.hold_secs),
+        guest: args.guest,
+    });
+
     let mut in_flight = Vec::new();
     let permits = Arc::new(tokio::sync::Semaphore::new(args.concurrency));
     for i in 0..args.clients {
         let permit = Arc::clone(&permits).acquire_owned().await?;
-        let (url, token, tag) = (args.url.clone(), args.token.clone(), args.tag.clone());
+        let run = Arc::clone(&run);
         let tally = Arc::clone(&tally);
-        let hold = Duration::from_secs(args.hold_secs);
         in_flight.push(tokio::spawn(async move {
             // The permit covers the handshake only. Holding it through the
             // hold would stagger the clients so that early ones log out
             // before late ones arrive, and the run would measure serial
             // throughput while claiming to measure concurrency.
-            if let Err(e) = one_client(&url, &token, &tag, i, hold, &tally, permit).await {
+            if let Err(e) = one_client(&run, i, &tally, permit).await {
                 if tally.failed.fetch_add(1, Ordering::Relaxed) < 5 {
                     eprintln!("client {i}: {e}");
                 }
@@ -100,14 +120,19 @@ async fn main() -> anyhow::Result<()> {
 }
 
 async fn one_client(
-    url: &str,
-    token: &str,
-    tag: &str,
+    run: &Run,
     index: usize,
-    hold: Duration,
     tally: &Tally,
     permit: tokio::sync::OwnedSemaphorePermit,
 ) -> anyhow::Result<()> {
+    let Run {
+        url,
+        token,
+        tag,
+        hold,
+        guest,
+    } = run;
+    let hold = *hold;
     let (mut ws, _) = tokio_tungstenite::connect_async(url).await?;
     tally.connected.fetch_add(1, Ordering::Relaxed);
 
@@ -122,15 +147,24 @@ async fn one_client(
     )
     .await?;
 
-    let account = format!("npc_{tag}_{index}");
-    send(
-        &mut ws,
-        &ClientMessage::AuthenticateNpc {
-            account_name: account.clone(),
-            npc_token: token.to_string(),
-        },
-    )
-    .await?;
+    if *guest {
+        send(
+            &mut ws,
+            &ClientMessage::AuthenticateGuest {
+                account_name: format!("{tag}{index}"),
+            },
+        )
+        .await?;
+    } else {
+        send(
+            &mut ws,
+            &ClientMessage::AuthenticateNpc {
+                account_name: format!("npc_{tag}_{index}"),
+                npc_token: token.to_string(),
+            },
+        )
+        .await?;
+    }
 
     let characters = loop {
         match recv(&mut ws).await? {

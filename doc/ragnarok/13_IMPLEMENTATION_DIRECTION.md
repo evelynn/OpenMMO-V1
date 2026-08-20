@@ -2620,6 +2620,34 @@ vitest가 `shared/src/messages.rs`와 `shared/src/skills.rs`를 **읽어서** �
 절차는 §0의 확인 목록을 그대로 쓰고, 결과를 §0에 적는다. 실패한 것이 나오면
 그것이 새 행이 된다.
 
+> **개정 (IMP-5.6 착수 시) — 손님 로그인을 먼저 만든다.** 이 항목이 오래 막혀 있던
+> 이유는 코드가 아니라 **Google 자격 증명**이었다. 브라우저로 들어가는 유일한 길이
+> Google 로그인 하나뿐이라, 클라이언트 ID가 없는 환경에서는 로그인 화면 너머를
+> 한 번도 볼 수 없다. 자격 증명을 구하는 것은 개발 항목이 아니므로, **자격 증명
+> 없이 들어갈 수 있는 두 번째 길**을 낸다.
+>
+> **손댈 파일** — `shared/src/messages.rs`, `shared/src/lib.rs`, `server/src/auth.rs`,
+> `server/src/connection.rs`, `server/src/main.rs`, `client/src/lib/network/socket.ts`,
+> `client/src/lib/components/LoginScreen.svelte`, `client/src/App.svelte`,
+> `tools/load-client/src/main.rs`.
+>
+> **프로토콜 v49** — `ClientMessage::AuthenticateGuest { account_name }`,
+> `ServerMessage::LoginOptions { google, guest }`. 서버가 무엇을 받아 주는지
+> 핸드셰이크가 먼저 알려 준다 — 클라이언트가 눌러 보고 거절당해서 알아내는 것이
+> 아니라, 손님 입력칸을 띄울지 말지를 **서버의 대답으로** 정한다.
+>
+> **안전 규칙 넷.** 이 문은 열려 있으면 누구나 이름 하나로 들어오는 문이므로,
+> ① `--allow-guest-login`(env `ALLOW_GUEST_LOGIN`)이 **기본 꺼짐**이고,
+> ② 켜면 기동 시 경고를 남기고,
+> ③ `login_guest`는 **`google_sub`가 있는 계정을 절대 넘겨주지 않는다** — 손님
+> 이름으로 실계정을 빼앗는 것이 이 기능의 유일한 진짜 위험이다,
+> ④ 손님은 NPC가 아니므로 API 운영 토큰을 받지 않는다(REST 관리 쓰기는 그대로 닫힘).
+> `npc_` 접두사와 `valid_name` 규칙도 그대로 적용한다.
+>
+> **검증** — `load-client --guest`가 실제 소켓으로 계정 생성 → 스탯 굴림 →
+> 캐릭터 생성 → 입장까지 완주하는지 본다(3/3 통과, `accounts.google_sub`는 NULL).
+> 그 다음이 이 항목의 본론인 브라우저 확인이다.
+
 ---
 
 ## Phase 6 — 베타 게이트

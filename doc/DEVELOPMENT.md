@@ -30,6 +30,12 @@ npm --prefix client run dev -- --port 10004
 `client/.env.local`의 `VITE_GOOGLE_CLIENT_ID`와 서버의 `GOOGLE_CLIENT_ID`가
 같은 **Web 클라이언트 ID**여야 한다.
 
+**자격 증명이 없으면 손님 로그인을 쓴다.** 서버를 `--allow-guest-login`
+(env `ALLOW_GUEST_LOGIN=1`)으로 띄우면 로그인 화면에 이름 입력칸이 생기고,
+이름 하나로 계정이 만들어진다. **기본은 꺼짐이고 켜면 기동 로그에 경고가 남는다** —
+켠 서버는 도달할 수 있는 누구나 빈 이름을 차지할 수 있다. Google로 만든 계정은
+손님 로그인이 절대 가져가지 못하므로 둘을 같이 켜 두어도 실계정은 안전하다.
+
 ---
 
 ## 2. 사전 요구사항

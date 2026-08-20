@@ -1419,6 +1419,51 @@ impl AuthService {
     /// named `player_*` (Google) or predate this scheme (legacy), so requiring
     /// the prefix stops the shared NPC token from ever binding to a human's
     /// account, even on a config typo.
+    /// Sign in by name alone, creating the account on first use. Refuses the
+    /// `npc_` prefix and refuses to take over an account that has a Google
+    /// identity — a guest must never be able to claim somebody's real one.
+    ///
+    /// Only reachable when the operator enabled guest login; the gate is in
+    /// `connection.rs` because this function has no business deciding policy.
+    pub fn login_guest(&self, account_name: &str) -> Result<String, AuthError> {
+        let account_name = account_name.trim();
+        if account_name.is_empty() {
+            return Err(AuthError::InvalidInput("A name is required"));
+        }
+        if account_name.starts_with(NPC_ACCOUNT_PREFIX) {
+            return Err(AuthError::InvalidInput(
+                "That prefix is reserved for townsfolk",
+            ));
+        }
+        if !valid_name(account_name) {
+            return Err(AuthError::InvalidInput(
+                "Name is too long or contains invalid characters",
+            ));
+        }
+
+        let conn = self.open_connection()?;
+        let existing: Option<Option<String>> = conn
+            .query_row(
+                "SELECT google_sub FROM accounts WHERE player_name = ?1",
+                params![account_name],
+                |row| row.get(0),
+            )
+            .optional()?;
+        match existing {
+            Some(Some(_)) => Err(AuthError::InvalidInput(
+                "That name belongs to a signed-in account",
+            )),
+            Some(None) => Ok(account_name.to_string()),
+            None => {
+                conn.execute(
+                    "INSERT INTO accounts (player_name, google_sub) VALUES (?1, NULL)",
+                    params![account_name],
+                )?;
+                Ok(account_name.to_string())
+            }
+        }
+    }
+
     pub fn login_npc(&self, account_name: &str) -> Result<String, AuthError> {
         let account_name = account_name.trim();
         if account_name.is_empty() {
@@ -2472,6 +2517,35 @@ mod tests {
         assert!(
             items.is_empty(),
             "issued gear comes from join-time seeding, not creation: {items:?}"
+        );
+    }
+
+    #[test]
+    /// A guest may take any free name and come back to it, but must never
+    /// be able to walk into an account somebody signed in to.
+    fn guest_login_creates_on_demand_and_never_takes_a_real_account() {
+        let db_path =
+            std::env::temp_dir().join(format!("onlinerpg_auth_guest_{}.db", uuid::Uuid::new_v4()));
+        let auth = AuthService::new(db_path.clone()).unwrap();
+
+        assert_eq!(auth.login_guest("Wanderer").unwrap(), "Wanderer");
+        assert_eq!(
+            auth.login_guest("Wanderer").unwrap(),
+            "Wanderer",
+            "coming back to the same name is the same account"
+        );
+
+        assert!(auth.login_guest("").is_err());
+        assert!(
+            auth.login_guest("npc_smith").is_err(),
+            "the townsfolk prefix is not a guest's to take"
+        );
+
+        // The one that matters: a Google account's name is not claimable.
+        let player = auth.login_google("sub-42").unwrap();
+        assert!(
+            auth.login_guest(&player).is_err(),
+            "a guest must not be able to walk into a signed-in account"
         );
     }
 
