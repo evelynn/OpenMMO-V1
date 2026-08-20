@@ -61,10 +61,6 @@ const NOT_SENT_BY_THE_BROWSER: Record<string, string> = {
   AuthenticateNpc: 'agent-only',
   OfferDeal: 'agent-only — an NPC proposing a price',
   OpenTrade: 'agent-only — an NPC pushing its shop at a player',
-  // Housing moved to the REST API; the server logs and ignores these.
-  PlaceHouse: 'refused by the server — use the housing REST API',
-  ModifyRoom: 'refused by the server — use the housing REST API',
-  RemoveHouse: 'refused by the server — use the housing REST API',
 }
 
 describe('the client mirrors of the shared protocol', () => {

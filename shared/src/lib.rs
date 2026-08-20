@@ -127,7 +127,10 @@ pub const NPC_TOKEN_FILENAME: &str = "npc_token";
 /// v46: crafting (CraftItem → CraftResult) and `SkillId::Crafting`; the new
 ///      skill id travels by name inside SkillsUpdate, so an older build
 ///      cannot decode a crafter's skill list — IMP-4.4.
-pub const PROTOCOL_VERSION: u32 = 46;
+/// v47: dead wire removed — `PlaceHouse`/`ModifyRoom`/`RemoveHouse` (the
+///      server refused all three; housing is a REST API) and `HousesInArea`
+///      (never constructed). Every later variant shifts down — IMP-5.4.
+pub const PROTOCOL_VERSION: u32 = 47;
 
 /// WebSocket close code sent when the handshake is refused (wrong protocol
 /// version, or traffic before `ClientInfo`). Lives outside the serialized

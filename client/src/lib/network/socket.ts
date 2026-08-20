@@ -844,28 +844,6 @@ class NetworkManager {
     this.sendMessage({ TurnInQuest: { quest_id: questId } })
   }
 
-  sendBuyItem(merchantPlayerId: number, itemDefId: string) {
-    this.sendMessage({
-      BuyItem: { merchant_player_id: merchantPlayerId, item_def_id: itemDefId },
-    })
-  }
-
-  sendSellItem(merchantPlayerId: number, instanceId: number) {
-    if (!this.isNetworkableInstanceId(instanceId, 'sell')) return
-    this.sendMessage({
-      SellItem: {
-        merchant_player_id: merchantPlayerId,
-        instance_id: instanceId,
-      },
-    })
-  }
-
-  sendBuybackItem(merchantPlayerId: number, entryId: number) {
-    this.sendMessage({
-      BuybackItem: { merchant_player_id: merchantPlayerId, entry_id: entryId },
-    })
-  }
-
   sendBuyItems(merchantPlayerId: number, items: TradeLineItem[]) {
     if (items.length === 0) return
     this.sendMessage({

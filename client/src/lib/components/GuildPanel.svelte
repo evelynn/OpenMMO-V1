@@ -6,10 +6,13 @@
     isGuildLeader,
     GUILD_PERMS,
     LEADER_RANK,
+    type GuildMemberInfo,
   } from '../stores/guildStore'
 
   let newName = $state('')
   let inviteName = $state('')
+  /** Member the leader picked to hand the guild to, pending confirmation. */
+  let handOverTo = $state<GuildMemberInfo | null>(null)
 
   const rankName = $derived(
     (rankId: number) =>
@@ -84,6 +87,15 @@
               {/each}
             </select>
           {/if}
+          {#if $isGuildLeader && m.rank_id !== LEADER_RANK}
+            <!-- The leader cannot leave a guild that still has members, so
+                 without this the guild locks when they go (IMP-5.4). -->
+            <button
+              class="hand-over"
+              title="Hand the guild to {m.name}"
+              onclick={() => (handOverTo = m)}>↑</button
+            >
+          {/if}
           {#if ($myGuildPerms & GUILD_PERMS.KICK) !== 0 && m.rank_id !== LEADER_RANK}
             <button
               class="kick"
@@ -94,6 +106,22 @@
         </div>
       {/each}
     </div>
+
+    {#if handOverTo}
+      <div class="confirm">
+        <span
+          >Hand <strong>{$guild.name}</strong> to
+          <strong>{handOverTo.name}</strong>? You take their rank.</span
+        >
+        <button
+          onclick={() => {
+            networkManager.sendTransferGuildLeadership(handOverTo!.character_id)
+            handOverTo = null
+          }}>Hand over</button
+        >
+        <button onclick={() => (handOverTo = null)}>Cancel</button>
+      </div>
+    {/if}
   {/if}
 </div>
 
@@ -194,6 +222,22 @@
   .member-rank {
     color: #999;
     font-size: 11px;
+  }
+
+  .hand-over {
+    background: none;
+    border: none;
+    color: #8fe08f;
+    cursor: pointer;
+  }
+
+  .confirm {
+    margin-top: 8px;
+    padding-top: 8px;
+    border-top: 1px solid rgba(255, 255, 255, 0.15);
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
   }
 
   .kick {

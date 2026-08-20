@@ -1776,18 +1776,6 @@ async fn handle_client_message(
             );
         }
 
-        ClientMessage::PlaceHouse { .. } => {
-            warn!("Ignoring client-side PlaceHouse broadcast request; use the housing REST API");
-        }
-
-        ClientMessage::ModifyRoom { .. } => {
-            // TODO: room modification broadcast
-        }
-
-        ClientMessage::RemoveHouse { .. } => {
-            warn!("Ignoring client-side RemoveHouse broadcast request; use the housing REST API");
-        }
-
         ClientMessage::ToggleDoor {
             house_id,
             room_index,

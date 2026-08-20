@@ -468,7 +468,6 @@ pub fn msg_name(msg: &onlinerpg_shared::ServerMessage) -> &'static str {
         ServerMessage::HouseUpdated { .. } => "HouseUpdated",
         ServerMessage::TreeTilesInvalidated { .. } => "TreeTilesInvalidated",
         ServerMessage::HouseRemoved { .. } => "HouseRemoved",
-        ServerMessage::HousesInArea { .. } => "HousesInArea",
         ServerMessage::DoorToggled { .. } => "DoorToggled",
         ServerMessage::MonsterAssigned { .. } => "MonsterAssigned",
         ServerMessage::SpawnMonsterRequest { .. } => "SpawnMonsterRequest",

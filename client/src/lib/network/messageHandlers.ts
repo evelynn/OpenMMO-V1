@@ -1204,10 +1204,6 @@ export function handleServerMessage(
       housingManager.handleRemoteHouseRemoved(data.house_id)
       break
 
-    case 'HousesInArea':
-      housingManager.handleRemoteHousesBatch(data.houses)
-      break
-
     case 'DoorToggled':
       housingManager.handleDoorToggled(
         data.house_id,

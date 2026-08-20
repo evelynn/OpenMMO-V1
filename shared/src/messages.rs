@@ -654,17 +654,6 @@ pub enum ClientMessage {
     },
     StopInteraction,
     Heartbeat,
-    PlaceHouse {
-        house: housing::HouseData,
-    },
-    ModifyRoom {
-        house_id: String,
-        room_index: u32,
-        room: housing::RoomData,
-    },
-    RemoveHouse {
-        house_id: String,
-    },
     ToggleDoor {
         house_id: String,
         room_index: u32,
@@ -1436,9 +1425,6 @@ pub enum ServerMessage {
     },
     HouseRemoved {
         house_id: String,
-    },
-    HousesInArea {
-        houses: Vec<housing::HouseData>,
     },
     DoorToggled {
         house_id: String,

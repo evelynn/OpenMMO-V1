@@ -157,8 +157,7 @@ export class HousingManager {
         return
       }
       const houses: HouseData[] = await resp.json()
-      for (const h of houses) this.addToCache(h)
-      this.notifyChanged()
+      this.handleRemoteHousesBatch(houses)
     } catch {
       this.chunkCache.set(key, []) // Cache as empty to prevent retry storm
     } finally {
@@ -219,7 +218,7 @@ export class HousingManager {
     }
   }
 
-  /** Handle a batch of houses from WebSocket (HousesInArea, etc.). */
+  /** Take a chunk's worth of houses into the cache in one notify. */
   handleRemoteHousesBatch(houses: HouseData[]) {
     for (const h of houses) this.addToCache(h)
     this.notifyChanged()

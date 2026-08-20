@@ -195,7 +195,6 @@ impl SharedState {
             | ServerMessage::PartyPositions { .. }
             | ServerMessage::GameTimeSync { .. }
             | ServerMessage::HouseSpawned { .. }
-            | ServerMessage::HousesInArea { .. }
             | ServerMessage::HouseUpdated { .. }
             | ServerMessage::HouseRemoved { .. }
             | ServerMessage::DoorToggled { .. } => EventUrgency::Noise,
@@ -828,12 +827,6 @@ impl SharedState {
             }
             ServerMessage::HouseSpawned { ref house } => {
                 self.world_cache.write().unwrap().add_house(house.clone());
-            }
-            ServerMessage::HousesInArea { ref houses } => {
-                let mut world = self.world_cache.write().unwrap();
-                for house in houses {
-                    world.add_house(house.clone());
-                }
             }
             ServerMessage::HouseUpdated { ref house } => {
                 self.world_cache.write().unwrap().add_house(house.clone());

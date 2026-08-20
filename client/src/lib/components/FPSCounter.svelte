@@ -65,6 +65,7 @@
   import { closeTopOverlay } from '../stores/overlayStack'
   import { friendPanelVisible } from '../stores/friendStore'
   import { get } from 'svelte/store'
+  import { activeCast } from '../stores/combatSkillStore'
   import { emoteStopRequest } from '../stores/emoteStore'
   import {
     macroPanelVisible,
@@ -107,9 +108,19 @@
       const closed = closeTopOverlay()
       if (closed === 'closed') {
         event.preventDefault()
-      } else if (closed === 'none') {
-        emoteStopRequest.set(true)
+        return
       }
+      if (closed !== 'none') return
+      // Nothing is open: Escape takes back a cast before it lands, and only
+      // then falls through to ending an emote. Moving already cancels a cast
+      // server-side; this is the way to stop one while standing still
+      // (IMP-5.4).
+      if (get(activeCast)) {
+        event.preventDefault()
+        networkManager.sendCancelCast()
+        return
+      }
+      emoteStopRequest.set(true)
     }
     if ((event.key === 'm' || event.key === 'M') && isGameKey(event)) {
       event.preventDefault()
