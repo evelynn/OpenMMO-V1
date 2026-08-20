@@ -263,6 +263,31 @@ tools/smoke-local.sh
 
 ---
 
+### 상태 백업과 복구 (`tools/backup-state.sh` · `restore-state.sh`)
+
+```bash
+tools/backup-state.sh /var/lib/onlinerpg /var/backups/onlinerpg   # 서버를 세우지 않는다
+tools/restore-state.sh /var/backups/onlinerpg/<타임스탬프> /var/lib/onlinerpg
+```
+
+**상태는 DB만이 아니다.** 플레이어가 지은 집은 `housing/`의 JSON 파일이고,
+공지는 `announcements/`, 봇 토큰은 `npc_token`이다. DB만 받아 두면 복구했을 때
+**집이 전부 사라지고 헤드리스 에이전트가 로그인하지 못한다.** 두 스크립트는 넷을
+같이 다룬다.
+
+- 백업은 `VACUUM INTO`를 쓴다 — SQLite가 스스로 일관된 스냅숏을 뜨므로 **서버를
+  멈출 필요가 없고**, 파일을 복사할 때처럼 트랜잭션 중간을 잡을 수 없다.
+- 백업은 뜬 직후 **다시 열어 `integrity_check`와 캐릭터 수를 확인한다.** 열어 본
+  적 없는 백업은 백업이 아니라 추측이다.
+- 복구는 **서버가 떠 있으면 거절한다.** 판정은 `/proc/<pid>/exe`로 한다 —
+  `pgrep -f`는 빌드나 편집기까지 잡고, `pgrep -x`는 리눅스가 프로세스 이름을
+  15자로 자르는 탓에 `onlinerpg-server`(16자)를 **영영 못 잡는다**(조용히 통과하는
+  쪽이 더 위험하다).
+- 복구는 기존 상태를 지우지 않고 `replaced-<타임스탬프>/`로 옮긴다. 잘못된 백업을
+  복구하는 것도 되돌릴 수 있어야 한다.
+
+`tools/smoke-local.sh`가 라이브 백업과 "떠 있으면 거절"을 매번 확인한다.
+
 ## 8. 성능 기준선 — 동시 접속 5,000명
 
 이 프로젝트는 **동시 5,000명에서 문제가 없어야 한다**. 새 코드를 넣기 전에 다음을 확인한다.

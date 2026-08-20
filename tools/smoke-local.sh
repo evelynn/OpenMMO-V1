@@ -129,6 +129,21 @@ case "$body" in
     *) fail "metrics with token: ${body:-no response}" ;;
 esac
 
+# IMP-6.2: a backup taken from a live server must read back, and the restore
+# must refuse to run against one. Both scripts are only as good as the last
+# time somebody ran them.
+snapshot=$(bash "$(dirname "$0")/backup-state.sh" "$STATE" "$STATE/backups" 2>/dev/null | tail -1)
+if [ -f "$snapshot/game_data.db" ]; then
+    ok "backup snapshots a live server (IMP-6.2)"
+else
+    fail "backup produced no database"
+fi
+if bash "$(dirname "$0")/restore-state.sh" "$snapshot" "$STATE" >/dev/null 2>&1; then
+    fail "restore ran against a live server"
+else
+    ok "restore refuses while the server is up"
+fi
+
 key=$(head -c 16 /dev/urandom | base64)
 line=$(curl -s -i -N --max-time 5 \
     -H "Connection: Upgrade" -H "Upgrade: websocket" \
