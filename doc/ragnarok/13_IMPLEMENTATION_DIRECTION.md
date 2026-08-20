@@ -896,7 +896,8 @@ CREATE TABLE IF NOT EXISTS character_storage (
 - `server/src/main.rs` — `mod travel_defs;` + 부팅 시 좌표가 던전 footprint 밖인지 assert.
 - `server/src/game_state/travel.rs`(신규) — 검증 후 `teleport_player`(`player.rs`) 호출.
 - `server/src/connection.rs:733` — arm 2개.
-- `client/src/lib/data/travelDefs.ts` + `TravelPanel.svelte`.
+- `client/src/lib/components/TravelPanel.svelte`. (**갱신**: 클라이언트 정의
+  파일은 만들지 않았다 — 이동 노드는 서버가 밀어 주므로 필요가 없었다.)
 - `agent-client/src/driver/action.rs` — `travel` 액션.
 
 **구현 방향**

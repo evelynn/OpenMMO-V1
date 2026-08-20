@@ -302,7 +302,7 @@ export type PlayerInventory = {
 }
 
 /** Trained-skill ids (shared `SkillId` wire strings). */
-export type SkillId = 'fishing' | 'trading' | CombatSkillId
+export type SkillId = 'fishing' | 'trading' | 'crafting' | CombatSkillId
 
 /** The subset bought with skill points rather than trained by use (IMP-3.2).
  *  Their definitions come from `data/skills.json`, the same csv the server

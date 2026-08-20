@@ -7,6 +7,7 @@ export type { SkillId, Skills }
 export const SKILL_DISPLAY_NAMES: Record<SkillId, string> = {
   fishing: 'Fishing',
   trading: 'Trading',
+  crafting: 'Crafting',
   power_strike: 'Power Strike',
   cleave: 'Cleave',
   flame_dart: 'Flame Dart',
