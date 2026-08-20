@@ -414,6 +414,7 @@ impl super::GameState {
     /// life. `None` means refuse the move, not "no opinion".
     async fn expected_monster_move_y(
         &self,
+        instance_key: Option<&str>,
         floor_level: i8,
         from: Position,
         to: Position,
@@ -428,9 +429,12 @@ impl super::GameState {
             if from_entrance.id != to_entrance.id {
                 return None;
             }
-            self.ensure_dungeon_runtime(&from_entrance.id).await;
+            // Stairs sit in different cells per instance, so the ground Y at
+            // one (x,z) is the instance's own answer (IMP-4.2).
+            let runtime_key = instance_key.unwrap_or(&from_entrance.id);
+            self.ensure_dungeon_runtime(runtime_key).await;
             let dungeons = self.dungeons.read().await;
-            let layouts = &dungeons.get(&from_entrance.id)?.layouts;
+            let layouts = &dungeons.get(runtime_key)?.layouts;
             let origin = from_entrance.position();
             let depth = floor_level.unsigned_abs();
             let height_at =
@@ -488,9 +492,19 @@ impl super::GameState {
         let raw_dist = horizontal.max((new_position.y - sample_from.y).abs());
         // `f32::max` swallows NaN, so `input_valid` — not `raw_dist` — is what
         // keeps malformed input out of the height sample.
+        let instance_key = if floor_level < 0 {
+            self.monster_instance_key(&monster_id).await
+        } else {
+            None
+        };
         let expected_y = if input_valid && raw_dist <= MONSTER_MOVE_BUDGET_CAP_METERS {
-            self.expected_monster_move_y(floor_level, sample_from, new_position)
-                .await
+            self.expected_monster_move_y(
+                instance_key.as_deref(),
+                floor_level,
+                sample_from,
+                new_position,
+            )
+            .await
         } else {
             None
         };
@@ -561,13 +575,20 @@ impl super::GameState {
                 // A move that reports an unchanged position can't cross anything,
                 // and attack cadence reports plenty of them.
                 let blocked = dist > 0.0 && {
-                    let cache = self.passability_read();
-                    let floor = super::passability::authoritative_floor(&cache, &monster.position);
+                    let global_cache = self.passability_read();
+                    let instance_caches = self.instance_passability_read();
+                    let floor =
+                        super::passability::authoritative_floor(&global_cache, &monster.position);
+                    let cache = super::passability::mover_cache(
+                        &global_cache,
+                        &instance_caches,
+                        instance_key.as_deref(),
+                    );
                     // Sweep in unwrapped X so a seam-crossing move stays the short
                     // local segment `dist` measured.
                     let to_x = monster.position.x + dx;
                     super::passability::wrapped_block_info(
-                        &cache,
+                        cache,
                         monster.position.x,
                         monster.position.z,
                         to_x,
@@ -1234,9 +1255,15 @@ impl super::GameState {
     /// items that were on the ground a minute ago (IMP-1.4). Also the only
     /// thing that clears `monster_loot`, so no entry outlives its monster.
     async fn return_carried_loot(&self, monster: &crate::types::Monster) {
+        let loot_instance = self.monster_instance_key(&monster.id).await;
         for item in self.take_monster_loot(&monster.id).await {
             let position = self
-                .loot_drop_position(monster.position, monster.floor_level, monster.position)
+                .loot_drop_position(
+                    loot_instance.as_deref(),
+                    monster.position,
+                    monster.floor_level,
+                    monster.position,
+                )
                 .await;
             self.spawn_ground_item(onlinerpg_shared::inventory::GroundItem {
                 instance_id: item.instance_id,

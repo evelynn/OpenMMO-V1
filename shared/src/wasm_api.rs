@@ -366,25 +366,56 @@ pub fn passability_get_floor_y_base(x: f32, z: f32, floor_level: u8) -> f32 {
 
 // --- Dungeon (procedural, seed-deterministic) ---
 
+/// Cached dungeons per worker. Bounded because party instances (IMP-4.2)
+/// turned the key from "an entrance" — of which there are a handful — into
+/// "an entrance and a party seed", of which there is no end. A player can see
+/// one dungeon at a time, so four covers bouncing between two instances with
+/// room to spare.
+const DUNGEON_LAYOUT_CACHE_CAP: usize = 4;
+
 thread_local! {
-    static DUNGEON_LAYOUTS: RefCell<HashMap<String, Rc<Vec<crate::dungeon::FloorLayout>>>> =
-        RefCell::new(HashMap::new());
+    /// Insertion-ordered, so the oldest entry is the one evicted.
+    #[allow(clippy::type_complexity)]
+    static DUNGEON_LAYOUTS: RefCell<Vec<((String, u64), Rc<Vec<crate::dungeon::FloorLayout>>)>> =
+        const { RefCell::new(Vec::new()) };
+    /// The party instance this worker is currently generating for; 0 is the
+    /// public dungeon. Set once on entry rather than threaded through six
+    /// exports the client already calls by name.
+    static DUNGEON_PARTY_SEED: RefCell<u64> = const { RefCell::new(0) };
 }
 
-/// Layouts are deterministic per entrance id, so generate once and memoize —
-/// regeneration costs milliseconds in wasm and several exports need them per
-/// floor transition. The registry is tiny, so entries are never evicted.
+/// Which party's instance subsequent dungeon queries describe. `0` restores
+/// the public dungeon, which is what a player outside an instance walks.
+#[wasm_bindgen]
+pub fn dungeon_set_party_seed(party_seed: f64) {
+    DUNGEON_PARTY_SEED.with(|c| *c.borrow_mut() = party_seed as u64);
+}
+
+/// Layouts are deterministic per (entrance, party seed), so generate once and
+/// memoize — regeneration costs milliseconds in wasm and several exports need
+/// them per floor transition.
 ///
 /// The hit path allocates nothing: the height queries below run per entity per
-/// frame, and `entry()` would key every one of them with a fresh `String`.
+/// frame, and keying with an owned `String` would allocate on every one.
 fn dungeon_layouts(entrance_id: &str) -> Rc<Vec<crate::dungeon::FloorLayout>> {
+    let party_seed = DUNGEON_PARTY_SEED.with(|c| *c.borrow());
     DUNGEON_LAYOUTS.with(|c| {
-        if let Some(layouts) = c.borrow().get(entrance_id) {
+        if let Some((_, layouts)) = c
+            .borrow()
+            .iter()
+            .find(|((id, seed), _)| id == entrance_id && *seed == party_seed)
+        {
             return layouts.clone();
         }
-        let layouts = Rc::new(crate::dungeon::generate_dungeon_for(entrance_id));
-        c.borrow_mut()
-            .insert(entrance_id.to_string(), layouts.clone());
+        let layouts = Rc::new(crate::dungeon::generate_dungeon_for_party(
+            entrance_id,
+            party_seed,
+        ));
+        let mut cache = c.borrow_mut();
+        if cache.len() >= DUNGEON_LAYOUT_CACHE_CAP {
+            cache.remove(0);
+        }
+        cache.push(((entrance_id.to_string(), party_seed), layouts.clone()));
         layouts
     })
 }

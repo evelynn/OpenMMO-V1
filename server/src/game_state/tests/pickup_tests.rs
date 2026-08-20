@@ -115,6 +115,7 @@ async fn monster_loot_is_withheld_until_the_killing_blow_lands() {
         vec![],
         drop_position,
         0,
+        None,
     );
 
     // Advance virtual time so the withheld task has been polled to its timer.

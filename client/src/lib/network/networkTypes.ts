@@ -235,6 +235,19 @@ export type ClientMessage =
   | { SellItems: { merchant_player_id: number; items: BagLineItem[] } }
   | { BuybackItems: { merchant_player_id: number; entry_ids: number[] } }
   | { EnvReport: ClientEnvReport }
+  | { UseSkill: { skill: string; monster_id: string | null } }
+  | 'CancelCast'
+  | { LearnSkill: { skill: string } }
+  | { SetTitle: { title: string | null } }
+  | { CreateGuild: { name: string } }
+  | { InviteToGuild: { name: string } }
+  | { RespondGuildInvite: { guild_id: number; accept: boolean } }
+  | { KickFromGuild: { character_id: number } }
+  | 'LeaveGuild'
+  | { SetGuildRank: { character_id: number; rank_id: number } }
+  | { TransferGuildLeadership: { character_id: number } }
+  | 'OpenGuildStorage'
+  | { ClaimDungeonInstance: { entrance_id: string } }
 
 /** One line of a batched `BuyItems` request: buy `qty` units of one item def. */
 export type TradeLineItem = {

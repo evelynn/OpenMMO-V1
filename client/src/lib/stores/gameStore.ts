@@ -11,6 +11,7 @@ import { resetPartyStores } from './partyStore'
 import { resetFriendStores } from './friendStore'
 import { resetFishingStore } from './fishingStore'
 import { resetDiscoveredDungeons } from './dungeonStore'
+import { resetDungeonInstances } from '../managers/dungeonManager'
 import { resetHungerStore } from './hungerStore'
 import { resetDebuffStore } from './debuffStore'
 import { groundItemManager } from '../managers/groundItemManager'
@@ -142,6 +143,7 @@ export const resetGameStore = () => {
   resetPartyStores()
   resetFriendStores()
   resetDiscoveredDungeons()
+  resetDungeonInstances()
   resetHungerStore()
   resetDebuffStore()
   groundItemManager.reset()

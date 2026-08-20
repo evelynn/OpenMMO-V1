@@ -1134,7 +1134,12 @@ impl super::GameState {
     /// rare drop can spill from anything that yields loot. Table entries are
     /// validated against `ItemDefs` at load time, so every rolled id is
     /// guaranteed to have a definition here.
-    pub(super) async fn spawn_world_drops(&self, origin: crate::types::Position, floor_level: i8) {
+    pub(super) async fn spawn_world_drops(
+        &self,
+        instance_key: Option<&str>,
+        origin: crate::types::Position,
+        floor_level: i8,
+    ) {
         /// How far from the loot origin a world drop scatters.
         const WORLD_DROP_OFFSET_METERS: f32 = 1.5;
 
@@ -1143,6 +1148,7 @@ impl super::GameState {
             self.world_drop_defs.roll(&mut rng)
         };
         self.spawn_scattered_items(
+            instance_key,
             item_def_ids,
             origin,
             floor_level,
@@ -1158,6 +1164,7 @@ impl super::GameState {
     /// pick them up.
     pub(super) async fn spawn_scattered_items(
         &self,
+        instance_key: Option<&str>,
         item_def_ids: Vec<String>,
         origin: crate::types::Position,
         floor_level: i8,
@@ -1171,7 +1178,7 @@ impl super::GameState {
             let radius = rand::thread_rng().gen_range(min_r..=max_r);
             let preferred = super::combat::offset_position_at_angle(origin, angle, radius);
             let position = self
-                .loot_drop_position(origin, floor_level, preferred)
+                .loot_drop_position(instance_key, origin, floor_level, preferred)
                 .await;
 
             let instance_id = self.next_instance_id().await;
@@ -1199,7 +1206,13 @@ impl super::GameState {
         // Scatter, or a run of drops piles onto one pixel under the player.
         let preferred = drop_landing_position(player_position, rotation);
         let position = self
-            .loot_drop_position(player_position, floor_level, preferred)
+            .loot_drop_position(
+                self.player_instance_key_at(player_id, &player_position)
+                    .as_deref(),
+                player_position,
+                floor_level,
+                preferred,
+            )
             .await;
         // For the unit that splits off a stack — the stack keeps its own id.
         // Reserved outside the lock like award_item; unused otherwise.
@@ -1385,7 +1398,13 @@ impl super::GameState {
             for _ in 0..piles {
                 let preferred = drop_landing_position(player_position, rotation);
                 let position = self
-                    .loot_drop_position(player_position, floor_level, preferred)
+                    .loot_drop_position(
+                        self.player_instance_key_at(player_id, &player_position)
+                            .as_deref(),
+                        player_position,
+                        floor_level,
+                        preferred,
+                    )
                     .await;
                 self.spawn_ground_item(GroundItem {
                     instance_id: next_ground_id,

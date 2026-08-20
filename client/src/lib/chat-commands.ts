@@ -21,6 +21,8 @@ import { parseTpArgs, resolveTpDestination } from './utils/tp-args'
 import { tpDestinations } from './utils/tp-destinations'
 
 import { dungeonManager } from './managers/dungeonManager'
+import { DUNGEON_ENTRANCES } from './data/dungeonDefs'
+import { shortestWrappedDeltaX } from './terrain/world-wrap'
 import { chatChannel } from './stores/chatChannelStore'
 import { partyRoster } from './stores/partyStore'
 
@@ -48,6 +50,20 @@ function nearestTownsperson(): number | null {
     if (!nearest || distSq < nearest.distSq) nearest = { id, distSq }
   }
   return nearest?.id ?? null
+}
+
+/** The dungeon entrance the player is standing at, within the same radius
+ *  that auto-registers its geometry. */
+function nearestDungeonEntranceId(): string | null {
+  const me = get(gameStore).currentPlayer
+  if (!me) return null
+  const r = dungeonManager.consts.eventDeliveryRadius
+  for (const e of DUNGEON_ENTRANCES) {
+    const dx = shortestWrappedDeltaX(e.x, me.position.x)
+    const dz = me.position.z - e.z
+    if (dx * dx + dz * dz < r * r) return e.id
+  }
+  return null
 }
 
 /** Every command lives here once: its `/help` line, whether it is admin-only,
@@ -166,6 +182,20 @@ const COMMANDS: Record<string, Command> = {
         return
       }
       networkManager.sendOpenStorage(npc)
+    },
+  },
+  '/instance': {
+    desc: 'Claim your own copy of the dungeon you are standing at: /instance',
+    run: () => {
+      const id = nearestDungeonEntranceId()
+      if (id === null) {
+        addChatMessage({
+          text: 'There is no dungeon entrance nearby.',
+          sender: 'system',
+        })
+        return
+      }
+      networkManager.sendClaimDungeonInstance(id)
     },
   },
   // No client-side handler: the server is the one resolver of song titles

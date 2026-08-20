@@ -215,6 +215,23 @@ pub(super) fn authoritative_floor(
     pathfinding::get_floor_at_position(cache, position.x, position.z, position.y)
 }
 
+/// The walls that apply to one mover: their instance's overlay when they walk
+/// a party copy of a dungeon, the global cache otherwise.
+///
+/// Sound because dungeon interiors register at floor indices
+/// `DUNGEON_FLOOR_INDEX_BASE..`, which housing and furniture never use — so a
+/// query at a dungeon floor can only ever be answered by a dungeon region, and
+/// an overlay holding that one region answers it identically (IMP-4.2).
+pub(super) fn mover_cache<'a>(
+    global: &'a pathfinding::PassabilityCache,
+    overlays: &'a std::collections::HashMap<String, pathfinding::PassabilityCache>,
+    instance_key: Option<&str>,
+) -> &'a pathfinding::PassabilityCache {
+    instance_key
+        .and_then(|key| overlays.get(key))
+        .unwrap_or(global)
+}
+
 impl super::GameState {
     /// Cache guards recover from poisoning: a panic mid-update at worst
     /// leaves one stale entry, which must not take down the movement tick.
@@ -228,6 +245,28 @@ impl super::GameState {
         &self,
     ) -> std::sync::RwLockWriteGuard<'_, pathfinding::PassabilityCache> {
         self.passability.write().unwrap_or_else(|e| e.into_inner())
+    }
+
+    pub(super) fn instance_passability_read(
+        &self,
+    ) -> std::sync::RwLockReadGuard<
+        '_,
+        std::collections::HashMap<String, pathfinding::PassabilityCache>,
+    > {
+        self.instance_passability
+            .read()
+            .unwrap_or_else(|e| e.into_inner())
+    }
+
+    pub(super) fn instance_passability_write(
+        &self,
+    ) -> std::sync::RwLockWriteGuard<
+        '_,
+        std::collections::HashMap<String, pathfinding::PassabilityCache>,
+    > {
+        self.instance_passability
+            .write()
+            .unwrap_or_else(|e| e.into_inner())
     }
 
     /// Build the boot-time cache: every house, every region's solid
@@ -347,7 +386,11 @@ impl super::GameState {
         let Some(cells) = cells else {
             return;
         };
-        set_floor_cells(&mut self.passability_write(), entrance_id, depth, cells);
+        if super::dungeon::party_seed_of(entrance_id) == 0 {
+            set_floor_cells(&mut self.passability_write(), entrance_id, depth, cells);
+        } else if let Some(overlay) = self.instance_passability_write().get_mut(entrance_id) {
+            set_floor_cells(overlay, entrance_id, depth, cells);
+        }
     }
 }
 

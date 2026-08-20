@@ -9,7 +9,7 @@
 use std::collections::{HashMap, HashSet};
 
 use onlinerpg_shared::dungeon::{
-    cell_center, dungeon_origin, floor_height_at, floor_world_y, generate_dungeon_for,
+    cell_center, dungeon_origin, floor_height_at, floor_world_y, generate_dungeon_for_party,
     interior_doors, monster_level_for_depth, FloorLayout, PropKind, ENTRANCE_DOOR_ID,
     FLOOR_Y_TOLERANCE, GRID,
 };
@@ -78,6 +78,40 @@ pub(super) fn discovery_cells(
         }
     }
     cells
+}
+
+/// A dungeon runtime is keyed by *instance*, not by entrance: two parties at
+/// the same mouth walk different mazes and must not share broken props, open
+/// doors or spawn slots (IMP-4.2).
+///
+/// The public dungeon keeps the bare entrance id as its key, so every path
+/// that predates instances behaves exactly as it did.
+pub(super) fn instance_key(entrance_id: &str, party_seed: u64) -> String {
+    if party_seed == 0 {
+        return entrance_id.to_string();
+    }
+    format!("{entrance_id}#{party_seed}")
+}
+
+/// The entrance an instance key names.
+/// The runtime key as an instance key: `None` for the public dungeon, which
+/// every layout lookup already answers by entrance id alone.
+pub(super) fn instance_of(runtime_key: &str) -> Option<String> {
+    (party_seed_of(runtime_key) != 0).then(|| runtime_key.to_string())
+}
+
+pub(super) fn entrance_of(instance_key: &str) -> &str {
+    instance_key
+        .split_once('#')
+        .map_or(instance_key, |(entrance, _)| entrance)
+}
+
+/// The party seed an instance key carries; 0 for the public dungeon.
+pub(super) fn party_seed_of(instance_key: &str) -> u64 {
+    instance_key
+        .split_once('#')
+        .and_then(|(_, seed)| seed.parse().ok())
+        .unwrap_or(0)
 }
 
 pub(super) struct DungeonRuntime {
@@ -162,6 +196,8 @@ pub(super) fn door_line_dist_sq(entrance: &Position, seg: [i32; 4], pos: &Positi
 
 impl GameState {
     /// Lazily generate and cache the layouts for a dungeon.
+    /// `instance_id` is an entrance id for the public dungeon, or an
+    /// entrance plus a party seed for one party's copy.
     pub(super) async fn ensure_dungeon_runtime(&self, entrance_id: &str) {
         {
             let dungeons = self.dungeons.read().await;
@@ -169,12 +205,30 @@ impl GameState {
                 return;
             }
         }
-        let layouts = generate_dungeon_for(entrance_id);
+        // Generated from the instance's own seed, so two parties at one
+        // mouth get different mazes without a byte of geometry on the wire.
+        let layouts =
+            generate_dungeon_for_party(entrance_of(entrance_id), party_seed_of(entrance_id));
         info!(
-            "Dungeon '{}' runtime created ({} floors)",
+            "Dungeon instance '{}' runtime created ({} floors)",
             entrance_id,
             layouts.len()
         );
+        // A party copy gets its own walls, in its own overlay: two dungeon
+        // regions over one footprint in the shared cache would block as the
+        // union of both mazes (IMP-4.2).
+        if party_seed_of(entrance_id) != 0 {
+            if let Some(def) = self.dungeon_defs.get(entrance_of(entrance_id)) {
+                let rp = onlinerpg_shared::dungeon::dungeon_passability(&def.position(), &layouts);
+                let mut overlay = onlinerpg_shared::pathfinding::PassabilityCache::new();
+                overlay.insert(
+                    onlinerpg_shared::dungeon::dungeon_cache_key(entrance_id),
+                    rp,
+                );
+                self.instance_passability_write()
+                    .insert(entrance_id.to_string(), overlay);
+            }
+        }
         let mut dungeons = self.dungeons.write().await;
         dungeons
             .entry(entrance_id.to_string())
@@ -185,6 +239,27 @@ impl GameState {
                 opened_props: HashMap::new(),
                 open_doors: HashMap::new(),
             });
+    }
+
+    /// Drop an emptied party instance: its runtime, its walls, and the seed
+    /// its members were carrying. The public dungeon (`party_seed == 0`) is
+    /// never dropped — everyone shares it and it is generated once.
+    async fn evict_dungeon_instance(&self, instance_key: &str) {
+        if party_seed_of(instance_key) == 0 {
+            return;
+        }
+        {
+            let mut dungeons = self.dungeons.write().await;
+            let still_occupied = dungeons
+                .get(instance_key)
+                .is_some_and(|rt| rt.floors.values().any(|fr| !fr.players.is_empty()));
+            if still_occupied {
+                return;
+            }
+            dungeons.remove(instance_key);
+        }
+        self.instance_passability_write().remove(instance_key);
+        info!("Dungeon instance '{}' runtime evicted", instance_key);
     }
 
     /// Toggle a dungeon door's open state and return the new state: the server
@@ -202,7 +277,7 @@ impl GameState {
         depth: u8,
         door_id: u32,
     ) -> Option<bool> {
-        let entrance = self.dungeon_defs.get(entrance_id)?;
+        let entrance = self.dungeon_defs.get(entrance_of(entrance_id))?;
         let expected_floor = -i8::try_from(depth).ok()?;
         let (player_pos, player_floor) = {
             let players = self.players.read().await;
@@ -235,7 +310,7 @@ impl GameState {
             let door = {
                 let dungeons = self.dungeons.read().await;
                 let layout = dungeons
-                    .get(entrance_id)?
+                    .get(entrance_of(entrance_id))?
                     .layouts
                     .get((depth - 1) as usize)?;
                 interior_doors(layout)
@@ -278,7 +353,7 @@ impl GameState {
         is_open: bool,
     ) {
         let (center, floor_level) = if depth == 0 {
-            let Some(def) = self.dungeon_defs.get(&entrance_id) else {
+            let Some(def) = self.dungeon_defs.get(entrance_of(&entrance_id)) else {
                 return;
             };
             (def.position(), 0)
@@ -460,7 +535,7 @@ impl GameState {
         entrance_id: &str,
         auth_service: &crate::auth::AuthService,
     ) {
-        let Some(entrance) = self.dungeon_defs.get(entrance_id) else {
+        let Some(entrance) = self.dungeon_defs.get(entrance_of(entrance_id)) else {
             return;
         };
         let Some(character_id) = self.character_id_of(player_id).await else {
@@ -575,7 +650,12 @@ impl GameState {
             (items, gold)
         };
 
-        self.eject_chest_loot(item_def_ids.clone(), chest_pos, player_floor);
+        self.eject_chest_loot(
+            instance_of(entrance_id),
+            item_def_ids.clone(),
+            chest_pos,
+            player_floor,
+        );
         let new_gold = {
             let mut gold_map = self.player_gold.write().await;
             let wallet = gold_map.entry(*player_id).or_insert(0);
@@ -611,12 +691,19 @@ impl GameState {
     /// Burst a treasure chest's loot out as scattered ground items once the
     /// lid has swung open. The wait lives server-side so a client that skips
     /// the lid animation can't reach the loot early (same rule as kill loot).
-    fn eject_chest_loot(&self, item_def_ids: Vec<String>, chest_pos: Position, floor_level: i8) {
+    fn eject_chest_loot(
+        &self,
+        instance_key: Option<String>,
+        item_def_ids: Vec<String>,
+        chest_pos: Position,
+        floor_level: i8,
+    ) {
         let game_state = self.clone();
         tokio::spawn(async move {
             tokio::time::sleep(*super::combat::CHEST_LOOT_EJECT_DELAY).await;
             game_state
                 .spawn_scattered_items(
+                    instance_key.as_deref(),
                     item_def_ids,
                     chest_pos,
                     floor_level,
@@ -625,7 +712,9 @@ impl GameState {
                 )
                 .await;
             // Rare bonus world drops burst out with the rest.
-            game_state.spawn_world_drops(chest_pos, floor_level).await;
+            game_state
+                .spawn_world_drops(instance_key.as_deref(), chest_pos, floor_level)
+                .await;
         });
     }
 
@@ -669,7 +758,12 @@ impl GameState {
                 self.spawn_dungeon_coin_pile(drop_pos, -(depth as i8)).await;
             }
             // Rare bonus world drops, independent of the coin roll.
-            self.spawn_world_drops(prop_pos, -(depth as i8)).await;
+            self.spawn_world_drops(
+                instance_of(entrance_id).as_deref(),
+                prop_pos,
+                -(depth as i8),
+            )
+            .await;
         }
     }
 
@@ -709,7 +803,12 @@ impl GameState {
                 .await;
             self.spawn_dungeon_coin_pile(drop_pos, -(depth as i8)).await;
             // Rare bonus world drops, in addition to the coin pile.
-            self.spawn_world_drops(chest_pos, -(depth as i8)).await;
+            self.spawn_world_drops(
+                instance_of(entrance_id).as_deref(),
+                chest_pos,
+                -(depth as i8),
+            )
+            .await;
         }
     }
 
@@ -790,7 +889,7 @@ impl GameState {
         if depth == 0 {
             return None;
         }
-        let entrance = self.dungeon_defs.get(entrance_id)?;
+        let entrance = self.dungeon_defs.get(entrance_of(entrance_id))?;
         self.ensure_dungeon_runtime(entrance_id).await;
 
         let (player_pos, player_floor) = {
@@ -859,7 +958,7 @@ impl GameState {
     /// Debug helper: reset all destructible/openable prop state for a dungeon
     /// instance and push empty snapshots to players currently on its floors.
     pub async fn debug_reset_dungeon_props(&self, entrance_id: &str) {
-        if self.dungeon_defs.get(entrance_id).is_none() {
+        if self.dungeon_defs.get(entrance_of(entrance_id)).is_none() {
             return;
         }
         self.ensure_dungeon_runtime(entrance_id).await;
@@ -916,18 +1015,157 @@ impl GameState {
         if old_floor >= 0 && new_floor >= 0 {
             return;
         }
+        // The instance a player is in is theirs for the whole descent, so it
+        // is read once here rather than re-derived per floor (IMP-4.2).
+        let party_seed = self.player_instance_seed(player_id);
         if old_floor < 0 {
             if let Some(entrance) = self.dungeon_defs.entrance_at(old_pos.x, old_pos.z) {
-                self.leave_dungeon_floor(player_id, &entrance.id, (-old_floor) as u8)
+                let key = instance_key(&entrance.id, party_seed);
+                self.leave_dungeon_floor(player_id, &key, (-old_floor) as u8)
                     .await;
             }
         }
         if new_floor < 0 {
             if let Some(entrance) = self.dungeon_defs.entrance_at(new_pos.x, new_pos.z) {
-                self.enter_dungeon_floor(player_id, &entrance.id, (-new_floor) as u8)
+                let key = instance_key(&entrance.id, party_seed);
+                self.enter_dungeon_floor(player_id, &key, (-new_floor) as u8)
                     .await;
             }
         }
+    }
+
+    /// Claim a fresh instance of `entrance_id` for this player and whichever
+    /// party members are with them.
+    ///
+    /// The cooldown is charged to each claimant individually, not to the
+    /// party: a shared one would let anyone ride along on somebody else's,
+    /// and moving to personal later would break whatever loop had grown
+    /// around it (09 #20).
+    pub async fn claim_dungeon_instance(
+        &self,
+        auth_service: &std::sync::Arc<crate::auth::AuthService>,
+        player_id: &PlayerId,
+        entrance_id: &str,
+    ) {
+        let Some(def) = self.dungeon_defs.get(entrance_id) else {
+            return;
+        };
+        if def.instance_cooldown_secs == 0 {
+            return self
+                .send_system_message(player_id, "This dungeon is shared by everyone")
+                .await;
+        }
+        // The claimant and every party member who shares the descent. Anyone
+        // not here keeps walking the public maze.
+        let mut claimants = vec![*player_id];
+        claimants.extend(self.other_party_members(player_id).await);
+        claimants.dedup();
+
+        let now = crate::auth::unix_now();
+        let mut charged = Vec::new();
+        for claimant in &claimants {
+            let Some(character_id) = self.character_id_of(claimant).await else {
+                continue;
+            };
+            let auth = auth_service.clone();
+            let entrance = entrance_id.to_string();
+            let available_at = tokio::task::spawn_blocking(move || {
+                auth.instance_available_at(character_id, &entrance)
+            })
+            .await
+            .ok()
+            .and_then(Result::ok)
+            .unwrap_or(0);
+            if available_at > now {
+                if claimant == player_id {
+                    let minutes = (available_at - now).div_euclid(60) + 1;
+                    self.send_system_message(
+                        player_id,
+                        format!("You cannot claim this dungeon for another {minutes} minute(s)"),
+                    )
+                    .await;
+                    return;
+                }
+                continue;
+            }
+            charged.push((*claimant, character_id));
+        }
+
+        // Seeded from the clock and the claimant, so two parties claiming in
+        // the same second still get different mazes.
+        let party_seed = now as u64 ^ (player_id.get().wrapping_mul(0x9E37_79B9_7F4A_7C15));
+        let party_seed = party_seed.max(1);
+        let until = now + i64::from(def.instance_cooldown_secs);
+        for (claimant, character_id) in charged {
+            self.player_instances
+                .write()
+                .unwrap_or_else(|e| e.into_inner())
+                .insert(claimant, party_seed);
+            let auth = auth_service.clone();
+            let entrance = entrance_id.to_string();
+            let _ = tokio::task::spawn_blocking(move || {
+                auth.set_instance_cooldown(character_id, &entrance, until)
+            })
+            .await;
+            self.send_direct_message(
+                &claimant,
+                ServerMessage::DungeonInstance {
+                    entrance_id: entrance_id.to_string(),
+                    party_seed,
+                },
+            )
+            .await;
+        }
+    }
+
+    /// Which instance this player walks. 0 is the public dungeon, which is
+    /// what everyone outside a party instance gets.
+    /// The runtime/overlay key for whoever stands at `position` carrying
+    /// `party_seed`. `None` for the public dungeon and for anywhere outside a
+    /// dungeon footprint — both of which the global cache already answers.
+    pub(super) fn instance_key_at(&self, party_seed: u64, position: &Position) -> Option<String> {
+        if party_seed == 0 {
+            return None;
+        }
+        let entrance = self.dungeon_defs.entrance_at(position.x, position.z)?;
+        Some(instance_key(&entrance.id, party_seed))
+    }
+
+    /// The instance a dungeon monster was spawned into, or `None` for a
+    /// monster on the surface or in the public dungeon.
+    pub(super) async fn monster_instance_key(&self, monster_id: &str) -> Option<String> {
+        let key = self
+            .dungeon_monsters
+            .read()
+            .await
+            .get(monster_id)
+            .map(|entry| entry.entrance_id.clone())?;
+        (party_seed_of(&key) != 0).then_some(key)
+    }
+
+    /// [`Self::instance_key_at`] for a player, resolving their seed first.
+    pub(super) fn player_instance_key_at(
+        &self,
+        player_id: &PlayerId,
+        position: &Position,
+    ) -> Option<String> {
+        self.instance_key_at(self.player_instance_seed(player_id), position)
+    }
+
+    pub(crate) fn player_instance_seed(&self, player_id: &PlayerId) -> u64 {
+        self.player_instances
+            .read()
+            .unwrap_or_else(|e| e.into_inner())
+            .get(player_id)
+            .copied()
+            .unwrap_or(0)
+    }
+
+    pub(crate) fn forget_player_instance(&self, player_id: &PlayerId) {
+        self.player_instances
+            .write()
+            .unwrap_or_else(|e| e.into_inner())
+            .remove(player_id);
     }
 
     async fn enter_dungeon_floor(&self, player_id: &PlayerId, entrance_id: &str, depth: u8) {
@@ -1016,7 +1254,7 @@ impl GameState {
         depth: u8,
         owner: &PlayerId,
     ) {
-        let Some(entrance) = self.dungeon_defs.get(entrance_id) else {
+        let Some(entrance) = self.dungeon_defs.get(entrance_of(entrance_id)) else {
             return;
         };
         let now = Self::now_ms();
@@ -1177,6 +1415,9 @@ impl GameState {
                     }
                 }
                 self.despawn_monsters(alive_ids).await;
+                // Last one out of a party copy takes it with them; otherwise
+                // one runtime per party ever formed would accumulate.
+                self.evict_dungeon_instance(entrance_id).await;
             }
         }
     }
@@ -1207,6 +1448,7 @@ impl GameState {
     /// it. On the surface (floor >= 0) the scatter is used unchanged.
     pub(super) async fn loot_drop_position(
         &self,
+        instance_key: Option<&str>,
         monster_position: Position,
         floor_level: i8,
         preferred: Position,
@@ -1223,7 +1465,7 @@ impl GameState {
         let depth = (-floor_level) as usize;
         let dungeons = self.dungeons.read().await;
         let Some(layout) = dungeons
-            .get(&entrance.id)
+            .get(instance_key.unwrap_or(&entrance.id))
             .and_then(|rt| rt.layouts.get(depth - 1))
         else {
             return preferred;
@@ -1287,11 +1529,14 @@ impl GameState {
             return current_floor.max(0);
         };
 
-        self.ensure_dungeon_runtime(&entrance.id).await;
+        // The mover's own copy: stairs sit in different cells per instance,
+        // so the expected Y at (x,z) is instance-specific (IMP-4.2).
+        let runtime_key = instance_key(&entrance.id, self.player_instance_seed(player_id));
+        self.ensure_dungeon_runtime(&runtime_key).await;
         let depth = requested_floor.unsigned_abs() as usize;
         let (total, expected_y) = {
             let dungeons = self.dungeons.read().await;
-            match dungeons.get(&entrance.id) {
+            match dungeons.get(&runtime_key) {
                 Some(d) => (
                     d.layouts.len(),
                     floor_height_at(

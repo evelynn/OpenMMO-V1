@@ -499,6 +499,7 @@ impl AuthService {
         Self::ensure_dungeon_discovery_schema(&conn)?;
         Self::ensure_achievement_schema(&conn)?;
         Self::ensure_guild_schema(&conn)?;
+        Self::ensure_instance_cooldown_schema(&conn)?;
         Self::ensure_mail_schema(&conn)?;
         Self::ensure_quest_schema(&conn)?;
         Self::ensure_storage_schema(&conn)?;
@@ -741,6 +742,56 @@ impl AuthService {
     /// Dungeon entrances each character has discovered (world-map markers).
     /// Row presence is the whole fact — losing one only means rediscovering
     /// by walking near the entrance again.
+    /// Per-character instance cooldowns (IMP-4.2). Personal from the start:
+    /// a party-wide cooldown would let anyone ride along on somebody else's,
+    /// and changing it later would break whatever farming loop had grown.
+    fn ensure_instance_cooldown_schema(conn: &Connection) -> Result<(), rusqlite::Error> {
+        conn.execute(
+            "CREATE TABLE IF NOT EXISTS character_instance_cooldowns (
+                character_id INTEGER NOT NULL REFERENCES characters(id) ON DELETE CASCADE,
+                entrance_id  TEXT NOT NULL,
+                available_at INTEGER NOT NULL,
+                PRIMARY KEY (character_id, entrance_id)
+            )",
+            [],
+        )?;
+        Ok(())
+    }
+
+    /// When this character may next claim an instance of `entrance_id`.
+    pub fn instance_available_at(
+        &self,
+        character_id: i64,
+        entrance_id: &str,
+    ) -> Result<i64, AuthError> {
+        let conn = self.open_connection()?;
+        let at = conn
+            .query_row(
+                "SELECT available_at FROM character_instance_cooldowns \
+                 WHERE character_id = ?1 AND entrance_id = ?2",
+                params![character_id, entrance_id],
+                |row| row.get::<_, i64>(0),
+            )
+            .optional()?;
+        Ok(at.unwrap_or(0))
+    }
+
+    pub fn set_instance_cooldown(
+        &self,
+        character_id: i64,
+        entrance_id: &str,
+        available_at: i64,
+    ) -> Result<(), AuthError> {
+        let conn = self.open_connection()?;
+        conn.execute(
+            "INSERT INTO character_instance_cooldowns (character_id, entrance_id, available_at) \
+             VALUES (?1, ?2, ?3) \
+             ON CONFLICT(character_id, entrance_id) DO UPDATE SET available_at = excluded.available_at",
+            params![character_id, entrance_id, available_at],
+        )?;
+        Ok(())
+    }
+
     /// Guilds, their rosters, their rank table and their shared storage
     /// (IMP-4.1). The UNIQUE index on `character_id` is what makes "which
     /// guild is this character in" an O(1) lookup and enforces one guild per

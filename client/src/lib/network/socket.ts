@@ -438,6 +438,10 @@ class NetworkManager {
     this.sendMessage({ TransferGuildLeadership: { character_id: characterId } })
   }
 
+  sendClaimDungeonInstance(entranceId: string) {
+    this.sendMessage({ ClaimDungeonInstance: { entrance_id: entranceId } })
+  }
+
   sendOpenGuildStorage() {
     this.sendMessage('OpenGuildStorage')
   }

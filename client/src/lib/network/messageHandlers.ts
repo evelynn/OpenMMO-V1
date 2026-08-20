@@ -23,7 +23,7 @@ import { housingManager } from '../managers/housingManager'
 import { bridgeManager } from '../managers/bridgeManager'
 import { objectManager } from '../managers/objectManager'
 import { groundItemManager } from '../managers/groundItemManager'
-import { dungeonManager } from '../managers/dungeonManager'
+import { dungeonManager, setDungeonInstance } from '../managers/dungeonManager'
 import type { ItemInstance } from '../network/networkTypes'
 import {
   openStorage as openStoragePanel,
@@ -1483,6 +1483,10 @@ export function handleServerMessage(
 
     case 'GuildUpdated':
       guild.set(data.guild ?? null)
+      break
+
+    case 'DungeonInstance':
+      setDungeonInstance(data.entrance_id, data.party_seed)
       break
 
     case 'GuildInvite':

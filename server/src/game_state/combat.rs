@@ -140,6 +140,7 @@ impl super::GameState {
         carried_drops: Vec<GroundItem>,
         origin: Position,
         floor_level: i8,
+        instance_key: Option<String>,
     ) {
         let game_state = self.clone();
         tokio::spawn(async move {
@@ -150,7 +151,9 @@ impl super::GameState {
             for item in carried_drops {
                 game_state.spawn_ground_item(item).await;
             }
-            game_state.spawn_world_drops(origin, floor_level).await;
+            game_state
+                .spawn_world_drops(instance_key.as_deref(), origin, floor_level)
+                .await;
         });
     }
 
@@ -399,9 +402,16 @@ impl super::GameState {
         ) else {
             return Err(AttackRejectReason::InvalidTarget);
         };
+        let attacker_instance = self.player_instance_key_at(player_id, &player_position);
         let walled_off = || {
+            let global_cache = self.passability_read();
+            let instance_caches = self.instance_passability_read();
             wall_between(
-                &self.passability_read(),
+                super::passability::mover_cache(
+                    &global_cache,
+                    &instance_caches,
+                    attacker_instance.as_deref(),
+                ),
                 player_position,
                 monster_position,
                 player_floor,
@@ -623,6 +633,11 @@ impl super::GameState {
                 .and_then(|def| def.weapon.as_deref())
                 .and_then(|weapon| self.item_defs.item_def_id_for_weapon_ref(weapon));
 
+            // Resolved from the killer, not the monster's index entry: the
+            // death path drops that entry, and a party's copy of a dungeon is
+            // where its own loot lands (IMP-4.2).
+            let loot_instance =
+                self.instance_key_at(self.player_instance_seed(player_id), &monster_position);
             debug!("Monster {} died, broadcasting dead state", monster_id);
             self.send_direct_message_to_players_within_position(
                 &monster_position,
@@ -643,6 +658,7 @@ impl super::GameState {
                 // behind a wall would be lost.
                 let drop_position = self
                     .loot_drop_position(
+                        loot_instance.as_deref(),
                         monster_position,
                         monster_floor_level,
                         dropped_weapon_position(monster_position),
@@ -668,6 +684,7 @@ impl super::GameState {
                 carried_drops.push(GroundItem {
                     position: self
                         .loot_drop_position(
+                            loot_instance.as_deref(),
                             monster_position,
                             monster_floor_level,
                             dropped_weapon_position(monster_position),
@@ -689,6 +706,7 @@ impl super::GameState {
                 carried_drops,
                 monster_position,
                 monster_floor_level,
+                loot_instance,
             );
 
             // Dungeon monsters: free their spawn slot for respawn.
@@ -1163,12 +1181,22 @@ impl super::GameState {
             );
             return;
         }
-        if wall_between(
-            &self.passability_read(),
-            monster_position,
-            target_position,
-            monster_floor_level,
-        ) {
+        let attacker_instance = self.monster_instance_key(monster_id).await;
+        let walled = {
+            let global_cache = self.passability_read();
+            let instance_caches = self.instance_passability_read();
+            wall_between(
+                super::passability::mover_cache(
+                    &global_cache,
+                    &instance_caches,
+                    attacker_instance.as_deref(),
+                ),
+                monster_position,
+                target_position,
+                monster_floor_level,
+            )
+        };
+        if walled {
             debug!(
                 "Rejected monster attack through a wall: monster {} -> player {}",
                 monster_id, target_player_name

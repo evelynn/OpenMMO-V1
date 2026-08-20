@@ -21,6 +21,7 @@ import {
   dungeon_interior_doors,
   dungeon_floor_height_at,
   dungeon_entrance_ramp_height_at,
+  dungeon_set_party_seed,
   dungeon_shaft_run_pos,
   passability_start_floor_at,
 } from '../wasm/onlinerpg_shared'
@@ -507,6 +508,9 @@ class DungeonManager {
   enter(id: string, entrance: DungeonEntrance) {
     if (this.id === id) return
     if (this.id) this.exit()
+    // The seed picks the maze; it must be set before anything is generated
+    // or the client walks a different one than the server (IMP-4.2).
+    dungeon_set_party_seed(partySeeds.get(id) ?? 0)
     this.layouts = dungeon_layout(id) as DungeonFloorLayout[]
     dungeon_add_passability(id, entrance.x, entrance.y, entrance.z)
     this.brokenProps.clear()
@@ -524,6 +528,7 @@ class DungeonManager {
   /** Drop dungeon state (passability included). Depth resets to surface. */
   exit() {
     if (this.id) dungeon_remove_passability(this.id)
+    dungeon_set_party_seed(0)
     this.id = null
     this.entrance = null
     this.layouts = []
@@ -1021,3 +1026,19 @@ class DungeonManager {
 }
 
 export const dungeonManager = new DungeonManager()
+
+/** entrance id → the party instance the server put us in; absent = public. */
+const partySeeds = new Map<string, number>()
+
+/** `DungeonInstance`: remember the seed, and regenerate on the spot if the
+ *  claim landed while we were already standing in that dungeon (IMP-4.2). */
+export const setDungeonInstance = (entranceId: string, partySeed: number) => {
+  partySeeds.set(entranceId, partySeed)
+  if (dungeonManager.dungeonId !== entranceId) return
+  const entrance = DUNGEON_ENTRANCES.find((e) => e.id === entranceId)
+  if (!entrance) return
+  dungeonManager.exit()
+  dungeonManager.enter(entranceId, entrance)
+}
+
+export const resetDungeonInstances = () => partySeeds.clear()

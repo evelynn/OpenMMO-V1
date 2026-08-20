@@ -520,6 +520,11 @@ pub enum ClientMessage {
     TransferGuildLeadership {
         character_id: i64,
     },
+    /// Claim a fresh instance of a dungeon before entering it. Refused while
+    /// the character's own cooldown is running (IMP-4.2).
+    ClaimDungeonInstance {
+        entrance_id: String,
+    },
     /// Open the guild's shared storage. Deposits, withdrawals and the close
     /// are the personal-storage messages unchanged — only which container is
     /// open differs (IMP-4.1).
@@ -1359,6 +1364,13 @@ pub enum ServerMessage {
     /// Owner-only: why a guild action was refused.
     GuildDenied {
         reason: crate::guild::GuildDeniedReason,
+    },
+    /// Owner-only: which instance of a dungeon this player now walks. `0` is
+    /// the public one. The client feeds it to the same generator the server
+    /// uses, so the maze crosses no wire (IMP-4.2).
+    DungeonInstance {
+        entrance_id: String,
+        party_seed: u64,
     },
     PlayerInteractionChanged {
         player_id: PlayerId,

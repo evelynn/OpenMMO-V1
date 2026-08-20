@@ -1247,7 +1247,7 @@ impl super::GameState {
         let mut spawned = 0u32;
         for i in 0..count {
             let angle = i as f32 / count as f32 * std::f32::consts::TAU;
-            let position = self.open_spot_beside(&center, angle, SPAWNMOB_RING_RADIUS);
+            let position = self.open_spot_beside(&center, angle, SPAWNMOB_RING_RADIUS, None);
             let Some(monster) = self
                 .spawn_monster(
                     monster_type.to_string(),

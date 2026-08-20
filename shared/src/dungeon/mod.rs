@@ -366,9 +366,27 @@ impl FloorLayout {
 /// `DefaultHasher` is not stable across Rust releases and the seed must
 /// match between independently-built server and client binaries.
 pub fn dungeon_seed(entrance_id: &str) -> u64 {
+    dungeon_seed_with(entrance_id, 0)
+}
+
+/// The seed for one party's instance of a dungeon (IMP-4.2).
+///
+/// `party_seed = 0` is the public dungeon and must hash exactly as
+/// `dungeon_seed` always did — the golden hashes in this module's tests, and
+/// every client already in the field, depend on it. Anything else mixes into
+/// the same FNV-1a walk, so two parties get different mazes from the same
+/// entrance without a single byte of geometry crossing the wire.
+pub fn dungeon_seed_with(entrance_id: &str, party_seed: u64) -> u64 {
     let mut h: u64 = 0xcbf2_9ce4_8422_2325;
     for b in entrance_id.as_bytes() {
         h ^= *b as u64;
+        h = h.wrapping_mul(0x0000_0100_0000_01b3);
+    }
+    if party_seed == 0 {
+        return h;
+    }
+    for b in party_seed.to_le_bytes() {
+        h ^= b as u64;
         h = h.wrapping_mul(0x0000_0100_0000_01b3);
     }
     h
@@ -395,11 +413,22 @@ pub(crate) fn generate_dungeon(seed: u64) -> Vec<FloorLayout> {
 /// server and the wasm client use for real dungeons; `generate_dungeon` stays
 /// seed-only for property tests over arbitrary seeds.
 pub fn generate_dungeon_for(entrance_id: &str) -> Vec<FloorLayout> {
+    generate_dungeon_for_party(entrance_id, 0)
+}
+
+/// One party's instance. `party_seed = 0` is the public dungeon, identical to
+/// what `generate_dungeon_for` has always produced.
+pub fn generate_dungeon_for_party(entrance_id: &str, party_seed: u64) -> Vec<FloorLayout> {
     let def = entrance(entrance_id);
     let floors = def.and_then(|d| d.floors);
     let boss = def.map_or(BOSS_MONSTER_TYPE, |d| d.boss.as_str());
     let dir = def.and_then(|d| d.entrance_dir);
-    gen::generate_dungeon_with(dungeon_seed(entrance_id), floors, boss, dir)
+    gen::generate_dungeon_with(
+        dungeon_seed_with(entrance_id, party_seed),
+        floors,
+        boss,
+        dir,
+    )
 }
 
 pub fn passability_floor_for_depth(depth: u8) -> u8 {

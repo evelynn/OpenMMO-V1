@@ -44,6 +44,10 @@ pub struct DungeonEntranceDef {
     pub chest_tier: u8,
     /// Side the entrance door opens toward (n/s/e/w); blank = seed-derived.
     pub entrance_dir: Option<WallDirection>,
+    /// How long a character must wait before claiming a fresh instance of
+    /// this dungeon. `0` (blank) means it has no instances at all and every
+    /// party walks the same public maze, exactly as before IMP-4.2.
+    pub instance_cooldown_secs: u32,
 }
 
 impl DungeonEntranceDef {
@@ -127,6 +131,7 @@ fn parse_entrances(csv: &str) -> Vec<DungeonEntranceDef> {
                     b => b.to_string(),
                 },
                 chest_tier: opt_u8("chestTier").unwrap_or(DEFAULT_DUNGEON_CHEST_TIER),
+                instance_cooldown_secs: field("instanceCooldownSecs").parse().unwrap_or(0),
                 entrance_dir: match field("entranceDir") {
                     "" => None,
                     "n" => Some(WallDirection::North),
@@ -160,9 +165,9 @@ mod tests {
 
     #[test]
     fn parses_drops_lists_and_optional_floor_override() {
-        let csv = "id,name,x,y,z,chestDrops,floors,boss,chestTier,entranceDir\n\
-                   a,A Place,-1450,0.7,4720,shield;armor,5,orc_boss,2,s\n\
-                   b,B Place,10,0,20,,,,,\n";
+        let csv = "id,name,x,y,z,chestDrops,floors,boss,chestTier,entranceDir,instanceCooldownSecs\n\
+                   a,A Place,-1450,0.7,4720,shield;armor,5,orc_boss,2,s,3600\n\
+                   b,B Place,10,0,20,,,,,,\n";
         let defs = parse_entrances(csv);
         assert_eq!(defs.len(), 2);
         assert_eq!(defs[0].chest_drops, ["shield", "armor"]);
@@ -175,6 +180,11 @@ mod tests {
         assert_eq!(defs[1].boss, super::super::BOSS_MONSTER_TYPE);
         assert_eq!(defs[1].chest_tier, 1, "blank chestTier = tier 1");
         assert_eq!(defs[1].entrance_dir, None, "blank = seed-derived");
+        assert_eq!(defs[0].instance_cooldown_secs, 3600);
+        assert_eq!(
+            defs[1].instance_cooldown_secs, 0,
+            "blank = one public dungeon, no copies"
+        );
     }
 
     /// Half-open on both axes, and the embedded csv parses at all. The server

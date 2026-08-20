@@ -954,3 +954,37 @@ fn start_floor_ignores_other_depths_shafts_below() {
     }
     assert!(saw_overlap, "no cross-depth shaft overlap in any test seed");
 }
+
+/// The determinism contract IMP-4.2 must not break: the public dungeon is
+/// seed 0, and seed 0 hashes exactly as it always did. Clients already in the
+/// field generate the same public maze as this build.
+#[test]
+fn the_public_dungeon_is_party_seed_zero() {
+    for id in ["old_crypt", "anything", ""] {
+        assert_eq!(super::dungeon_seed(id), super::dungeon_seed_with(id, 0));
+    }
+}
+
+/// Two parties at the same mouth walk different mazes — the whole point of
+/// mixing a seed instead of copying a dungeon.
+#[test]
+fn different_parties_get_different_dungeons() {
+    let public = super::generate_dungeon_for("old_crypt");
+    let party = super::generate_dungeon_for_party("old_crypt", 7);
+    let other = super::generate_dungeon_for_party("old_crypt", 8);
+    assert_ne!(public[0].carved, party[0].carved);
+    assert_ne!(party[0].carved, other[0].carved);
+}
+
+/// …and the same party seed is the same maze every time, which is what lets
+/// the server and every client generate it independently.
+#[test]
+fn the_same_party_seed_is_the_same_dungeon() {
+    let a = super::generate_dungeon_for_party("old_crypt", 4242);
+    let b = super::generate_dungeon_for_party("old_crypt", 4242);
+    assert_eq!(a.len(), b.len());
+    for (x, y) in a.iter().zip(b.iter()) {
+        assert_eq!(x.carved, y.carved);
+        assert_eq!(x.spawns.len(), y.spawns.len());
+    }
+}

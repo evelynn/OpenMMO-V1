@@ -1416,6 +1416,14 @@ async fn handle_client_message(
             }
         }
 
+        ClientMessage::ClaimDungeonInstance { entrance_id } => {
+            if let Some(id) = &state.player_id {
+                game_state
+                    .claim_dungeon_instance(auth_service, id, &entrance_id)
+                    .await;
+            }
+        }
+
         ClientMessage::OpenGuildStorage => {
             if let Some(id) = &state.player_id {
                 game_state.open_guild_storage(auth_service, id).await;

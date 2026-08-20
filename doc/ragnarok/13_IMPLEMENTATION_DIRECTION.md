@@ -2045,6 +2045,46 @@ LRU 4개로 제한한다(플레이어가 동시에 볼 수 있는 던전은 하�
 서버 측 `PassabilityCache`도 같은 이유로 인스턴스가 비면 항목을 제거해야 한다 —
 `leave_dungeon_floor`(`server/src/game_state/dungeon.rs`)의 층 비움 경로에 붙인다.
 
+> **개정 (IMP-4.2 착수 시)** — 다섯 가지.
+>
+> 1. **인스턴스 통로 판정은 전역 `PassabilityCache`에 넣을 수 없다.** 원문은
+>    "캐시 키 `dungeon:{id}` → `dungeon:{id}:{party_seed}`"라고만 적었는데, 그렇게
+>    하면 **같은 발자국을 덮는 항목이 둘이 된다**. `blocking_entries`
+>    (`shared/src/pathfinding/query.rs`)는 캐시 전체를 훑어 발자국이 겹치는 항목
+>    **아무거나 하나라도** 막으면 이동을 거절한다. 즉 공용 미로의 벽과 인스턴스
+>    미로의 벽이 **합집합**으로 걸리고, 공용 던전에 있는 사람까지 같이 망가진다.
+>    질의 API에 이동 주체의 인스턴스를 흘려보내는 방법도 있으나 호출부가 100곳이
+>    넘어 이번 항목의 크기를 벗어난다.
+>    **대신 서버는 인스턴스 전용 오버레이 캐시를 따로 둔다** —
+>    `GameState.instance_passability: HashMap<인스턴스 키, PassabilityCache>`이고
+>    각 항목은 그 인스턴스의 던전 영역 **하나만** 담는다. 지하에 있는 이동 주체는
+>    전역 캐시 대신 자기 오버레이로 질의한다. 이것이 정확히 등가인 근거는 층 번호에
+>    있다: 던전 내부 층은 `DUNGEON_FLOOR_INDEX_BASE + depth - 1`로, 하우징·가구가
+>    쓰는 0..3과 절대 겹치지 않는다(`shared/src/dungeon/mod.rs` 머리말). 따라서 던전
+>    층 번호로 들어온 질의에 답할 수 있는 항목은 던전 영역뿐이고, 오버레이에 그
+>    던전 하나만 있으면 전역 캐시에서 공용 던전 영역을 뺀 것과 결과가 같다.
+>    `authoritative_floor`(Y → 층 번호)는 층의 세계 Y가 깊이만으로 정해지므로
+>    인스턴스와 무관하다 — 전역 캐시로 그대로 묻는다.
+> 2. **런타임 키가 곧 인스턴스 키다.** `DungeonRuntime`을 인스턴스별로 나누라는
+>    원문을 `dungeons: HashMap<String, DungeonRuntime>`의 **키를
+>    `entrance_id` 또는 `entrance_id#party_seed`로 넓히는 것**으로 구현한다
+>    (`instance_key`/`entrance_of`/`party_seed_of`). 정의(`dungeon_defs`) 조회는
+>    전부 `entrance_of`를 거친다. 레이아웃을 읽던 곳
+>    (`loot_drop_position`, `expected_monster_move_y`, `validated_dungeon_floor`)도
+>    이동 주체의 인스턴스 키로 읽어야 한다 — 인스턴스마다 계단 위치가 달라서
+>    같은 (x,z)의 바닥 Y가 다르기 때문이다.
+> 3. **인스턴스는 로그아웃을 넘기지 않는다.** `player_instances`는 메모리에만 있고
+>    접속 종료 시 지워진다. 인스턴스 안에서 로그아웃한 캐릭터는 공용 던전으로
+>    복귀한다(`rehydrate_dungeon_player`는 층 수만 확인하므로 공용 런타임으로 충분).
+>    쿨다운은 DB에 남으므로 "나갔다 들어와 새 인스턴스"는 막힌다.
+> 4. **비면 즉시 버린다.** 파티 사본은 무한히 생길 수 있으므로 마지막 한 명이
+>    마지막 층을 떠나면 `dungeons` 항목과 오버레이 캐시 항목을 **둘 다** 지운다.
+>    공용 던전(`party_seed == 0`)은 지금처럼 남긴다.
+> 5. **`instanceCooldownSecs`의 기본값은 0이다.** 원문의 `INSTANCE_COOLDOWN_SECS`
+>    `21_600`(6시간)은 표(51행)에만 있고 CSV 컬럼과 충돌한다. 값은 CSV가 쥔다.
+>    첫 던전(`old_crypt`)만 `3600`을 넣어 실제로 도는지 보고, 나머지 둘은 빈 칸 =
+>    지금까지와 완전히 동일한 공용 던전으로 남긴다.
+
 ---
 
 ### IMP-4.3. 거점 점유 (공성전 대체) — 보류

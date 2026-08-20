@@ -406,6 +406,13 @@ pub struct GameState {
     /// solid furniture, dungeons), used to collision-check simulated player
     /// movement. std RwLock: accesses are sync and short.
     passability: Arc<std::sync::RwLock<onlinerpg_shared::pathfinding::PassabilityCache>>,
+    /// Per-instance walls, one entry per live dungeon instance, each holding
+    /// that instance's dungeon region alone. Kept out of `passability`
+    /// because two entries over one footprint would block as the *union* of
+    /// both mazes; underground movers are queried against their own overlay
+    /// instead (IMP-4.2).
+    instance_passability:
+        Arc<std::sync::RwLock<HashMap<String, onlinerpg_shared::pathfinding::PassabilityCache>>>,
     /// When each player was last sent a `PositionCorrected`. Only touched when
     /// a correction is sent, and pruned on the refused-move path, so it needs
     /// no disconnect cleanup and stays empty in the normal case.
@@ -448,6 +455,9 @@ pub struct GameState {
     quest_defs: crate::quest_defs::QuestDefs,
     /// Live dungeon runtimes, keyed by entrance id. Created lazily.
     dungeons: Arc<RwLock<HashMap<String, dungeon::DungeonRuntime>>>,
+    /// Which dungeon instance each player walks; absent means the public one
+    /// (IMP-4.2). Set when a party claims an instance, dropped on logout.
+    player_instances: Arc<std::sync::RwLock<HashMap<PlayerId, u64>>>,
     /// monster_id → dungeon spawn slot, for respawn bookkeeping on death.
     dungeon_monsters: Arc<RwLock<HashMap<String, dungeon::DungeonMonsterRef>>>,
     /// Which guild each online player belongs to, and at what rank (IMP-4.1).
@@ -716,6 +726,7 @@ impl GameState {
             passability: Arc::new(std::sync::RwLock::new(
                 onlinerpg_shared::pathfinding::PassabilityCache::new(),
             )),
+            instance_passability: Arc::new(std::sync::RwLock::new(HashMap::new())),
             no_spawn_zones,
             inventories: Arc::new(RwLock::new(HashMap::new())),
             storages: Arc::new(RwLock::new(HashMap::new())),
@@ -731,6 +742,7 @@ impl GameState {
             dungeon_defs,
             quest_defs,
             dungeons: Arc::new(RwLock::new(HashMap::new())),
+            player_instances: Arc::new(std::sync::RwLock::new(HashMap::new())),
             dungeon_monsters: Arc::new(RwLock::new(HashMap::new())),
             world_bosses: Arc::new(RwLock::new(HashMap::new())),
             boss_damage: Arc::new(RwLock::new(HashMap::new())),

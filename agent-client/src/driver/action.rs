@@ -35,6 +35,11 @@ pub(super) enum AgentAction {
         #[serde(alias = "target", default)]
         name: Option<String>,
     },
+    #[serde(rename = "claim_instance")]
+    ClaimInstance {
+        #[serde(alias = "dungeon", alias = "id", alias = "target")]
+        entrance_id: String,
+    },
     #[serde(rename = "set_title")]
     SetTitle {
         #[serde(alias = "name", default)]
@@ -454,6 +459,15 @@ pub(super) const ACTION_SPECS: &[ActionSpec] = &[
   says so if you lack it."#,
     },
     ActionSpec {
+        names: &["claim_instance"],
+        aliases: &[],
+        doc: r#"- Claim your party's own copy of a dungeon, standing at its entrance:
+  {"type": "claim_instance", "entrance_id": "old_crypt"}
+  Only some dungeons have copies; the rest are shared by everyone. Claiming
+  puts every party member with you into the same copy and starts a personal
+  cooldown for each of them."#,
+    },
+    ActionSpec {
         names: &["set_title"],
         aliases: &[],
         doc: r#"- Show a title you have unlocked beside your name (omit it to show none):
@@ -836,7 +850,10 @@ impl AgentAction {
     /// must not be able to slip past this.
     pub(super) fn takes_over_movement(&self) -> bool {
         match self {
-            Self::LearnSkill { .. } | Self::SetTitle { .. } | Self::Guild { .. } => false,
+            Self::LearnSkill { .. }
+            | Self::SetTitle { .. }
+            | Self::Guild { .. }
+            | Self::ClaimInstance { .. } => false,
             Self::Move { .. }
             | Self::Attack { .. }
             | Self::UseSkill { .. }
@@ -922,6 +939,7 @@ impl AgentAction {
             Self::LearnSkill { .. }
             | Self::SetTitle { .. }
             | Self::Guild { .. }
+            | Self::ClaimInstance { .. }
             | Self::SetSavePoint { .. }
             | Self::Travel { .. }
             | Self::Deposit { .. }
@@ -969,6 +987,7 @@ impl AgentAction {
             Self::UseSkill { .. } => "use_skill",
             Self::LearnSkill { .. } => "learn_skill",
             Self::SetTitle { .. } => "set_title",
+            Self::ClaimInstance { .. } => "claim_instance",
             Self::Guild { .. } => "guild",
             Self::Move { .. } => "move",
             Self::Follow { .. } => "follow",
@@ -1424,6 +1443,9 @@ pub(super) fn action_to_command(
             // accept/decline need the invite's id, which lives in the driver.
             _ => None,
         },
+        AgentAction::ClaimInstance { entrance_id } => Some(ClientMessage::ClaimDungeonInstance {
+            entrance_id: entrance_id.clone(),
+        }),
         AgentAction::SetTitle { title } => Some(ClientMessage::SetTitle {
             title: title.clone(),
         }),

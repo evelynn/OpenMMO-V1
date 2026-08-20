@@ -326,6 +326,7 @@ impl super::GameState {
         self.forget_job_progress(player_id).await;
         self.forget_achievements(player_id).await;
         self.forget_guild_membership(player_id).await;
+        self.forget_player_instance(player_id);
         self.remove_dungeon_discoveries(player_id).await;
         self.forget_hunger(player_id).await;
     }
@@ -1121,7 +1122,8 @@ impl super::GameState {
             let mover_ids: Vec<PlayerId> = queues.keys().copied().collect();
             let hunger_profiles = self.hunger_movement_profiles_for(&mover_ids).await;
             let mut players = self.players.write().await;
-            let cache = self.passability_read();
+            let global_cache = self.passability_read();
+            let instance_caches = self.instance_passability_read();
             queues.retain(|player_id, waypoints| {
                 let Some(player) = players.get_mut(player_id) else {
                     return false;
@@ -1147,6 +1149,15 @@ impl super::GameState {
                 let old_position = player.position;
                 let old_floor = player.floor_level;
                 let old_rotation = player.rotation;
+                // Party copies of a dungeon have their own walls, and a
+                // mover cannot leave their instance's footprint mid-tick
+                // (IMP-4.2).
+                let instance_key = self.player_instance_key_at(player_id, &player.position);
+                let cache = super::passability::mover_cache(
+                    &global_cache,
+                    &instance_caches,
+                    instance_key.as_deref(),
+                );
                 let mut budget = max_step;
                 let mut blocked = false;
                 while let Some(intent) = waypoints.front() {
@@ -1173,9 +1184,9 @@ impl super::GameState {
                     // player and drops the queue.
                     if intent.check_collision {
                         let step_floor =
-                            super::passability::authoritative_floor(&cache, &player.position);
+                            super::passability::authoritative_floor(cache, &player.position);
                         match super::passability::resolve_step(
-                            &cache,
+                            cache,
                             player.position.x,
                             player.position.z,
                             step_x,
@@ -1203,7 +1214,7 @@ impl super::GameState {
                                 // correction below carries them clear instead
                                 // of pinning them back inside the wall.
                                 if let Some(out) = super::passability::escape_from_sealed_cell(
-                                    &cache,
+                                    cache,
                                     &player.position,
                                     step_floor,
                                 ) {
@@ -1548,16 +1559,25 @@ impl super::GameState {
     /// arrivals don't stack.
     pub(crate) fn arrival_beside(&self, mover: &PlayerId, center: &Position) -> Position {
         let angle = (mover.get() % 360) as f32 * GOLDEN_ANGLE_RAD;
-        self.open_spot_beside(center, angle, ARRIVAL_RING_RADIUS)
+        let instance = self.player_instance_key_at(mover, center);
+        self.open_spot_beside(center, angle, ARRIVAL_RING_RADIUS, instance.as_deref())
     }
 
     /// A walkable spot at `angle` from `center`, X wrapped to the canonical
     /// range (callers store it directly). A blocked spot (dungeon walls run
     /// 1m from a corridor's center) retries at half radius and finally lands
     /// on `center` itself — a walkable cell by construction.
-    pub(crate) fn open_spot_beside(&self, center: &Position, angle: f32, radius: f32) -> Position {
-        let cache = self.passability_read();
-        let cell_floor = super::passability::authoritative_floor(&cache, center);
+    pub(crate) fn open_spot_beside(
+        &self,
+        center: &Position,
+        angle: f32,
+        radius: f32,
+        instance: Option<&str>,
+    ) -> Position {
+        let global_cache = self.passability_read();
+        let instance_caches = self.instance_passability_read();
+        let cache = super::passability::mover_cache(&global_cache, &instance_caches, instance);
+        let cell_floor = super::passability::authoritative_floor(cache, center);
         for radius in [radius, radius * 0.5] {
             let candidate = Position {
                 x: wrap_world_x(center.x + angle.cos() * radius),
@@ -1565,7 +1585,7 @@ impl super::GameState {
                 z: center.z + angle.sin() * radius,
             };
             if super::passability::wrapped_block_info(
-                &cache,
+                cache,
                 center.x,
                 center.z,
                 candidate.x,

@@ -117,7 +117,10 @@ pub const NPC_TOKEN_FILENAME: &str = "npc_token";
 ///      LeaveGuild/SetGuildRank/TransferGuildLeadership/OpenGuildStorage →
 ///      GuildUpdated/GuildInvite/GuildChatMessage/GuildDenied); the `$`
 ///      prefix routes a line to the guild — IMP-4.1.
-pub const PROTOCOL_VERSION: u32 = 43;
+/// v44: instance dungeons (ClaimDungeonInstance → DungeonInstance); the
+///      party seed picks the maze, so a client that ignores it generates a
+///      different one than the server walks — IMP-4.2.
+pub const PROTOCOL_VERSION: u32 = 44;
 
 /// WebSocket close code sent when the handshake is refused (wrong protocol
 /// version, or traffic before `ClientInfo`). Lives outside the serialized
