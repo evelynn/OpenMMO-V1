@@ -427,8 +427,10 @@ async fn run_npc_session(
         }
     }
 
-    let llm_enabled = npc.llm != LlmType::None;
-    let enter_char_id = if llm_enabled {
+    // A bot has no LLM but does play a character, so this is "does it enter
+    // the world", not "does it prompt a model" (IMP-7.2).
+    let drives_a_character = npc.llm != LlmType::None;
+    let enter_char_id = if drives_a_character {
         characters.first().map(|c| c.id)
     } else {
         None
@@ -592,10 +594,10 @@ async fn run_npc_session(
         }
     });
 
-    if llm_enabled {
-        info!("[{}] Running in LLM-driven mode", label);
-    } else {
-        info!("[{}] Running in direct mode", label);
+    match npc.llm {
+        LlmType::None => info!("[{}] Running in direct mode", label),
+        LlmType::Bot => info!("[{}] Running as a rule-driven world bot", label),
+        _ => info!("[{}] Running in LLM-driven mode", label),
     }
 
     // Wait until the WebSocket reader dies (connection lost)
@@ -621,7 +623,9 @@ impl NpcConfig {
             LlmType::Openrouter => Some(&self.openrouter.system_prompt_file),
             LlmType::Codex => Some(&self.codex.system_prompt_file),
             LlmType::Openai => Some(&self.openai.system_prompt_file),
-            LlmType::None => None,
+            // Neither reads a system prompt: one has no driver, the other
+            // decides from state rather than from prose.
+            LlmType::None | LlmType::Bot => None,
         }
     }
 }
@@ -793,6 +797,18 @@ fn build_system_prompt(npc: &NpcConfig) -> anyhow::Result<String> {
 /// Build the configured LLM backend, already carrying the layered system
 /// prompt. `None` when the agent runs without an LLM, or when the provider
 /// could not be set up.
+/// Where a bot hunts. Its schedule's first entry is its post when it has one
+/// — that is already how an NPC says where it belongs — and the world spawn
+/// otherwise.
+fn bot_post(npc: &NpcConfig) -> (f32, f32) {
+    npc.schedule_file
+        .as_deref()
+        .and_then(|path| std::fs::read_to_string(path).ok())
+        .and_then(|content| serde_json::from_str::<ScheduleFile>(&content).ok())
+        .and_then(|f| f.schedule.first().map(|e| (e.pos[0], e.pos[2])))
+        .unwrap_or((-1475.2, 4741.6))
+}
+
 fn build_llm_backend(
     npc: &NpcConfig,
     watch: Option<Arc<crate::watch::NpcWatch>>,
@@ -834,7 +850,9 @@ fn build_llm_backend(
                     as Arc<dyn driver::LlmBackend>
             }),
         ),
-        LlmType::None => return None,
+        // Both are handled before this point: `None` has no driver at all,
+        // and `Bot` needs the shared state, which does not exist yet here.
+        LlmType::None | LlmType::Bot => return None,
     };
 
     match invoker {
@@ -882,7 +900,16 @@ fn spawn_llm_task(
     let idle_interval = Duration::from_secs(npc.idle_interval_secs);
     let activity_window = Duration::from_secs(npc.activity_window_secs);
 
-    let invoker = build_llm_backend(npc, watch, scheduler.request_timeout())?;
+    let invoker: Arc<dyn driver::LlmBackend> = if npc.llm == LlmType::Bot {
+        // The bot reads the same world state the prompt would have described,
+        // so it decides from structured facts rather than from prose.
+        Arc::new(driver::rule_bot::RuleBot::new(
+            Arc::clone(state),
+            bot_post(npc),
+        ))
+    } else {
+        build_llm_backend(npc, watch, scheduler.request_timeout())?
+    };
 
     let state = Arc::clone(state);
     let scheduler = scheduler.clone();

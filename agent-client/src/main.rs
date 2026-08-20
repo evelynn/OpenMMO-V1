@@ -42,6 +42,10 @@ pub enum LlmType {
     Codex,
     /// Any OpenAI-compatible chat completions endpoint (HTTP)
     Openai,
+    /// Rules instead of a model: a world bot that hunts and joins parties,
+    /// so a solo player has someone to play with and a young world is not
+    /// empty. Costs no tokens (IMP-7.2).
+    Bot,
 }
 
 /// Config parsed from TOML. Uses `[[npcs]]` array for multi-NPC orchestrator.

@@ -21,6 +21,7 @@ mod execute;
 mod movement;
 mod outcome;
 mod prompt;
+pub mod rule_bot;
 
 pub(crate) use prompt::format_event;
 
