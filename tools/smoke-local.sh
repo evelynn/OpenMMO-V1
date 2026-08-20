@@ -114,6 +114,21 @@ read -r verdict what < "$STATE/tile.txt"
 code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 10 "http://127.0.0.1:$API/api/announcements")
 [ "$code" = "200" ] && ok "announcements API answers" || fail "announcements API: HTTP $code"
 
+# IMP-5.5: a load balancer must be able to ask without a credential, and
+# metrics must not answer without one.
+code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 10 "http://127.0.0.1:$API/api/health")
+[ "$code" = "200" ] && ok "health endpoint answers (IMP-5.5)" || fail "health: HTTP $code"
+code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 10 "http://127.0.0.1:$API/api/ready")
+[ "$code" = "200" ] && ok "ready endpoint answers while serving" || fail "ready: HTTP $code"
+code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 10 "http://127.0.0.1:$API/api/metrics")
+[ "$code" = "401" ] && ok "metrics refuses an unauthenticated read" || fail "metrics unauthenticated: HTTP $code"
+token=$(cat "$STATE/npc_token" 2>/dev/null || true)
+body=$(curl -s --max-time 10 -H "Authorization: Bearer $token" "http://127.0.0.1:$API/api/metrics")
+case "$body" in
+    *players_online*dropped_messages*) ok "metrics answers the operator token" ;;
+    *) fail "metrics with token: ${body:-no response}" ;;
+esac
+
 key=$(head -c 16 /dev/urandom | base64)
 line=$(curl -s -i -N --max-time 5 \
     -H "Connection: Upgrade" -H "Upgrade: websocket" \

@@ -17,6 +17,7 @@ mod merchant_defs;
 mod monster_defs;
 mod npc_defs;
 mod npc_schedule;
+mod ops;
 mod quest_defs;
 mod recipe_defs;
 mod semicolon_list;
@@ -657,6 +658,11 @@ async fn main() -> ExitCode {
         ))
         .merge(npc_router(npc_io, Arc::clone(&game_state)))
         .merge(announcements_router(announcement_store))
+        .merge(ops::ops_router(
+            Arc::clone(&game_state),
+            Arc::clone(&auth_ctx),
+            drain_shutdown.clone(),
+        ))
         .layer(axum::middleware::from_fn_with_state(
             Arc::clone(&auth_ctx),
             api_auth::require_admin_for_writes,

@@ -2418,9 +2418,21 @@ impl super::GameState {
             .await
     }
 
-    #[allow(dead_code)]
     pub async fn get_player_count(&self) -> usize {
         self.players.read().await.len()
+    }
+
+    pub async fn monster_count(&self) -> usize {
+        self.monsters.read().await.len()
+    }
+
+    /// Dropped lossy messages across every live connection, and how many of
+    /// those connections lost something they could not lose (IMP-5.5).
+    pub async fn outbound_queue_health(&self) -> (u64, usize) {
+        let channels = self.direct_channels.read().await;
+        let dropped = channels.values().map(|c| c.dropped()).sum();
+        let overflowed = channels.values().filter(|c| c.overflowed()).count();
+        (dropped, overflowed)
     }
 
     #[allow(dead_code)]
