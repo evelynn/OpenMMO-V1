@@ -67,7 +67,7 @@
               >
             </div>
             <div class="quest-target">
-              {quest.monster_id} ×{quest.count}
+              {quest.target} ×{quest.count}
               {#if accepted(quest)}
                 <span class="quest-progress"
                   >({$acceptedQuests.get(quest.id)?.progress ??

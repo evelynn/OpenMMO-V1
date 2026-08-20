@@ -3,7 +3,7 @@
 //! 5,000 players × 5 accepted contracts has to stay in the tens of kilobytes.
 
 use crate::item_defs::ItemDefs;
-use crate::monster_defs::MonsterDefs;
+use crate::monster_defs::{MonsterDefs, MonsterRace};
 use serde::Deserialize;
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -19,8 +19,14 @@ pub struct QuestDefinition {
     #[serde(rename = "boardId")]
     pub board_id: String,
     pub name: String,
-    #[serde(rename = "monsterId")]
-    pub monster_id: String,
+    /// One named monster, or `None` when the contract targets a whole race.
+    /// Exactly one of this and `target_race` is set; the boot asserts it.
+    #[serde(rename = "monsterId", default)]
+    pub monster_id: Option<String>,
+    /// A race, counting every monster in it (IMP-8.2). "고블린 10마리"는 몹을
+    /// 찍어 주지만 "고블린류 20마리"는 사냥터를 고르게 한다.
+    #[serde(rename = "targetRace", default)]
+    pub target_race: Option<MonsterRace>,
     pub count: u16,
     #[serde(rename = "minLevel")]
     pub min_level: u32,
@@ -35,6 +41,26 @@ pub struct QuestDefinition {
     /// Completions allowed per UTC day. 0 = unlimited (IMP-2.6).
     #[serde(rename = "dailyLimit", default)]
     pub daily_limit: u16,
+}
+
+impl QuestDefinition {
+    /// What to show and to write in the completion letter.
+    pub fn target_label(&self) -> String {
+        match (&self.monster_id, self.target_race) {
+            (Some(id), _) => id.clone(),
+            (None, Some(race)) => format!("{} kin", race.as_str()),
+            (None, None) => String::new(),
+        }
+    }
+
+    /// Does this kill count towards the contract?
+    pub fn counts(&self, monster_type: &str, race: MonsterRace) -> bool {
+        match (&self.monster_id, self.target_race) {
+            (Some(id), _) => id == monster_type,
+            (None, Some(want)) => want == race,
+            (None, None) => false,
+        }
+    }
 }
 
 /// Interned contract id. Index into `QuestDefs::defs`.
@@ -61,11 +87,27 @@ impl QuestDefs {
         info!("Loaded {} hunting contracts", defs.len());
         for def in &defs {
             assert!(
-                monster_defs.get(&def.monster_id).is_some(),
-                "hunting quest '{}' targets unknown monster '{}'",
-                def.id,
-                def.monster_id
+                def.monster_id.is_some() != def.target_race.is_some(),
+                "hunting quest '{}' must name exactly one of monsterId and targetRace",
+                def.id
             );
+            if let Some(monster_id) = &def.monster_id {
+                assert!(
+                    monster_defs.get(monster_id).is_some(),
+                    "hunting quest '{}' targets unknown monster '{monster_id}'",
+                    def.id
+                );
+            }
+            // A race contract nobody can finish is the failure mode the race
+            // axis was rejected for in the first place (09 #25).
+            if let Some(race) = def.target_race {
+                assert!(
+                    monster_defs.any_of_race(race),
+                    "hunting quest '{}' targets race '{}', which no monster has",
+                    def.id,
+                    race.as_str()
+                );
+            }
             if let Some(item) = &def.reward_item {
                 assert!(
                     item_defs.get(item).is_some(),
@@ -87,7 +129,7 @@ impl QuestDefs {
                 "  {} [{}] {} ×{} lv{}~{} xp:{} zeny:{} daily:{}",
                 def.id,
                 def.board_id,
-                def.monster_id,
+                def.target_label(),
                 def.count,
                 def.min_level,
                 def.max_level,

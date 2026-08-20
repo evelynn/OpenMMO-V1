@@ -55,6 +55,10 @@ export interface MonsterDefinition {
   /** Size class a weapon's sizeMult is applied against (doc/COMBAT.md).
    * Blank means medium. */
   size?: 'small' | 'medium' | 'large'
+  /** Race a race-targeted hunting contract counts this kill towards
+   * (IMP-8.2). Server-side only today; kept here so the shape matches
+   * monsters.json. */
+  race?: 'goblinoid' | 'orc' | 'beast' | 'giant' | 'aberration'
   /** Optional weapon item id, or legacy model path relative to /models/. */
   weapon?: string
   /** Chance from 0-1 that the weapon is dropped on death. */

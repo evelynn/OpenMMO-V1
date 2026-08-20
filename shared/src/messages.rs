@@ -330,7 +330,10 @@ pub struct TravelOffer {
 pub struct QuestOffer {
     pub id: String,
     pub name: String,
-    pub monster_id: String,
+    /// What the contract asks for, ready to show: a monster id, or a race
+    /// phrased as kin ("goblinoid kin") when the contract targets a race
+    /// rather than one monster (IMP-8.2).
+    pub target: String,
     pub count: u16,
     pub min_level: u32,
     pub max_level: u32,

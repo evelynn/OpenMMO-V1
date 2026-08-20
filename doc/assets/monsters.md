@@ -81,3 +81,37 @@
     > d&d 혹은 nethack에 나오는 kobold를 3d로 제작할 수 있게 T자형 포즈로 그려줘
 
     ![원화](../images/kobold-concept.png)
+
+## 상위 티어 — 기존 메시 재사용 (2026-08-20, IMP-8.2)
+
+레벨 11~20의 12종은 **새 애셋이 아니다.** 전부 위 모델을 `scale`과 스탯만 바꿔
+재사용한다(`goblin_raider`←goblin, `troll_king`←troll …). 원화→3D→Mixamo→Blender
+파이프라인이 1종당 사람의 하루치인 반면 이쪽은 CSV 한 줄이고, `orc_boss` 등
+기존 보스 3종이 이미 같은 방식이었다.
+
+**`scale`을 올리면 `walkSpeed`/`runSpeed`도 같은 배율로 올린다.** 위 오거 항목이
+적어 둔 대로 공유 팩의 보폭은 Hips 본의 지면 위 높이에 비례하는데 `scale`이 그
+높이를 곱하기 때문이다. 이번에 기존 보스 3종도 같이 고쳤다 —
+`goblin_boss`는 scale 1.4에 walk 0.8(=고블린 그대로)이라 발이 미끄러지고 있었다.
+예외는 **달리기 상한 8.0**이다: 스토커보다 빠른 몬스터를 만들지 않는 쪽을 택했고,
+상한에 걸린 셋(`deep_stalker` 10.4→8.0, `troll_elder` 8.1→8.0, `troll_king` 9.8→8.0)만
+달릴 때 약간 미끄러진다.
+
+## 무료 애셋 조사 (2026-08-20)
+
+**결론부터: 이번 확충에 무료 애셋을 쓰지 않았다.** 아래는 다음 확충에서 고를 수
+있도록 조사만 해 둔 것이고, **이 컨테이너에서는 검증할 수 없었다** — 에그레스
+프록시가 `quaternius.com`과 `meshy.ai`를 막고, 바이너리 애셋은 git이 아니라
+Hugging Face에 있어 `client/public/models/`가 비어 있다. 실제 도입 전에 라이선스
+원문과 메시를 직접 확인할 것.
+
+| 출처 | 라이선스(조사값) | 이 파이프라인과의 적합성 |
+|------|------------------|--------------------------|
+| [Quaternius Ultimate Monsters](https://poly.pizza/bundle/Ultimate-Monsters-Bundle-5oyGWAmOB6) (50종, glTF/FBX/Blend, 리깅·애니 포함) | CC0 — 상업 가능, 표시 의무 없음 | **화풍이 맞지 않는다.** 로우폴리 스타일라이즈드이고 이 저장소의 몬스터는 Meshy 계열 준사실주의다. 한 장면에 섞이면 둘 다 어색해진다. 종족 전체를 새 화풍으로 통일할 때만 후보 |
+| [Mixamo 캐릭터 라이브러리](https://helpx.adobe.com/creative-cloud/faq/mixamo-faq.html) (60여 종, Mutant·Warrok·Maw 등) | 무료·로열티 없음·상업 가능. **단독 재배포 금지**(임베드는 OK — 이 저장소의 애니 팩과 같은 판단) | **리그가 이미 우리 규약**이다. 65본 Mixamo 스켈레톤이라 `sharedAnims` 리타게팅 오차가 없고, `mixamorig:` 접두사 제거 외에 Blender 작업이 거의 없다. **비용 대비 가장 유력**하지만 종수가 적고 판타지 몬스터보다 좀비·크리처 쪽이다 |
+| [Sketchfab CC0/CC-BY 크리처](https://sketchfab.com/3d-models/free-stylized-dark-fantasy-skeleton-v1-13b75487badc4c54a6e1644376fe6900) | 모델마다 다름 (CC0 / CC-BY) | 언데드처럼 **지금 없는 계열**을 한 종씩 채우기에 적합. CC-BY는 이 문서에 표시 항목이 늘어난다. 리깅 여부가 제각각이라 Mixamo 오토리그를 한 번 태워야 한다 |
+| Meshy 무료 CC0 라이브러리 (`meshy.ai/tags/monster`) | CC0로 표기됨 — **미확인**(프록시 차단) | 같은 생성기라 **화풍이 맞을 가능성이 가장 높다.** 접근 가능한 환경에서 먼저 확인할 것 |
+
+판단 기준은 값이 아니라 **화풍의 일관성과 리그**다. 무료라도 화풍이 어긋나면
+쓸 수 없고, 리그가 다르면 공유 애니 팩을 못 써서 클립을 따로 실어야 한다 —
+그때부터는 유료 생성과 비용이 비슷해진다.

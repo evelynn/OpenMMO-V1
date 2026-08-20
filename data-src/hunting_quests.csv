@@ -1,7 +1,21 @@
-id,boardId,name,monsterId,count,minLevel,maxLevel,rewardXp,rewardZeny,rewardItem,dailyLimit
-hb_kobold_10,capital,Kobold Cull,kobold,10,1,4,120,300,,0
-hb_goblin_10,capital,Goblin Cull,goblin,10,2,6,260,450,,0
-hb_orc_8,capital,Orc Patrol,orc,8,4,9,900,900,,0
-hb_gnoll_8,capital,Gnoll Watch,gnoll,8,5,10,1400,1200,,0
-hb_ogre_5,capital,Ogre Contract,ogre,5,8,99,9000,5000,healing_potion,1
-hb_troll_5,capital,Troll Contract,troll,5,8,99,9000,6000,healing_potion,1
+id,boardId,name,monsterId,targetRace,count,minLevel,maxLevel,rewardXp,rewardZeny,rewardItem,dailyLimit
+hb_kobold_10,capital,Kobold Cull,kobold,,10,1,4,120,300,,0
+hb_goblin_10,capital,Goblin Cull,goblin,,10,2,6,260,450,,0
+hb_orc_8,capital,Orc Patrol,orc,,8,4,9,900,900,,0
+hb_gnoll_8,capital,Gnoll Watch,gnoll,,8,5,10,1400,1200,,0
+hb_ogre_5,capital,Ogre Contract,ogre,,5,8,99,9000,5000,healing_potion,1
+hb_troll_5,capital,Troll Contract,troll,,5,8,99,9000,6000,healing_potion,1
+hb_goblinoid_20,capital,Goblinoid Sweep,,goblinoid,20,3,12,3000,1500,,0
+hb_orc_kin_15,capital,Orc Kin Sweep,,orc,15,5,14,2600,1800,,0
+hb_raider_10,capital,Raider Bounty,goblin_raider,,10,10,15,7000,2000,,0
+hb_orc_veteran_10,capital,Veteran Bounty,orc_veteran,,10,11,16,8000,2200,,0
+hb_matron_8,capital,Matron Bounty,orc_matron,,8,12,17,7500,2400,,0
+hb_captain_8,capital,Captain Bounty,hobgoblin_captain,,8,13,18,8800,2600,,0
+hb_beast_kin_20,capital,Beast Kin Sweep,,beast,20,5,99,10000,3000,,0
+hb_packlord_6,capital,Pack Lord Contract,gnoll_packlord,,6,14,99,30000,8000,healing_potion,1
+hb_stalker_6,capital,Stalker Contract,bugbear_stalker,,6,15,99,34000,9000,healing_potion,1
+hb_giant_kin_12,capital,Giant Kin Contract,,giant,12,8,99,43000,10000,healing_potion,1
+hb_brute_5,capital,Brute Contract,ogre_brute,,5,16,99,38000,11000,healing_potion,1
+hb_deep_stalker_5,capital,Deep Stalker Contract,deep_stalker,,5,17,99,42000,12000,scroll_of_enchant_armor,1
+hb_troll_elder_5,capital,Elder Contract,troll_elder,,5,18,99,47000,13000,scroll_of_enchant_weapon,1
+hb_troll_king_1,capital,The Troll King,troll_king,,1,19,99,60000,15000,scroll_of_enchant_weapon,1

@@ -32,6 +32,32 @@ impl MonsterSize {
     }
 }
 
+/// The race axis (09 #25, re-judged 2026-08-20). Only the five that are
+/// actually filled exist — a label with an empty column is the state the
+/// original rejection was about. Hunting quests target it (IMP-8.2).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum MonsterRace {
+    #[default]
+    Goblinoid,
+    Orc,
+    Beast,
+    Giant,
+    Aberration,
+}
+
+impl MonsterRace {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Goblinoid => "goblinoid",
+            Self::Orc => "orc",
+            Self::Beast => "beast",
+            Self::Giant => "giant",
+            Self::Aberration => "aberration",
+        }
+    }
+}
+
 #[derive(Debug, Clone, Deserialize)]
 #[allow(dead_code)]
 pub struct MonsterDefinition {
@@ -96,6 +122,9 @@ pub struct MonsterDefinition {
     /// Which column of a weapon's `sizeMult` this monster is hit on.
     #[serde(default)]
     pub size: MonsterSize,
+    /// What a race-targeted hunting quest counts this kill towards.
+    #[serde(default)]
+    pub race: MonsterRace,
 }
 
 impl MonsterDefinition {
@@ -154,6 +183,20 @@ impl MonsterDefs {
         Self {
             defs: Arc::new(defs),
         }
+    }
+
+    /// Whether the race has anybody in it. Guards the boot assert that keeps
+    /// the axis from acquiring an empty column.
+    pub fn any_of_race(&self, race: MonsterRace) -> bool {
+        self.defs.values().any(|def| def.race == race)
+    }
+
+    /// The race a kill counts towards. Unknown types fall back to the default
+    /// rather than failing a kill credit.
+    pub fn race_of(&self, monster_type: &str) -> MonsterRace {
+        self.defs
+            .get(monster_type)
+            .map_or(MonsterRace::default(), |def| def.race)
     }
 
     pub fn get(&self, monster_type: &str) -> Option<&MonsterDefinition> {

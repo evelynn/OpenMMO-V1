@@ -90,7 +90,7 @@ impl super::GameState {
                 QuestOffer {
                     id: def.id.clone(),
                     name: def.name.clone(),
-                    monster_id: def.monster_id.clone(),
+                    target: def.target_label(),
                     count: def.count,
                     min_level: def.min_level,
                     max_level: def.max_level,
@@ -286,7 +286,7 @@ impl super::GameState {
             Letter {
                 sender: "Hunting Board".to_string(),
                 subject: format!("{} — contract complete", def.name),
-                body: format!("{} {} slain.", def.count, def.monster_id),
+                body: format!("{} {} slain.", def.count, def.target_label()),
                 gold: def.reward_zeny,
                 items,
             },
@@ -312,11 +312,12 @@ impl super::GameState {
     /// the players that shared the kill's XP. At most `MAX_ACCEPTED_QUESTS`
     /// comparisons per recipient and no allocation on the miss path.
     pub(super) async fn credit_quest_kill(&self, recipients: &[PlayerId], monster_type: &str) {
+        let race = self.monster_defs.race_of(monster_type);
         let targets: Vec<(QuestKey, u16)> = self
             .quest_defs
             .iter()
             .enumerate()
-            .filter(|(_, def)| def.monster_id == monster_type)
+            .filter(|(_, def)| def.counts(monster_type, race))
             .map(|(index, def)| (index as QuestKey, def.count))
             .collect();
         if targets.is_empty() {

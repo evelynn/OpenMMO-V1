@@ -4,7 +4,7 @@ import { writable } from 'svelte/store'
 export interface QuestOffer {
   id: string
   name: string
-  monster_id: string
+  target: string
   count: number
   min_level: number
   max_level: number

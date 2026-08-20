@@ -4,6 +4,8 @@ use crate::auth::AuthService;
 
 const UNLIMITED: &str = "hb_kobold_10";
 const DAILY: &str = "hb_ogre_5";
+/// Targets the goblinoid race rather than one monster (IMP-8.2).
+const BY_RACE: &str = "hb_goblinoid_20";
 
 /// A character in the DB and in the world, at `level`.
 async fn hunter(
@@ -264,4 +266,27 @@ async fn a_new_utc_day_restores_the_daily_contract() {
         .complete_quest(character_id, DAILY, utc_day_key(86_400))
         .unwrap();
     assert_eq!(today, 1, "a new day starts the tally over");
+}
+
+/// The point of the race axis: one contract counts several monsters, so it
+/// sends the player around a band of the world rather than to one spawn.
+#[tokio::test]
+async fn a_race_contract_counts_every_monster_of_that_race() {
+    let game_state = make_test_game_state("quest_race");
+    let auth = make_test_auth("quest_race");
+    let (_, mut rx) = hunter(&game_state, &auth, "Rae", 6).await;
+    game_state.accept_quest(&auth, &pid("Rae"), BY_RACE).await;
+    drain(&mut rx);
+
+    for monster in ["goblin", "kobold", "bugbear", "goblin_raider"] {
+        game_state.credit_quest_kill(&[pid("Rae")], monster).await;
+    }
+    assert_eq!(progress_of(&drain(&mut rx), BY_RACE), Some(4));
+
+    // An orc is a different race and must not count.
+    game_state.credit_quest_kill(&[pid("Rae")], "orc").await;
+    assert!(
+        drain(&mut rx).is_empty(),
+        "an orc kill is silent on a goblinoid contract"
+    );
 }

@@ -1,2 +1,4 @@
 id,monsterId,x,y,z,respawnBaseSecs,respawnVarianceSecs
 crypt_ogre,ogre_boss,-1390.0,1.2,4705.0,1800,600
+gnoll_den,gnoll_matriarch,-1647.5,4.81,5168.1,2700,900
+troll_throne,troll_king,-554.3,6.75,4406.4,5400,1800

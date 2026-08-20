@@ -46,6 +46,42 @@
     {
       "monsterType": "troll",
       "maxDistance": 60
+    },
+    {
+      "monsterType": "goblin_raider",
+      "maxDistance": 60
+    },
+    {
+      "monsterType": "orc_veteran",
+      "maxDistance": 60
+    },
+    {
+      "monsterType": "orc_matron",
+      "maxDistance": 60
+    },
+    {
+      "monsterType": "hobgoblin_captain",
+      "maxDistance": 60
+    },
+    {
+      "monsterType": "gnoll_packlord",
+      "maxDistance": 60
+    },
+    {
+      "monsterType": "bugbear_stalker",
+      "maxDistance": 60
+    },
+    {
+      "monsterType": "ogre_brute",
+      "maxDistance": 60
+    },
+    {
+      "monsterType": "deep_stalker",
+      "maxDistance": 60
+    },
+    {
+      "monsterType": "troll_elder",
+      "maxDistance": 60
     }
   ]
 }

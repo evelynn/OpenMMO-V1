@@ -451,7 +451,7 @@ pub(crate) fn format_event(state: &SharedState, msg: &ServerMessage) -> Option<S
                         "  {} \"{}\" {} x{} lv{}-{} → {} xp, {}c{daily}{held}",
                         q.id,
                         q.name,
-                        q.monster_id,
+                        q.target,
                         q.count,
                         q.min_level,
                         q.max_level,
