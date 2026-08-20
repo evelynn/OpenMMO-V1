@@ -1489,6 +1489,19 @@ export function handleServerMessage(
       setDungeonInstance(data.entrance_id, data.party_seed)
       break
 
+    case 'CompanionContract': {
+      const npc = get(gameStore).otherPlayers.get(data.npc_player_id)
+      const who = npc?.name ?? 'Your companion'
+      addChatMessage({
+        text:
+          data.expires_at === 0
+            ? `${who} is no longer under contract.`
+            : `${who} is with you until the contract runs out.`,
+        sender: 'system',
+      })
+      break
+    }
+
     case 'GuildInvite':
       guildInvite.set({
         guildId: data.guild_id,

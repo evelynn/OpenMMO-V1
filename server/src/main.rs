@@ -121,6 +121,10 @@ async fn time_sync_tick(game_state: &GameState, auth_service: &Arc<AuthService>,
     // Pay NPC trader salaries on game-day rollover (economy phase 3)
     game_state.tick_npc_salaries().await;
 
+    // Expire companion contracts (IMP-4.5) — a map of tens of rows, not a
+    // pass over every player, which is why it rides this tick.
+    game_state.tick_companion_contracts().await;
+
     // Batch-save dirty character states and inventories every 4 ticks (32s)
     if tick_count.is_multiple_of(4) {
         game_state.flush_dirty_saves(auth_service).await;

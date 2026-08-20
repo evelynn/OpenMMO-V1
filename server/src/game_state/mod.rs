@@ -234,6 +234,7 @@ mod cast;
 mod chat;
 pub(crate) use chat::{parse_admin_command, parse_notice_command};
 mod combat;
+mod companion;
 mod consent;
 mod deals;
 mod debuff;
@@ -458,6 +459,9 @@ pub struct GameState {
     /// Which dungeon instance each player walks; absent means the public one
     /// (IMP-4.2). Set when a party claims an instance, dropped on logout.
     player_instances: Arc<std::sync::RwLock<HashMap<PlayerId, u64>>>,
+    /// NPC player id → who has them under contract, until when (IMP-4.5).
+    /// Memory only: a restart ends every contract.
+    companions: Arc<RwLock<companion::Contracts>>,
     /// monster_id → dungeon spawn slot, for respawn bookkeeping on death.
     dungeon_monsters: Arc<RwLock<HashMap<String, dungeon::DungeonMonsterRef>>>,
     /// Which guild each online player belongs to, and at what rank (IMP-4.1).
@@ -743,6 +747,7 @@ impl GameState {
             quest_defs,
             dungeons: Arc::new(RwLock::new(HashMap::new())),
             player_instances: Arc::new(std::sync::RwLock::new(HashMap::new())),
+            companions: Arc::new(RwLock::new(HashMap::new())),
             dungeon_monsters: Arc::new(RwLock::new(HashMap::new())),
             world_bosses: Arc::new(RwLock::new(HashMap::new())),
             boss_damage: Arc::new(RwLock::new(HashMap::new())),

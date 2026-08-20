@@ -1416,6 +1416,15 @@ async fn handle_client_message(
             }
         }
 
+        ClientMessage::HireCompanion {
+            npc_player_id,
+            hours,
+        } => {
+            if let Some(id) = &state.player_id {
+                game_state.hire_companion(id, &npc_player_id, hours).await;
+            }
+        }
+
         ClientMessage::ClaimDungeonInstance { entrance_id } => {
             if let Some(id) = &state.player_id {
                 game_state

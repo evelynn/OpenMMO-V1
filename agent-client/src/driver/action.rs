@@ -8,6 +8,12 @@
 use onlinerpg_shared::ClientMessage;
 use serde::Deserialize;
 
+/// Contract length default: the shortest one, so an unqualified hire is the
+/// cheapest one.
+fn one_hour() -> u8 {
+    1
+}
+
 /// Quantity default for storage actions: one unit unless asked.
 fn one_unit() -> u32 {
     1
@@ -34,6 +40,15 @@ pub(super) enum AgentAction {
         action: String,
         #[serde(alias = "target", default)]
         name: Option<String>,
+    },
+    /// Hire an official NPC as a companion for a few hours. The fee is
+    /// prepaid; the NPC decides for itself what the contract means (IMP-4.5).
+    #[serde(rename = "hire", alias = "hire_companion")]
+    Hire {
+        #[serde(alias = "target", alias = "name", alias = "player")]
+        npc: String,
+        #[serde(default = "one_hour")]
+        hours: u8,
     },
     #[serde(rename = "claim_instance")]
     ClaimInstance {
@@ -459,6 +474,14 @@ pub(super) const ACTION_SPECS: &[ActionSpec] = &[
   says so if you lack it."#,
     },
     ActionSpec {
+        names: &["hire"],
+        aliases: &["hire_companion"],
+        doc: r#"- Hire a townsperson to keep you company for a few hours:
+  {"type": "hire", "npc": "Karl", "hours": 2}
+  The fee is charged up front and they are told about it. They are still
+  themselves — a contract buys their time, not their obedience."#,
+    },
+    ActionSpec {
         names: &["claim_instance"],
         aliases: &[],
         doc: r#"- Claim your party's own copy of a dungeon, standing at its entrance:
@@ -853,7 +876,8 @@ impl AgentAction {
             Self::LearnSkill { .. }
             | Self::SetTitle { .. }
             | Self::Guild { .. }
-            | Self::ClaimInstance { .. } => false,
+            | Self::ClaimInstance { .. }
+            | Self::Hire { .. } => false,
             Self::Move { .. }
             | Self::Attack { .. }
             | Self::UseSkill { .. }
@@ -940,6 +964,7 @@ impl AgentAction {
             | Self::SetTitle { .. }
             | Self::Guild { .. }
             | Self::ClaimInstance { .. }
+            | Self::Hire { .. }
             | Self::SetSavePoint { .. }
             | Self::Travel { .. }
             | Self::Deposit { .. }
@@ -988,6 +1013,7 @@ impl AgentAction {
             Self::LearnSkill { .. } => "learn_skill",
             Self::SetTitle { .. } => "set_title",
             Self::ClaimInstance { .. } => "claim_instance",
+            Self::Hire { .. } => "hire",
             Self::Guild { .. } => "guild",
             Self::Move { .. } => "move",
             Self::Follow { .. } => "follow",
@@ -1408,6 +1434,8 @@ pub(super) fn action_to_command(
         // Handled in `execute::handle_response` (needs name resolution and a
         // background chase task).
         AgentAction::Follow { .. } => None,
+        // Needs the roster to turn the NPC's name into an id.
+        AgentAction::Hire { .. } => None,
         // Needs the roster to turn a name into an id.
         AgentAction::SetSavePoint { .. } => None,
         AgentAction::Travel { .. } => None,

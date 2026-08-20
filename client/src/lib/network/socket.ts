@@ -438,6 +438,12 @@ class NetworkManager {
     this.sendMessage({ TransferGuildLeadership: { character_id: characterId } })
   }
 
+  sendHireCompanion(npcPlayerId: number, hours: number) {
+    this.sendMessage({
+      HireCompanion: { npc_player_id: npcPlayerId, hours },
+    })
+  }
+
   sendClaimDungeonInstance(entranceId: string) {
     this.sendMessage({ ClaimDungeonInstance: { entrance_id: entranceId } })
   }

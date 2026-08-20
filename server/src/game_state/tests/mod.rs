@@ -18,6 +18,7 @@ mod chat_tests;
 mod collision_tests;
 mod combat_scale_tests;
 mod combat_tests;
+mod companion_tests;
 mod dungeon_tests;
 mod enchant_tests;
 mod fishing_tests;

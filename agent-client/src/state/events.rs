@@ -90,6 +90,9 @@ impl SharedState {
             // standing there waiting for an answer.
             ServerMessage::ShopState { .. } => EventUrgency::Urgent,
             ServerMessage::PartyState { .. } => EventUrgency::Routine,
+            // Urgent: somebody just hired us, or the contract ran out — both
+            // change what we should be doing right now (IMP-4.5).
+            ServerMessage::CompanionContract { .. } => EventUrgency::Urgent,
             // Urgent: kicked
             ServerMessage::Kicked { .. } => EventUrgency::Urgent,
 

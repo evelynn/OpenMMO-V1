@@ -327,6 +327,7 @@ impl super::GameState {
         self.forget_achievements(player_id).await;
         self.forget_guild_membership(player_id).await;
         self.forget_player_instance(player_id);
+        self.end_companion_contracts_for(player_id).await;
         self.remove_dungeon_discoveries(player_id).await;
         self.forget_hunger(player_id).await;
     }

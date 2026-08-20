@@ -525,6 +525,13 @@ pub enum ClientMessage {
     ClaimDungeonInstance {
         entrance_id: String,
     },
+    /// Hire an NPC as a companion for `hours` game-clock hours, paid up
+    /// front. The contract is a fact, not a leash: what the NPC does with it
+    /// is its own agent's decision (IMP-4.5).
+    HireCompanion {
+        npc_player_id: PlayerId,
+        hours: u8,
+    },
     /// Open the guild's shared storage. Deposits, withdrawals and the close
     /// are the personal-storage messages unchanged — only which container is
     /// open differs (IMP-4.1).
@@ -1371,6 +1378,15 @@ pub enum ServerMessage {
     DungeonInstance {
         entrance_id: String,
         party_seed: u64,
+    },
+    /// A companion contract changed. Sent to both sides: `expires_at` is a
+    /// unix second, and `0` means the contract is over (expired, refused
+    /// after the fact, or either party left). Contracts live in memory only,
+    /// so a restart ends every one of them (IMP-4.5).
+    CompanionContract {
+        npc_player_id: PlayerId,
+        employer_id: PlayerId,
+        expires_at: i64,
     },
     PlayerInteractionChanged {
         player_id: PlayerId,

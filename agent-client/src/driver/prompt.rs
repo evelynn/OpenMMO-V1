@@ -538,6 +538,28 @@ pub(crate) fn format_event(state: &SharedState, msg: &ServerMessage) -> Option<S
             "[Guild] {from} invited you to \"{guild_name}\" - answer in chat if you want in"
         )),
         ServerMessage::GuildDenied { reason } => Some(format!("[Guild] refused: {reason}")),
+        ServerMessage::CompanionContract {
+            npc_player_id,
+            employer_id,
+            expires_at,
+        } => {
+            let self_id = state.self_player_id.as_ref();
+            let hired_us = self_id == Some(npc_player_id);
+            let who = player_name(state, if hired_us { employer_id } else { npc_player_id });
+            Some(if *expires_at == 0 {
+                if hired_us {
+                    format!("[Companion] your contract with {who} is over - go back to your own day")
+                } else {
+                    format!("[Companion] {who} is no longer working for you")
+                }
+            } else if hired_us {
+                format!(
+                    "[Companion] {who} hired you until unix {expires_at} - the fee is already paid.                      Staying with them (follow) and helping is the deal you took; you are still                      yourself while you do it."
+                )
+            } else {
+                format!("[Companion] {who} is working for you until unix {expires_at}")
+            })
+        }
         ServerMessage::AchievementUnlocked {
             achievement_id,
             title,

@@ -248,6 +248,7 @@ export type ClientMessage =
   | { TransferGuildLeadership: { character_id: number } }
   | 'OpenGuildStorage'
   | { ClaimDungeonInstance: { entrance_id: string } }
+  | { HireCompanion: { npc_player_id: number; hours: number } }
 
 /** One line of a batched `BuyItems` request: buy `qty` units of one item def. */
 export type TradeLineItem = {

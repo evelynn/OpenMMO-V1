@@ -41,9 +41,17 @@ pub struct NpcDefinition {
     /// into free slots. Never sellable, unlike keepsakes.
     #[serde(default, deserialize_with = "crate::semicolon_list::deserialize")]
     pub loadout: Vec<String>,
+    /// Copper charged per contracted hour. 0 (blank) = not for hire.
+    #[serde(rename = "hireRatePerHour", default)]
+    pub hire_rate_per_hour: i64,
 }
 
 impl NpcDefinition {
+    /// Whether this NPC takes companion contracts (IMP-4.5).
+    pub fn hireable(&self) -> bool {
+        self.hire_rate_per_hour > 0
+    }
+
     /// Whether this NPC trades as a resident (has a wishlist or keepsakes).
     pub fn trades(&self) -> bool {
         !self.wishlist.is_empty() || !self.keepsakes.is_empty()

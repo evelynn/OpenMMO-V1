@@ -1378,6 +1378,14 @@
     if (caps.trade) {
       entries.push({ label: 'Trade', action: () => approachAndTrade(intent) })
     }
+    if (caps.hireRatePerHour > 0) {
+      // One hour, the shortest contract: the fee is prepaid and a longer one
+      // is a bigger bet than a right-click should place (IMP-4.5).
+      entries.push({
+        label: `Hire 1h (${caps.hireRatePerHour})`,
+        action: () => networkManager.sendHireCompanion(intent.playerId, 1),
+      })
+    }
     npcContextMenu.set({
       npcName: npc.name,
       screenX: event.clientX,

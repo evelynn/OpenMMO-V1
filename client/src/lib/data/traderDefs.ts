@@ -13,6 +13,8 @@ export interface NpcDefinition {
   wishlistRatePercent?: number
   salaryPerDay?: number
   walletCap?: number
+  /** Copper per contracted hour; absent/0 = not for hire (IMP-4.5). */
+  hireRatePerHour?: number
 }
 
 const npcDefs = npcsJson as Record<string, NpcDefinition>
@@ -34,6 +36,8 @@ export function getNpcTraderByNpcName(
 export interface NpcCapabilities {
   talk: boolean
   trade: boolean
+  /** Copper per hour this NPC charges for a companion contract; 0 = never. */
+  hireRatePerHour: number
   /** Trade is the click default for merchants; talk for everyone else. */
   defaultAction: 'talk' | 'trade'
   /** Portrait/def id for UI assets, when the NPC trades. */
@@ -46,6 +50,7 @@ export function getNpcCapabilities(npcName: string): NpcCapabilities {
   return {
     talk: true,
     trade: Boolean(merchant || trader),
+    hireRatePerHour: byNpcName.get(npcName)?.hireRatePerHour ?? 0,
     defaultAction: merchant ? 'trade' : 'talk',
     traderId: merchant?.id ?? trader?.id,
   }

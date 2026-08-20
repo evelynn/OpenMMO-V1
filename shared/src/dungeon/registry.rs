@@ -165,7 +165,8 @@ mod tests {
 
     #[test]
     fn parses_drops_lists_and_optional_floor_override() {
-        let csv = "id,name,x,y,z,chestDrops,floors,boss,chestTier,entranceDir,instanceCooldownSecs\n\
+        let csv =
+            "id,name,x,y,z,chestDrops,floors,boss,chestTier,entranceDir,instanceCooldownSecs\n\
                    a,A Place,-1450,0.7,4720,shield;armor,5,orc_boss,2,s,3600\n\
                    b,B Place,10,0,20,,,,,,\n";
         let defs = parse_entrances(csv);
